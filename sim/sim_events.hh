@@ -66,7 +66,7 @@ class SimExitEvent : public Event
     virtual const char *description();
 };
 
-void SimExit(const char *message);
+void SimExit(Tick when, const char *message);
 
 //
 // Event class to terminate simulation after 'n' related events have
@@ -91,30 +91,6 @@ class CountedExitEvent : public Event
 //
 // Event to cause a statistics dump
 //
-class DumpStatsEvent : public Event
-{
-  public:
-    DumpStatsEvent()
-        : Event(&mainEventQueue)
-        { setFlags(AutoDelete); schedule(curTick, 999); }
-
-    DumpStatsEvent(EventQueue *q)
-        : Event(q)
-        { setFlags(AutoDelete); schedule(curTick, 999); }
-
-    DumpStatsEvent(Tick when)
-        : Event(&mainEventQueue)
-        { setFlags(AutoDelete); schedule(when, 999); }
-
-    DumpStatsEvent(EventQueue *q, Tick when)
-        : Event(q)
-        { setFlags(AutoDelete); schedule(when, 999); }
-
-    void process();
-
-    virtual const char *description();
-};
-
 class CheckSwapEvent : public Event
 {
   private:
