@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2003 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,22 +26,31 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __BASE_STATS_OUTPUT_HH__
-#define __BASE_STATS_OUTPUT_HH__
+#ifndef __SYSTEM_EVENTS_HH__
+#define __SYSTEM_EVENTS_HH__
 
-#include <string>
+#include "cpu/pc_event.hh"
 
-#include "base/stats/visit.hh"
+class System;
 
-namespace Stats {
-
-struct Output : public Visit
+class SkipFuncEvent : public PCEvent
 {
-    inline void operator()() { output(); }
-    virtual void output() = 0;
-    virtual bool valid() const = 0;
+  public:
+    SkipFuncEvent(PCEventQueue *q, const std::string &desc)
+        : PCEvent(q, desc) {}
+    virtual void process(ExecContext *xc);
 };
 
-/* namespace Stats */ }
+class FnEvent : public PCEvent
+{
+  public:
+    FnEvent(PCEventQueue *q, const std::string &desc, System *system);
+    virtual void process(ExecContext *xc);
+    std::string myname() const { return _name; }
 
-#endif // __BASE_STATS_OUTPUT_HH__
+  private:
+    std::string _name;
+    Stats::MainBin *myBin;
+};
+
+#endif // __SYSTEM_EVENTS_HH__

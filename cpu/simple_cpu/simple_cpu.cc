@@ -42,6 +42,7 @@
 #include "base/pollevent.hh"
 #include "base/range.hh"
 #include "base/trace.hh"
+#include "base/stats/events.hh"
 #include "cpu/base_cpu.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/exetrace.hh"
@@ -50,7 +51,6 @@
 #include "cpu/static_inst.hh"
 #include "mem/base_mem.hh"
 #include "mem/mem_interface.hh"
-#include "sim/annotation.hh"
 #include "sim/builder.hh"
 #include "sim/debug.hh"
 #include "sim/host.hh"
@@ -255,7 +255,7 @@ SimpleCPU::haltContext(int thread_num)
 void
 SimpleCPU::regStats()
 {
-    using namespace Statistics;
+    using namespace Stats;
 
     BaseCPU::regStats();
 
@@ -287,8 +287,6 @@ SimpleCPU::regStats()
         ;
 
     idleFraction = constant(1.0) - notIdleFraction;
-    numInsts = Statistics::scalar(numInst) - Statistics::scalar(startNumInst);
-    simInsts += numInsts;
 }
 
 void
@@ -405,6 +403,9 @@ SimpleCPU::read(Addr addr, T &data, unsigned flags)
         }
     }
 
+    if (!dcacheInterface && (memReq->flags & UNCACHEABLE))
+        Stats::recordEvent("Uncached Read");
+
     return fault;
 }
 
@@ -489,6 +490,9 @@ SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 
     if (res && (fault == No_Fault))
         *res = memReq->result;
+
+    if (!dcacheInterface && (memReq->flags & UNCACHEABLE))
+        Stats::recordEvent("Uncached Write");
 
     return fault;
 }
@@ -581,7 +585,6 @@ SimpleCPU::post_interrupt(int int_num, int index)
     if (xc->status() == ExecContext::Suspended) {
                 DPRINTF(IPI,"Suspended Processor awoke\n");
         xc->activate();
-        Annotate::Resume(xc);
     }
 }
 #endif // FULL_SYSTEM
@@ -590,6 +593,8 @@ SimpleCPU::post_interrupt(int int_num, int index)
 void
 SimpleCPU::tick()
 {
+    numCycles++;
+
     traceData = NULL;
 
     Fault fault = No_Fault;
@@ -697,6 +702,7 @@ SimpleCPU::tick()
 
         // keep an instruction count
         numInst++;
+        numInsts++;
 
         // check for instruction-count-based events
         comInstEventQueue[0]->serviceEvents(numInst);

@@ -26,12 +26,88 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SIM_STATS_HH__
-#define __SIM_STATS_HH__
+#ifndef __VPTR_HH__
+#define __VPTR_HH__
 
-#include "base/statistics.hh"
+#include "arch/alpha/vtophys.hh"
 
-extern Stats::Formula simSeconds;
-extern Stats::Value simTicks;
+class ExecContext;
 
-#endif // __SIM_SIM_STATS_HH__
+template <class T>
+class VPtr
+{
+  public:
+    typedef T Type;
+
+  private:
+    ExecContext *xc;
+    Addr ptr;
+
+  public:
+    ExecContext *GetXC() const { return xc; }
+    Addr GetPointer() const { return ptr; }
+
+  public:
+    explicit VPtr(ExecContext *_xc, Addr p = 0) : xc(_xc), ptr(p) { }
+    template <class U>
+    VPtr(const VPtr<U> &vp) : xc(vp.GetXC()), ptr(vp.GetPointer()) {}
+    ~VPtr() {}
+
+    bool operator!() const
+    {
+        return ptr == 0;
+    }
+
+    VPtr<T> operator+(int offset)
+    {
+        VPtr<T> ptr(*this);
+        ptr += offset;
+
+        return ptr;
+    }
+
+    const VPtr<T> &operator+=(int offset)
+    {
+        ptr += offset;
+        assert((ptr & (ALPHA_PGBYTES - 1)) + sizeof(T) < ALPHA_PGBYTES);
+
+        return *this;
+    }
+
+    const VPtr<T> &operator=(Addr p)
+    {
+        assert((p & (ALPHA_PGBYTES - 1)) + sizeof(T) < ALPHA_PGBYTES);
+        ptr = p;
+
+        return *this;
+    }
+
+    template <class U>
+    const VPtr<T> &operator=(const VPtr<U> &vp)
+    {
+        xc = vp.GetXC();
+        ptr = vp.GetPointer();
+
+        return *this;
+    }
+
+    operator T *()
+    {
+        void *addr = vtomem(xc, ptr, sizeof(T));
+        return (T *)addr;
+    }
+
+    T *operator->()
+    {
+        void *addr = vtomem(xc, ptr, sizeof(T));
+        return (T *)addr;
+    }
+
+    T &operator*()
+    {
+        void *addr = vtomem(xc, ptr, sizeof(T));
+        return *(T *)addr;
+    }
+};
+
+#endif // __VPTR_HH__

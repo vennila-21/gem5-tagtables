@@ -60,7 +60,7 @@ __nan()
 }
 #endif
 
-namespace Statistics {
+namespace Stats {
 
 Text::Text()
     : mystream(false), stream(NULL), compat(false), descriptions(false)
@@ -132,7 +132,7 @@ Text::output()
         for (i = bins().begin(); i != end; ++i) {
             MainBin *bin = *i;
             bin->activate();
-            ccprintf(*stream,"---%s Bin------------\n", bin);
+            ccprintf(*stream,"---%s Bin------------\n", bin->name());
             stat_list_t::const_iterator i, end = stats().end();
             for (i = stats().begin(); i != end; ++i)
                 (*i)->visit(*this);
@@ -282,14 +282,14 @@ VectorPrint::operator()(std::ostream &stream) const
             print(stream);
         }
 
-        if (flags & ::Statistics::total) {
+        if (flags & ::Stats::total) {
             print.name = base + "total";
             print.desc = desc;
             print.value = total;
             print(stream);
         }
     } else {
-        if (flags & ::Statistics::total) {
+        if (flags & ::Stats::total) {
             print.value = total;
             print(stream);
         }
@@ -640,7 +640,7 @@ Text::visit(const Vector2dData &data)
         print(*stream);
     }
 
-    if ((data.flags & ::Statistics::total) && (data.x > 1)) {
+    if ((data.flags & ::Stats::total) && (data.x > 1)) {
         print.name = data.name;
         print.desc = data.desc;
         print.vec = tot_vec;
@@ -728,4 +728,4 @@ Text::visit(const FormulaData &data)
     visit((const VectorData &)data);
 }
 
-/* namespace Statistics */ }
+/* namespace Stats */ }
