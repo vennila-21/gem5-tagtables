@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -98,7 +98,7 @@ class Process : public SimObject
     std::string prog_fname;	// file name
     Addr prog_entry;		// entry point (initial PC)
 
-    Statistics::Scalar<> num_syscalls;	// number of syscalls executed
+    Stats::Scalar<> num_syscalls;	// number of syscalls executed
 
 
   protected:

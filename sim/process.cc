@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -95,7 +95,7 @@ Process::Process(const string &name,
 void
 Process::regStats()
 {
-    using namespace Statistics;
+    using namespace Stats;
 
     num_syscalls
         .name(name() + ".PROG:num_syscalls")

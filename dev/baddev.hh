@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,8 @@
 #ifndef __BADDEV_HH__
 #define __BADDEV_HH__
 
-#include "mem/functional_mem/functional_memory.hh"
+#include "base/range.hh"
+#include "dev/io_device.hh"
 
 /**
  * BadDevice
@@ -42,7 +43,7 @@
  * the user that the kernel they are running has unsupported
  * options (i.e. frame buffer)
  */
-class BadDevice : public FunctionalMemory
+class BadDevice : public PioDevice
 {
   private:
     Addr addr;
@@ -51,14 +52,42 @@ class BadDevice : public FunctionalMemory
     std::string devname;
 
   public:
-    /**
-     * The default constructor.
-     */
+     /**
+      * Constructor for the Baddev Class.
+      * @param name name of the object
+      * @param a base address of the write
+      * @param mmu the memory controller
+      * @param hier object to store parameters universal the device hierarchy
+      * @param bus The bus that this device is attached to
+      * @param devicename device that is not implemented
+      */
     BadDevice(const std::string &name, Addr a, MemoryController *mmu,
-              const std::string &devicename);
+              HierParams *hier, Bus *bus, const std::string &devicename);
 
+    /**
+      * On a read event we just panic aand hopefully print a
+      * meaningful error message.
+      * @param req Contains the address to read from.
+      * @param data A pointer to write the read data to.
+      * @return The fault condition of the access.
+      */
     virtual Fault read(MemReqPtr &req, uint8_t *data);
+
+    /**
+      * On a write event we just panic aand hopefully print a
+      * meaningful error message.
+      * @param req Contains the address to write to.
+      * @param data The data to write.
+      * @return The fault condition of the access.
+      */
     virtual Fault write(MemReqPtr &req, const uint8_t *data);
+
+    /**
+     * Return how long this access will take.
+     * @param req the memory request to calcuate
+     * @return Tick when the request is done
+     */
+    Tick cacheAccess(MemReqPtr &req);
 };
 
 #endif // __BADDEV_HH__

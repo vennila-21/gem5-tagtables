@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@
 
 #include "base/stats/output.hh"
 
-namespace Statistics {
+namespace Stats {
 
 class Text : public Output
 {
@@ -72,6 +72,6 @@ class Text : public Output
     virtual void output();
 };
 
-/* namespace Statistics */ }
+/* namespace Stats */ }
 
 #endif // __BASE_STATS_TEXT_HH__

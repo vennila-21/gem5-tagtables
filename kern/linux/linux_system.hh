@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,47 +32,75 @@
 #include <vector>
 
 #include "sim/system.hh"
+#include "sim/host.hh"
 #include "targetarch/isa_traits.hh"
 
 #include <map>
+
+/**
+ * MAGIC address where the kernel arguments should go. Defined as
+ * PARAM in linux kernel alpha-asm.
+ */
+const Addr PARAM_ADDR =  ULL(0xfffffc000030a000);
 
 class ExecContext;
 class ElfObject;
 class SymbolTable;
 
 class BreakPCEvent;
-class LinuxBadAddrEvent;
-class LinuxSkipFuncEvent;
 class LinuxSkipDelayLoopEvent;
-class LinuxSkipIdeDelay50msEvent;
-class LinuxPrintfEvent;
-class LinuxDebugPrintfEvent;
-class LinuxDumpMbufEvent;
+class SkipFuncEvent;
 class FnEvent;
 class AlphaArguments;
 
+/**
+ * This class contains linux specific system code (Loading, Events, Binning).
+ * It points to objects that are the system binaries to load and patches them
+ * appropriately to work in simulator.
+ */
 class LinuxSystem : public System
 {
   private:
+    /** Object pointer for the kernel code */
     ElfObject *kernel;
-    ElfObject *console;
-    ElfObject *bootloader;
 
+    /** Object pointer for the console code */
+    ElfObject *console;
+
+    /** kernel Symbol table */
     SymbolTable *kernelSymtab;
-    SymbolTable *bootloaderSymtab;
+
+    /** console symbol table */
     SymbolTable *consoleSymtab;
 
+    /** Event to halt the simulator if the kernel calls panic()  */
     BreakPCEvent *kernelPanicEvent;
+
+    /** Event to halt the simulator if the console calls panic() */
     BreakPCEvent *consolePanicEvent;
-    LinuxSkipFuncEvent *skipCacheProbeEvent;
-    LinuxSkipIdeDelay50msEvent *skipIdeDelay50msEvent;
+
+    /** Event to skip determine_cpu_caches() because we don't support the
+     * IPRs that the code can access to figure out cache sizes
+     */
+    SkipFuncEvent *skipCacheProbeEvent;
+
+    /** PC based event to skip the ide_delay_50ms() call */
+    SkipFuncEvent *skipIdeDelay50msEvent;
+
+    /** Skip calculate_delay_loop() rather than waiting for this to be
+     * calculated
+     */
     LinuxSkipDelayLoopEvent *skipDelayLoopEvent;
 
-  private:
-
+    /** Begining of kernel code */
     Addr kernelStart;
+
+    /** End of kernel code */
     Addr kernelEnd;
+
+    /** Entry point in the kernel to start at */
     Addr kernelEntry;
+
     bool bin;
     std::vector<string> binned_fns;
 
@@ -80,7 +108,6 @@ class LinuxSystem : public System
     std::vector<RemoteGDB *>   remoteGDB;
     std::vector<GDBListener *> gdbListen;
 
-  public:
     LinuxSystem(const std::string _name,
                 const uint64_t _init_param,
                 MemoryController *_memCtrl,
@@ -89,7 +116,6 @@ class LinuxSystem : public System
                 const std::string &console_path,
                 const std::string &palcode,
                 const std::string &boot_osflags,
-                const std::string &bootloader_path,
                 const bool _bin,
                 const std::vector<std::string> &_binned_fns);
 
@@ -100,9 +126,25 @@ class LinuxSystem : public System
     int registerExecContext(ExecContext *xc);
     void replaceExecContext(ExecContext *xc, int xcIndex);
 
+    /**
+     * Returns the addess the kernel starts at.
+     * @return address the kernel starts at
+     */
     Addr getKernelStart() const { return kernelStart; }
+
+    /**
+     * Returns the addess the kernel ends at.
+     * @return address the kernel ends at
+     */
     Addr getKernelEnd() const { return kernelEnd; }
+
+    /**
+     * Returns the addess the entry point to the kernel code.
+     * @return entry point of the kernel code
+     */
     Addr getKernelEntry() const { return kernelEntry; }
+
+
     bool breakpoint();
 };
 

@@ -630,6 +630,9 @@ class CpuModel:
 CpuModel('SimpleCPU', 'simple_cpu_exec.cc',
          '#include "cpu/simple_cpu/simple_cpu.hh"',
          { 'CPU_exec_context': 'SimpleCPU' })
+CpuModel('FastCPU', 'fast_cpu_exec.cc',
+         '#include "cpu/fast_cpu/fast_cpu.hh"',
+         { 'CPU_exec_context': 'FastCPU' })
 CpuModel('FullCPU', 'full_cpu_exec.cc',
          '#include "cpu/full_cpu/dyn_inst.hh"',
          { 'CPU_exec_context': 'DynInst' })
@@ -1057,10 +1060,10 @@ class IntRegOperandTraits(OperandTraits):
         if (type == 'float' or type == 'double'):
             error(0, 'Attempt to read integer register as FP')
         if (size == self.dflt_size):
-            return '%s = xc->readIntReg(_srcRegIdx[%d]);\n' % \
+            return '%s = xc->readIntReg(this, %d);\n' % \
                    (op_desc.munged_name, op_desc.src_reg_idx)
         else:
-            return '%s = bits(xc->readIntReg(_srcRegIdx[%d]), %d, 0);\n' % \
+            return '%s = bits(xc->readIntReg(this, %d), %d, 0);\n' % \
                    (op_desc.munged_name, op_desc.src_reg_idx, size-1)
 
     def makeWrite(self, op_desc):
@@ -1074,7 +1077,7 @@ class IntRegOperandTraits(OperandTraits):
         wb = '''
         {
             %s final_val = %s;
-            xc->setIntReg(_destRegIdx[%d], final_val);\n
+            xc->setIntReg(this, %d, final_val);\n
             if (traceData) { traceData->setData(final_val); }
         }''' % (self.dflt_type, final_val, op_desc.dest_reg_idx)
         return wb
@@ -1107,7 +1110,7 @@ class FloatRegOperandTraits(OperandTraits):
             func = 'readFloatRegInt'
             if (size != self.dflt_size):
                 bit_select = 1
-        base = 'xc->%s(_srcRegIdx[%d] - FP_Base_DepTag)' % \
+        base = 'xc->%s(this, %d)' % \
                (func, op_desc.src_reg_idx)
         if bit_select:
             return '%s = bits(%s, %d, 0);\n' % \
@@ -1130,7 +1133,7 @@ class FloatRegOperandTraits(OperandTraits):
         wb = '''
         {
             %s final_val = %s;
-            xc->%s(_destRegIdx[%d] - FP_Base_DepTag, final_val);\n
+            xc->%s(this, %d, final_val);\n
             if (traceData) { traceData->setData(final_val); }
         }''' % (type, final_val, func, op_desc.dest_reg_idx)
         return wb
@@ -1490,19 +1493,19 @@ class CodeBlock:
         # These are good enough for most cases, and will be overridden
         # later otherwise.
         if 'IsStore' in self.flags:
-            self.op_class = 'WrPort'
+            self.op_class = 'MemWriteOp'
         elif 'IsLoad' in self.flags or 'IsPrefetch' in self.flags:
-            self.op_class = 'RdPort'
+            self.op_class = 'MemReadOp'
         elif 'IsFloating' in self.flags:
-            self.op_class = 'FloatADD'
+            self.op_class = 'FloatAddOp'
         else:
-            self.op_class = 'IntALU'
+            self.op_class = 'IntAluOp'
 
 # Assume all instruction flags are of the form 'IsFoo'
 instFlagRE = re.compile(r'Is.*')
 
-# OpClass constants are just a little more complicated
-opClassRE = re.compile(r'Int.*|Float.*|.*Port|No_OpClass')
+# OpClass constants end in 'Op' except No_OpClass
+opClassRE = re.compile(r'.*Op|No_OpClass')
 
 class InstObjParams:
     def __init__(self, mnem, class_name, base_class = '',

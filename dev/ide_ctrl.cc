@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -255,7 +255,10 @@ IdeController::cacheAccess(MemReqPtr &req)
 void
 IdeController::ReadConfig(int offset, int size, uint8_t *data)
 {
+
+#if TRACING_ON
     Addr origOffset = offset;
+#endif
 
     if (offset < PCI_DEVICE_SPECIFIC) {
         PciDev::ReadConfig(offset, size, data);
@@ -338,63 +341,74 @@ IdeController::WriteConfig(int offset, int size, uint32_t data)
         memcpy((void *)&pci_regs[offset], (void *)&data, size);
     }
 
-    if (offset == PCI_COMMAND) {
-        if (config.data[offset] & IOSE)
+    // Catch the writes to specific PCI registers that have side affects
+    // (like updating the PIO ranges)
+    switch (offset) {
+      case PCI_COMMAND:
+        if (config.data[offset] & PCI_CMD_IOSE)
             io_enabled = true;
         else
             io_enabled = false;
 
-        if (config.data[offset] & BME)
+        if (config.data[offset] & PCI_CMD_BME)
             bm_enabled = true;
         else
             bm_enabled = false;
+        break;
 
-    } else if (data != 0xffffffff) {
-        switch (offset) {
-          case PCI0_BASE_ADDR0:
+      case PCI0_BASE_ADDR0:
+        if (BARAddrs[0] != 0) {
             pri_cmd_addr = BARAddrs[0];
             if (pioInterface)
                 pioInterface->addAddrRange(pri_cmd_addr,
                                            pri_cmd_addr + pri_cmd_size - 1);
 
-            pri_cmd_addr = pri_cmd_addr & PA_UNCACHED_MASK;
-            break;
+            pri_cmd_addr &= PA_UNCACHED_MASK;
+        }
+        break;
 
-          case PCI0_BASE_ADDR1:
+      case PCI0_BASE_ADDR1:
+        if (BARAddrs[1] != 0) {
             pri_ctrl_addr = BARAddrs[1];
             if (pioInterface)
                 pioInterface->addAddrRange(pri_ctrl_addr,
                                            pri_ctrl_addr + pri_ctrl_size - 1);
 
-            pri_ctrl_addr = pri_ctrl_addr & PA_UNCACHED_MASK;
-            break;
+            pri_ctrl_addr &= PA_UNCACHED_MASK;
+        }
+        break;
 
-          case PCI0_BASE_ADDR2:
+      case PCI0_BASE_ADDR2:
+        if (BARAddrs[2] != 0) {
             sec_cmd_addr = BARAddrs[2];
             if (pioInterface)
                 pioInterface->addAddrRange(sec_cmd_addr,
                                            sec_cmd_addr + sec_cmd_size - 1);
 
-            sec_cmd_addr = sec_cmd_addr & PA_UNCACHED_MASK;
-            break;
+            sec_cmd_addr &= PA_UNCACHED_MASK;
+        }
+        break;
 
-          case PCI0_BASE_ADDR3:
+      case PCI0_BASE_ADDR3:
+        if (BARAddrs[3] != 0) {
             sec_ctrl_addr = BARAddrs[3];
             if (pioInterface)
                 pioInterface->addAddrRange(sec_ctrl_addr,
                                            sec_ctrl_addr + sec_ctrl_size - 1);
 
-            sec_ctrl_addr = sec_ctrl_addr & PA_UNCACHED_MASK;
-            break;
+            sec_ctrl_addr &= PA_UNCACHED_MASK;
+        }
+        break;
 
-          case PCI0_BASE_ADDR4:
+      case PCI0_BASE_ADDR4:
+        if (BARAddrs[4] != 0) {
             bmi_addr = BARAddrs[4];
             if (pioInterface)
                 pioInterface->addAddrRange(bmi_addr, bmi_addr + bmi_size - 1);
 
-            bmi_addr = bmi_addr & PA_UNCACHED_MASK;
-            break;
+            bmi_addr &= PA_UNCACHED_MASK;
         }
+        break;
     }
 }
 
@@ -589,6 +603,9 @@ IdeController::write(MemReqPtr &req, const uint8_t *data)
 void
 IdeController::serialize(std::ostream &os)
 {
+    // Serialize the PciDev base class
+    PciDev::serialize(os);
+
     // Serialize register addresses and sizes
     SERIALIZE_SCALAR(pri_cmd_addr);
     SERIALIZE_SCALAR(pri_cmd_size);
@@ -615,6 +632,9 @@ IdeController::serialize(std::ostream &os)
 void
 IdeController::unserialize(Checkpoint *cp, const std::string &section)
 {
+    // Unserialize the PciDev base class
+    PciDev::unserialize(cp, section);
+
     // Unserialize register addresses and sizes
     UNSERIALIZE_SCALAR(pri_cmd_addr);
     UNSERIALIZE_SCALAR(pri_cmd_size);
@@ -636,6 +656,18 @@ IdeController::unserialize(Checkpoint *cp, const std::string &section)
     UNSERIALIZE_SCALAR(io_enabled);
     UNSERIALIZE_SCALAR(bm_enabled);
     UNSERIALIZE_ARRAY(cmd_in_progress, 4);
+
+    if (pioInterface) {
+        pioInterface->addAddrRange(pri_cmd_addr, pri_cmd_addr +
+                                   pri_cmd_size - 1);
+        pioInterface->addAddrRange(pri_ctrl_addr, pri_ctrl_addr +
+                                   pri_ctrl_size - 1);
+        pioInterface->addAddrRange(sec_cmd_addr, sec_cmd_addr +
+                                   sec_cmd_size - 1);
+        pioInterface->addAddrRange(sec_ctrl_addr, sec_ctrl_addr +
+                                   sec_ctrl_size - 1);
+        pioInterface->addAddrRange(bmi_addr, bmi_addr + bmi_size - 1);
+   }
 }
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
@@ -651,7 +683,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(IdeController)
     Param<uint32_t> pci_bus;
     Param<uint32_t> pci_dev;
     Param<uint32_t> pci_func;
-    SimObjectParam<Bus *> host_bus;
+    SimObjectParam<Bus *> io_bus;
     SimObjectParam<HierParams *> hier;
 
 END_DECLARE_SIM_OBJECT_PARAMS(IdeController)
@@ -667,7 +699,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(IdeController)
     INIT_PARAM(pci_bus, "PCI bus ID"),
     INIT_PARAM(pci_dev, "PCI device number"),
     INIT_PARAM(pci_func, "PCI function code"),
-    INIT_PARAM_DFLT(host_bus, "Host bus to attach to", NULL),
+    INIT_PARAM_DFLT(io_bus, "Host bus to attach to", NULL),
     INIT_PARAM_DFLT(hier, "Hierarchy global variables", &defaultHierParams)
 
 END_INIT_SIM_OBJECT_PARAMS(IdeController)
@@ -676,7 +708,7 @@ CREATE_SIM_OBJECT(IdeController)
 {
     return new IdeController(getInstanceName(), intr_ctrl, disks, mmu,
                              configspace, configdata, tsunami, pci_bus,
-                             pci_dev, pci_func, host_bus, hier);
+                             pci_dev, pci_func, io_bus, hier);
 }
 
 REGISTER_SIM_OBJECT("IdeController", IdeController)

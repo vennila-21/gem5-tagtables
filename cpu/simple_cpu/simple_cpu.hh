@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,7 @@
 #include "cpu/pc_event.hh"
 #include "base/statistics.hh"
 #include "cpu/exec_context.hh"
+#include "cpu/static_inst.hh"
 
 // forward declarations
 #ifdef FULL_SYSTEM
@@ -209,7 +210,7 @@ class SimpleCPU : public BaseCPU
     // number of simulated instructions
     Counter numInst;
     Counter startNumInst;
-    Statistics::Scalar<> numInsts;
+    Stats::Scalar<> numInsts;
 
     virtual Counter totalInstructions() const
     {
@@ -217,22 +218,22 @@ class SimpleCPU : public BaseCPU
     }
 
     // number of simulated memory references
-    Statistics::Scalar<> numMemRefs;
+    Stats::Scalar<> numMemRefs;
 
     // number of simulated loads
     Counter numLoad;
     Counter startNumLoad;
 
     // number of idle cycles
-    Statistics::Average<> notIdleFraction;
-    Statistics::Formula idleFraction;
+    Stats::Average<> notIdleFraction;
+    Stats::Formula idleFraction;
 
     // number of cycles stalled for I-cache misses
-    Statistics::Scalar<> icacheStallCycles;
+    Stats::Scalar<> icacheStallCycles;
     Counter lastIcacheStall;
 
     // number of cycles stalled for D-cache misses
-    Statistics::Scalar<> dcacheStallCycles;
+    Stats::Scalar<> dcacheStallCycles;
     Counter lastDcacheStall;
 
     void processCacheCompletion();
@@ -261,37 +262,71 @@ class SimpleCPU : public BaseCPU
 
     Fault copy(Addr dest);
 
-    uint64_t readIntReg(int reg_idx) { return xc->readIntReg(reg_idx); }
+    // The register accessor methods provide the index of the
+    // instruction's operand (e.g., 0 or 1), not the architectural
+    // register index, to simplify the implementation of register
+    // renaming.  We find the architectural register index by indexing
+    // into the instruction's own operand index table.  Note that a
+    // raw pointer to the StaticInst is provided instead of a
+    // ref-counted StaticInstPtr to redice overhead.  This is fine as
+    // long as these methods don't copy the pointer into any long-term
+    // storage (which is pretty hard to imagine they would have reason
+    // to do).
 
-    float readFloatRegSingle(int reg_idx)
-    { return xc->readFloatRegSingle(reg_idx); }
+    uint64_t readIntReg(StaticInst<TheISA> *si, int idx)
+    {
+        return xc->readIntReg(si->srcRegIdx(idx));
+    }
 
-    double readFloatRegDouble(int reg_idx)
-    { return xc->readFloatRegDouble(reg_idx); }
+    float readFloatRegSingle(StaticInst<TheISA> *si, int idx)
+    {
+        int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
+        return xc->readFloatRegSingle(reg_idx);
+    }
 
-    uint64_t readFloatRegInt(int reg_idx)
-    { return xc->readFloatRegInt(reg_idx); }
+    double readFloatRegDouble(StaticInst<TheISA> *si, int idx)
+    {
+        int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
+        return xc->readFloatRegDouble(reg_idx);
+    }
 
-    void setIntReg(int reg_idx, uint64_t val)
-    { return xc->setIntReg(reg_idx, val); }
+    uint64_t readFloatRegInt(StaticInst<TheISA> *si, int idx)
+    {
+        int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
+        return xc->readFloatRegInt(reg_idx);
+    }
 
-    void setFloatRegSingle(int reg_idx, float val)
-    { return xc->setFloatRegSingle(reg_idx, val); }
+    void setIntReg(StaticInst<TheISA> *si, int idx, uint64_t val)
+    {
+        xc->setIntReg(si->destRegIdx(idx), val);
+    }
 
-    void setFloatRegDouble(int reg_idx, double val)
-    { return xc->setFloatRegDouble(reg_idx, val); }
+    void setFloatRegSingle(StaticInst<TheISA> *si, int idx, float val)
+    {
+        int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
+        xc->setFloatRegSingle(reg_idx, val);
+    }
 
-    void setFloatRegInt(int reg_idx, uint64_t val)
-    { return xc->setFloatRegInt(reg_idx, val); }
+    void setFloatRegDouble(StaticInst<TheISA> *si, int idx, double val)
+    {
+        int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
+        xc->setFloatRegDouble(reg_idx, val);
+    }
+
+    void setFloatRegInt(StaticInst<TheISA> *si, int idx, uint64_t val)
+    {
+        int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
+        xc->setFloatRegInt(reg_idx, val);
+    }
 
     uint64_t readPC() { return xc->readPC(); }
-    void setNextPC(uint64_t val) { return xc->setNextPC(val); }
+    void setNextPC(uint64_t val) { xc->setNextPC(val); }
 
     uint64_t readUniq() { return xc->readUniq(); }
-    void setUniq(uint64_t val) { return xc->setUniq(val); }
+    void setUniq(uint64_t val) { xc->setUniq(val); }
 
     uint64_t readFpcr() { return xc->readFpcr(); }
-    void setFpcr(uint64_t val) { return xc->setFpcr(val); }
+    void setFpcr(uint64_t val) { xc->setFpcr(val); }
 
 #ifdef FULL_SYSTEM
     uint64_t readIpr(int idx, Fault &fault) { return xc->readIpr(idx, fault); }
@@ -300,7 +335,7 @@ class SimpleCPU : public BaseCPU
     int readIntrFlag() { return xc->readIntrFlag(); }
     void setIntrFlag(int val) { xc->setIntrFlag(val); }
     bool inPalMode() { return xc->inPalMode(); }
-    void ev5_trap(Fault fault) { return xc->ev5_trap(fault); }
+    void ev5_trap(Fault fault) { xc->ev5_trap(fault); }
     bool simPalCheck(int palFunc) { return xc->simPalCheck(palFunc); }
 #else
     void syscall() { xc->syscall(); }

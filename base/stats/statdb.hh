@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@
 
 class Python;
 
-namespace Statistics {
+namespace Stats {
 
 class MainBin;
 class StatData;
@@ -69,6 +69,6 @@ void regPrint(void *stat);
 inline std::string name() { return "Statistics Database"; }
 
 /* namespace Database */ }
-/* namespace Statistics */ }
+/* namespace Stats */ }
 
 #endif // __BASE_STATS_STATDB_HH__

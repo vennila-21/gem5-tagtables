@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -96,7 +96,7 @@ struct dp_rom {
 };
 
 class IntrControl;
-class EtherDevInt;
+class NSGigEInt;
 class PhysicalMemory;
 class BaseInterface;
 class HierParams;
@@ -106,7 +106,7 @@ class PciConfigAll;
 /**
  * NS DP82830 Ethernet device model
  */
-class EtherDev : public PciDev
+class NSGigE : public PciDev
 {
   public:
     /** Transmit State Machine states */
@@ -158,12 +158,21 @@ class EtherDev : public PciDev
     dp_regs regs;
     dp_rom rom;
 
-     /*** BASIC STRUCTURES FOR TX/RX ***/
+    /** pci settings */
+    bool io_enable;
+#if 0
+    bool mem_enable;
+    bool bm_enable;
+#endif
+
+    /*** BASIC STRUCTURES FOR TX/RX ***/
     /* Data FIFOs */
     pktbuf_t txFifo;
     pktbuf_t rxFifo;
 
     /** various helper vars */
+    PacketPtr txPacket;
+    PacketPtr rxPacket;
     uint8_t *txPacketBufPtr;
     uint8_t *rxPacketBufPtr;
     uint32_t txXferLen;
@@ -171,8 +180,6 @@ class EtherDev : public PciDev
     uint32_t txPktXmitted;
     bool rxDmaFree;
     bool txDmaFree;
-    PacketPtr txPacket;
-    PacketPtr rxPacket;
 
     /** DescCaches */
     ns_desc txDescCache;
@@ -236,20 +243,20 @@ class EtherDev : public PciDev
     void  txDmaWriteCopy();
 
     void rxDmaReadDone();
-    friend class EventWrapper<EtherDev, &EtherDev::rxDmaReadDone>;
-    EventWrapper<EtherDev, &EtherDev::rxDmaReadDone> rxDmaReadEvent;
+    friend class EventWrapper<NSGigE, &NSGigE::rxDmaReadDone>;
+    EventWrapper<NSGigE, &NSGigE::rxDmaReadDone> rxDmaReadEvent;
 
     void rxDmaWriteDone();
-    friend class EventWrapper<EtherDev, &EtherDev::rxDmaWriteDone>;
-    EventWrapper<EtherDev, &EtherDev::rxDmaWriteDone> rxDmaWriteEvent;
+    friend class EventWrapper<NSGigE, &NSGigE::rxDmaWriteDone>;
+    EventWrapper<NSGigE, &NSGigE::rxDmaWriteDone> rxDmaWriteEvent;
 
     void txDmaReadDone();
-    friend class EventWrapper<EtherDev, &EtherDev::txDmaReadDone>;
-    EventWrapper<EtherDev, &EtherDev::txDmaReadDone> txDmaReadEvent;
+    friend class EventWrapper<NSGigE, &NSGigE::txDmaReadDone>;
+    EventWrapper<NSGigE, &NSGigE::txDmaReadDone> txDmaReadEvent;
 
     void txDmaWriteDone();
-    friend class EventWrapper<EtherDev, &EtherDev::txDmaWriteDone>;
-    EventWrapper<EtherDev, &EtherDev::txDmaWriteDone> txDmaWriteEvent;
+    friend class EventWrapper<NSGigE, &NSGigE::txDmaWriteDone>;
+    EventWrapper<NSGigE, &NSGigE::txDmaWriteDone> txDmaWriteEvent;
 
     bool dmaDescFree;
     bool dmaDataFree;
@@ -261,34 +268,23 @@ class EtherDev : public PciDev
 
     void txReset();
     void rxReset();
-    void regsReset() {
-        memset(&regs, 0, sizeof(regs));
-        regs.config = 0x80000000;
-        regs.mear = 0x12;
-        regs.isr = 0x00608000;
-        regs.txcfg = 0x120;
-        regs.rxcfg = 0x4;
-        regs.srr = 0x0103;
-        regs.mibc = 0x2;
-        regs.vdr = 0x81;
-        regs.tesr = 0xc000;
-    }
+    void regsReset();
 
     void rxKick();
     Tick rxKickTick;
-    typedef EventWrapper<EtherDev, &EtherDev::rxKick> RxKickEvent;
+    typedef EventWrapper<NSGigE, &NSGigE::rxKick> RxKickEvent;
     friend class RxKickEvent;
 
     void txKick();
     Tick txKickTick;
-    typedef EventWrapper<EtherDev, &EtherDev::txKick> TxKickEvent;
+    typedef EventWrapper<NSGigE, &NSGigE::txKick> TxKickEvent;
     friend class TxKickEvent;
 
     /**
      * Retransmit event
      */
     void transmit();
-    typedef EventWrapper<EtherDev, &EtherDev::transmit> TxEvent;
+    typedef EventWrapper<NSGigE, &NSGigE::transmit> TxEvent;
     friend class TxEvent;
     TxEvent txEvent;
 
@@ -323,7 +319,7 @@ class EtherDev : public PciDev
     void cpuInterrupt();
     void cpuIntrClear();
 
-    typedef EventWrapper<EtherDev, &EtherDev::cpuInterrupt> IntrEvent;
+    typedef EventWrapper<NSGigE, &NSGigE::cpuInterrupt> IntrEvent;
     friend class IntrEvent;
     IntrEvent *intrEvent;
 
@@ -335,18 +331,18 @@ class EtherDev : public PciDev
     bool ipChecksum(PacketPtr packet, bool gen);
     uint16_t checksumCalc(uint16_t *pseudo, uint16_t *buf, uint32_t len);
 
-    EtherDevInt *interface;
+    NSGigEInt *interface;
 
   public:
-    EtherDev(const std::string &name, IntrControl *i, Tick intr_delay,
+    NSGigE(const std::string &name, IntrControl *i, Tick intr_delay,
              PhysicalMemory *pmem, Tick tx_delay, Tick rx_delay,
              MemoryController *mmu, HierParams *hier, Bus *header_bus,
              Bus *payload_bus, Tick pio_latency, bool dma_desc_free,
              bool dma_data_free, Tick dma_read_delay, Tick dma_write_delay,
              Tick dma_read_factor, Tick dma_write_factor, PciConfigAll *cf,
              PciConfigData *cd, Tsunami *t, uint32_t bus, uint32_t dev,
-             uint32_t func, bool rx_filter, const int eaddr[6], Addr addr);
-    ~EtherDev();
+             uint32_t func, bool rx_filter, const int eaddr[6]);
+    ~NSGigE();
 
     virtual void WriteConfig(int offset, int size, uint32_t data);
     virtual void ReadConfig(int offset, int size, uint8_t *data);
@@ -360,7 +356,7 @@ class EtherDev : public PciDev
     bool recvPacket(PacketPtr packet);
     void transferDone();
 
-    void setInterface(EtherDevInt *i) { assert(!interface); interface = i; }
+    void setInterface(NSGigEInt *i) { assert(!interface); interface = i; }
 
     virtual void serialize(std::ostream &os);
     virtual void unserialize(Checkpoint *cp, const std::string &section);
@@ -369,14 +365,14 @@ class EtherDev : public PciDev
     void regStats();
 
   private:
-    Statistics::Scalar<> txBytes;
-    Statistics::Scalar<> rxBytes;
-    Statistics::Scalar<> txPackets;
-    Statistics::Scalar<> rxPackets;
-    Statistics::Formula txBandwidth;
-    Statistics::Formula rxBandwidth;
-    Statistics::Formula txPacketRate;
-    Statistics::Formula rxPacketRate;
+    Stats::Scalar<> txBytes;
+    Stats::Scalar<> rxBytes;
+    Stats::Scalar<> txPackets;
+    Stats::Scalar<> rxPackets;
+    Stats::Formula txBandwidth;
+    Stats::Formula rxBandwidth;
+    Stats::Formula txPacketRate;
+    Stats::Formula rxPacketRate;
 
   private:
     Tick pioLatency;
@@ -388,13 +384,13 @@ class EtherDev : public PciDev
 /*
  * Ethernet Interface for an Ethernet Device
  */
-class EtherDevInt : public EtherInt
+class NSGigEInt : public EtherInt
 {
   private:
-    EtherDev *dev;
+    NSGigE *dev;
 
   public:
-    EtherDevInt(const std::string &name, EtherDev *d)
+    NSGigEInt(const std::string &name, NSGigE *d)
         : EtherInt(name), dev(d) { dev->setInterface(this); }
 
     virtual bool recvPacket(PacketPtr &pkt) { return dev->recvPacket(pkt); }

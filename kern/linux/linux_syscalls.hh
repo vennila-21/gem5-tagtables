@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -308,22 +308,15 @@ struct SystemCalls<Linux>
     waitpid = 270,
     write = 271,
     writev = 272,
-        StandardNumber
+        Number
     };
 
     static const char *name(int num);
 
     static bool validSyscallNumber(int num) {
-        return num < StandardNumber;
+            return num < Number;
     }
 
-    /* why does this exist, I don't think it is needed for linux */
-    static int convert(int syscall_num) {
-        if (!validSyscallNumber(syscall_num))
-            return -1;
-
-        return syscall_num ;
-    }
 };
 
 #endif // __LINUX_SYSCALLS_HH__

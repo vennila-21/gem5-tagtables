@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,18 +51,18 @@ class System : public SimObject
 {
     // lisa's binning stuff
   private:
-    std::map<const std::string, Statistics::MainBin *> fnBins;
+    std::map<const std::string, Stats::MainBin *> fnBins;
     std::map<const Addr, SWContext *> swCtxMap;
 
   protected:
     std::vector<FnEvent *> fnEvents;
 
   public:
-    Statistics::Scalar<> fnCalls;
-    Statistics::MainBin *Kernel;
-    Statistics::MainBin *User;
+    Stats::Scalar<> fnCalls;
+    Stats::MainBin *Kernel;
+    Stats::MainBin *User;
 
-    Statistics::MainBin * getBin(const std::string &name);
+    Stats::MainBin * getBin(const std::string &name);
     bool findCaller(std::string, std::string) const;
 
     SWContext *findContext(Addr pcb);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -111,9 +111,9 @@ class MemTest : public BaseCPU
     Tick noResponseCycles;
 
     uint64_t numReads;
-    Statistics::Scalar<> numReadsStat;
-    Statistics::Scalar<> numWritesStat;
-    Statistics::Scalar<> numCopiesStat;
+    Stats::Scalar<> numReadsStat;
+    Stats::Scalar<> numWritesStat;
+    Stats::Scalar<> numCopiesStat;
 
     // called by MemCompleteEvent::process()
     void completeRequest(MemReqPtr &req, uint8_t *data);

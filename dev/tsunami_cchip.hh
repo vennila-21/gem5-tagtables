@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,24 +33,28 @@
 #ifndef __TSUNAMI_CCHIP_HH__
 #define __TSUNAMI_CCHIP_HH__
 
-#include "mem/functional_mem/functional_memory.hh"
 #include "dev/tsunami.hh"
+#include "base/range.hh"
+#include "dev/io_device.hh"
 
 /*
  * Tsunami CChip
  */
-class TsunamiCChip : public FunctionalMemory
+class TsunamiCChip : public PioDevice
 {
   private:
+    /** The base address of this device */
     Addr addr;
+
+    /** The size of mappad from the above address */
     static const Addr size = 0xfff;
 
   protected:
-      /**
-       * pointer to the tsunami object.
-       * This is our access to all the other tsunami
-       * devices.
-       */
+    /**
+     * pointer to the tsunami object.
+     * This is our access to all the other tsunami
+     * devices.
+     */
     Tsunami *tsunami;
 
     /**
@@ -72,24 +76,85 @@ class TsunamiCChip : public FunctionalMemory
      */
     uint64_t drir;
 
+    /**
+     * The MISC register contains the CPU we are currently on
+     * as well as bits to ack RTC and IPI interrupts.
+     */
     uint64_t misc;
 
+    /** Count of the number of pending IPIs on a CPU */
     uint64_t ipiInterrupting[Tsunami::Max_CPUs];
+
+    /** Indicator of which CPUs have had an RTC interrupt */
     bool RTCInterrupting[Tsunami::Max_CPUs];
 
   public:
+    /**
+     * Initialize the Tsunami CChip by setting all of the
+     * device register to 0.
+     * @param name name of this device.
+     * @param t pointer back to the Tsunami object that we belong to.
+     * @param a address we are mapped at.
+     * @param mmu pointer to the memory controller that sends us events.
+     * @param hier object to store parameters universal the device hierarchy
+     * @param bus The bus that this device is attached to
+     */
     TsunamiCChip(const std::string &name, Tsunami *t, Addr a,
-                 MemoryController *mmu);
+                 MemoryController *mmu, HierParams *hier, Bus *bus);
 
+    /**
+      * Process a read to the CChip.
+      * @param req Contains the address to read from.
+      * @param data A pointer to write the read data to.
+      * @return The fault condition of the access.
+      */
     virtual Fault read(MemReqPtr &req, uint8_t *data);
+
+
+    /**
+      * Process a write to the CChip.
+      * @param req Contains the address to write to.
+      * @param data The data to write.
+      * @return The fault condition of the access.
+      */
     virtual Fault write(MemReqPtr &req, const uint8_t *data);
 
+    /**
+     * post an RTC interrupt to the CPU
+     */
     void postRTC();
+
+    /**
+     * post an interrupt to the CPU.
+     * @param interrupt the interrupt number to post (0-64)
+     */
     void postDRIR(uint32_t interrupt);
+
+    /**
+     * clear an interrupt previously posted to the CPU.
+     * @param interrupt the interrupt number to post (0-64)
+     */
     void clearDRIR(uint32_t interrupt);
 
+    /**
+     * Serialize this object to the given output stream.
+     * @param os The stream to serialize to.
+     */
     virtual void serialize(std::ostream &os);
+
+    /**
+     * Reconstruct the state of this object from a checkpoint.
+     * @param cp The checkpoint use.
+     * @param section The section name of this object
+     */
     virtual void unserialize(Checkpoint *cp, const std::string &section);
+
+    /**
+     * Return how long this access will take.
+     * @param req the memory request to calcuate
+     * @return Tick when the request is done
+     */
+    Tick cacheAccess(MemReqPtr &req);
 };
 
 #endif // __TSUNAMI_CCHIP_HH__

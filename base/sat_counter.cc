@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,7 +69,7 @@ SaturatingCounterPred::SaturatingCounterPred(string p_name,
 
 void SaturatingCounterPred::regStats()
 {
-    using namespace Statistics;
+    using namespace Stats;
     stringstream name, description;
 
     //
@@ -138,7 +138,7 @@ void SaturatingCounterPred::regStats()
 
 void SaturatingCounterPred::regFormulas()
 {
-    using namespace Statistics;
+    using namespace Stats;
     stringstream name, description;
 
     //

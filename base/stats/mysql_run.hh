@@ -26,38 +26,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __BASE_STATS_VISIT_HH__
-#define __BASE_STATS_VISIT_HH__
+#ifndef __BASE_STATS_MYSQL_RUN_HH__
+#define __BASE_STATS_MYSQL_RUN_HH__
 
 #include <string>
 
-#include "base/time.hh"
+#include "base/mysql.hh"
 #include "sim/host.hh"
 
 namespace Stats {
 
-class StatData;
-class ScalarData;
-class VectorData;
-class DistDataData;
-class DistData;
-class VectorDistData;
-class Vector2dData;
-class FormulaData;
-
-struct Visit
+struct MySqlRun
 {
-    Visit();
-    virtual ~Visit();
+  private:
+    MySQL::Connection mysql;
+    uint16_t run_id;
 
-    virtual void visit(const ScalarData &data) = 0;
-    virtual void visit(const VectorData &data) = 0;
-    virtual void visit(const DistData &data) = 0;
-    virtual void visit(const VectorDistData &data) = 0;
-    virtual void visit(const Vector2dData &data) = 0;
-    virtual void visit(const FormulaData &data) = 0;
+  public:
+    bool connected() const { return mysql.connected(); }
+    void connect(const std::string &host, const std::string &user,
+                 const std::string &passwd, const std::string &db,
+                 const std::string &name, const std::string &project);
+
+    void setup(const std::string &name, const std::string &user,
+               const std::string &project);
+
+    void remove(const std::string &name);
+    void cleanup();
+
+    MySQL::Connection &conn() { return mysql; }
+    uint16_t run() const { return run_id; }
 };
 
 /* namespace Stats */ }
 
-#endif // __BASE_STATS_VISIT_HH__
+#endif // __BASE_STATS_MYSQL_RUN_HH__
