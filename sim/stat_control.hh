@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,7 @@
 #include <fstream>
 #include <list>
 
-namespace Statistics {
+namespace Stats {
 
 enum {
     Reset = 0x1,
@@ -47,6 +47,6 @@ void SetupEvent(int flags, Tick when, Tick repeat = 0);
 
 void InitSimStats();
 
-/* namespace Statistics */ }
+/* namespace Stats */ }
 
 #endif // __SIM_STAT_CONTROL_HH__

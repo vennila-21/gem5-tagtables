@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,7 @@ class Platform : public SimObject
     virtual ~Platform() {}
     virtual void postConsoleInt() = 0;
     virtual void clearConsoleInt() = 0;
+    virtual Tick intrFrequency() = 0;
 };
 
 #endif // __PLATFORM_HH_

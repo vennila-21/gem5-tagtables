@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -89,7 +89,9 @@ class Tru64System : public System
                 const std::string &palcode,
                 const std::string &boot_osflags,
                 const bool _bin,
-                const std::vector<string> &binned_fns);
+                const std::vector<string> &binned_fns,
+        const uint64_t system_type,
+        const uint64_t system_rev);
     ~Tru64System();
 
     int registerExecContext(ExecContext *xc);

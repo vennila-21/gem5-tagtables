@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -121,7 +121,7 @@ SimObject::regAllStats()
         (*i)->regFormulas();
     }
 
-    Statistics::registerResetCallback(&StatResetCB);
+    Stats::registerResetCallback(&StatResetCB);
 }
 
 //

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@
 
 using namespace std;
 
-namespace Statistics {
+namespace Stats {
 namespace Database {
 
 StatData *
@@ -86,4 +86,4 @@ TheDatabase &db()
 }
 
 /* namespace Database */ }
-/* namespace Statistics */ }
+/* namespace Stats */ }

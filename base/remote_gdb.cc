@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -343,6 +343,13 @@ RemoteGDB::acc(Addr va, size_t len)
                 return false;
             }
         }
+
+    /**
+     * This code says that all accesses to palcode (instruction and data)
+     * are valid since there isn't a va->pa mapping because palcode is
+     * accessed physically. At some point this should probably be cleaned up
+     * but there is no easy way to do it.
+     */
 
         if (PC_PAL(va) || va < 0x10000)
             return true;

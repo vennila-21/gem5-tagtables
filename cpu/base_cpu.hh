@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -139,6 +139,21 @@ class BaseCPU : public SimObject
 
 #ifdef FULL_SYSTEM
     System *system;
+
+
+    /**
+     * Serialize this object to the given output stream.
+     * @param os The stream to serialize to.
+     */
+    virtual void serialize(std::ostream &os);
+
+    /**
+     * Reconstruct the state of this object from a checkpoint.
+     * @param cp The checkpoint use.
+     * @param section The section name of this object
+     */
+    virtual void unserialize(Checkpoint *cp, const std::string &section);
+
 #endif
 
     /**
@@ -167,7 +182,7 @@ class BaseCPU : public SimObject
 
   public:
     // Number of CPU cycles simulated
-    Statistics::Scalar<> numCycles;
+    Stats::Scalar<> numCycles;
 };
 
 #endif // __BASE_CPU_HH__

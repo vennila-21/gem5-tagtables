@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,15 +37,16 @@
 #include <vector>
 
 #include "base/trace.hh"
-#include "cpu/exec_context.hh"
 #include "dev/console.hh"
-#include "dev/tlaser_clock.hh"
 #include "dev/tsunami_io.hh"
-#include "dev/tsunamireg.h"
 #include "dev/tsunami.hh"
-#include "mem/functional_mem/memory_control.hh"
+#include "mem/bus/bus.hh"
+#include "mem/bus/pio_interface.hh"
+#include "mem/bus/pio_interface_impl.hh"
 #include "sim/builder.hh"
 #include "dev/tsunami_cchip.hh"
+#include "dev/tsunamireg.h"
+#include "mem/functional_mem/memory_control.hh"
 
 using namespace std;
 
@@ -74,6 +75,22 @@ TsunamiIO::RTCEvent::description()
 {
     return "tsunami RTC 1024Hz interrupt";
 }
+
+void
+TsunamiIO::RTCEvent::serialize(std::ostream &os)
+{
+    Tick time = when();
+    SERIALIZE_SCALAR(time);
+}
+
+void
+TsunamiIO::RTCEvent::unserialize(Checkpoint *cp, const std::string &section)
+{
+    Tick time;
+    UNSERIALIZE_SCALAR(time);
+    reschedule(time);
+}
+
 
 // Timer Event for PIT Timers
 TsunamiIO::ClockEvent::ClockEvent()
@@ -121,11 +138,39 @@ TsunamiIO::ClockEvent::Status()
     return status;
 }
 
+void
+TsunamiIO::ClockEvent::serialize(std::ostream &os)
+{
+    Tick time = scheduled() ? when() : 0;
+    SERIALIZE_SCALAR(time);
+    SERIALIZE_SCALAR(status);
+    SERIALIZE_SCALAR(mode);
+    SERIALIZE_SCALAR(interval);
+}
+
+void
+TsunamiIO::ClockEvent::unserialize(Checkpoint *cp, const std::string &section)
+{
+    Tick time;
+    UNSERIALIZE_SCALAR(time);
+    UNSERIALIZE_SCALAR(status);
+    UNSERIALIZE_SCALAR(mode);
+    UNSERIALIZE_SCALAR(interval);
+    if (time)
+        schedule(time);
+}
+
 TsunamiIO::TsunamiIO(const string &name, Tsunami *t, time_t init_time,
-                     Addr a, MemoryController *mmu)
-    : FunctionalMemory(name), addr(a), tsunami(t), rtc(t)
+                     Addr a, MemoryController *mmu, HierParams *hier, Bus *bus)
+    : PioDevice(name), addr(a), tsunami(t), rtc(t)
 {
     mmu->add_child(this, Range<Addr>(addr, addr + size));
+
+    if (bus) {
+        pioInterface = newPioInterface(name, hier, bus, this,
+                                       &TsunamiIO::cacheAccess);
+        pioInterface->addAddrRange(addr, addr + size - 1);
+    }
 
     // set the back pointer from tsunami to myself
     tsunami->io = this;
@@ -243,8 +288,11 @@ TsunamiIO::read(MemReqPtr &req, uint8_t *data)
 Fault
 TsunamiIO::write(MemReqPtr &req, const uint8_t *data)
 {
+
+#if TRACING_ON
     uint8_t dt = *(uint8_t*)data;
     uint64_t dt64 = dt;
+#endif
 
     DPRINTF(Tsunami, "io write - va=%#x size=%d IOPort=%#x Data=%#x\n",
             req->vaddr, req->size, req->vaddr & 0xfff, dt64);
@@ -375,20 +423,32 @@ TsunamiIO::clearPIC(uint8_t bitvector)
     }
 }
 
+Tick
+TsunamiIO::cacheAccess(MemReqPtr &req)
+{
+    return curTick + 1000;
+}
+
 void
 TsunamiIO::serialize(std::ostream &os)
 {
     SERIALIZE_SCALAR(timerData);
     SERIALIZE_SCALAR(uip);
+    SERIALIZE_SCALAR(mask1);
+    SERIALIZE_SCALAR(mask2);
+    SERIALIZE_SCALAR(mode1);
+    SERIALIZE_SCALAR(mode2);
     SERIALIZE_SCALAR(picr);
     SERIALIZE_SCALAR(picInterrupting);
-    Tick time0when = timer0.when();
-    Tick time2when = timer2.when();
-    Tick rtcwhen = rtc.when();
-    SERIALIZE_SCALAR(time0when);
-    SERIALIZE_SCALAR(time2when);
-    SERIALIZE_SCALAR(rtcwhen);
+    SERIALIZE_SCALAR(RTCAddress);
 
+    // Serialize the timers
+    nameOut(os, csprintf("%s.timer0", name()));
+    timer0.serialize(os);
+    nameOut(os, csprintf("%s.timer2", name()));
+    timer2.serialize(os);
+    nameOut(os, csprintf("%s.rtc", name()));
+    rtc.serialize(os);
 }
 
 void
@@ -396,17 +456,18 @@ TsunamiIO::unserialize(Checkpoint *cp, const std::string &section)
 {
     UNSERIALIZE_SCALAR(timerData);
     UNSERIALIZE_SCALAR(uip);
+    UNSERIALIZE_SCALAR(mask1);
+    UNSERIALIZE_SCALAR(mask2);
+    UNSERIALIZE_SCALAR(mode1);
+    UNSERIALIZE_SCALAR(mode2);
     UNSERIALIZE_SCALAR(picr);
     UNSERIALIZE_SCALAR(picInterrupting);
-    Tick time0when;
-    Tick time2when;
-    Tick rtcwhen;
-    UNSERIALIZE_SCALAR(time0when);
-    UNSERIALIZE_SCALAR(time2when);
-    UNSERIALIZE_SCALAR(rtcwhen);
-    timer0.reschedule(time0when);
-    timer2.reschedule(time2when);
-    rtc.reschedule(rtcwhen);
+    UNSERIALIZE_SCALAR(RTCAddress);
+
+    // Unserialize the timers
+    timer0.unserialize(cp, csprintf("%s.timer0", section));
+    timer2.unserialize(cp, csprintf("%s.timer2", section));
+    rtc.unserialize(cp, csprintf("%s.rtc", section));
 }
 
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(TsunamiIO)
@@ -415,6 +476,8 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(TsunamiIO)
     Param<time_t> time;
     SimObjectParam<MemoryController *> mmu;
     Param<Addr> addr;
+    SimObjectParam<Bus*> io_bus;
+    SimObjectParam<HierParams *> hier;
 
 END_DECLARE_SIM_OBJECT_PARAMS(TsunamiIO)
 
@@ -424,13 +487,16 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(TsunamiIO)
     INIT_PARAM_DFLT(time, "System time to use "
             "(0 for actual time, default is 1/1/06", ULL(1136073600)),
     INIT_PARAM(mmu, "Memory Controller"),
-    INIT_PARAM(addr, "Device Address")
+    INIT_PARAM(addr, "Device Address"),
+    INIT_PARAM_DFLT(io_bus, "The IO Bus to attach to", NULL),
+    INIT_PARAM_DFLT(hier, "Hierarchy global variables", &defaultHierParams)
 
 END_INIT_SIM_OBJECT_PARAMS(TsunamiIO)
 
 CREATE_SIM_OBJECT(TsunamiIO)
 {
-    return new TsunamiIO(getInstanceName(), tsunami, time,  addr, mmu);
+    return new TsunamiIO(getInstanceName(), tsunami, time,  addr, mmu, hier,
+                         io_bus);
 }
 
 REGISTER_SIM_OBJECT("TsunamiIO", TsunamiIO)

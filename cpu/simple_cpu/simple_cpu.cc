@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,7 @@
 #include "base/pollevent.hh"
 #include "base/range.hh"
 #include "base/trace.hh"
+#include "base/stats/events.hh"
 #include "cpu/base_cpu.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/exetrace.hh"
@@ -254,7 +255,7 @@ SimpleCPU::haltContext(int thread_num)
 void
 SimpleCPU::regStats()
 {
-    using namespace Statistics;
+    using namespace Stats;
 
     BaseCPU::regStats();
 
@@ -298,6 +299,7 @@ SimpleCPU::resetStats()
 void
 SimpleCPU::serialize(ostream &os)
 {
+    BaseCPU::serialize(os);
     SERIALIZE_ENUM(_status);
     SERIALIZE_SCALAR(inst);
     nameOut(os, csprintf("%s.xc", name()));
@@ -311,6 +313,7 @@ SimpleCPU::serialize(ostream &os)
 void
 SimpleCPU::unserialize(Checkpoint *cp, const string &section)
 {
+    BaseCPU::unserialize(cp, section);
     UNSERIALIZE_ENUM(_status);
     UNSERIALIZE_SCALAR(inst);
     xc->unserialize(cp, csprintf("%s.xc", section));
@@ -402,6 +405,9 @@ SimpleCPU::read(Addr addr, T &data, unsigned flags)
         }
     }
 
+    if (!dcacheInterface && (memReq->flags & UNCACHEABLE))
+        Stats::recordEvent("Uncached Read");
+
     return fault;
 }
 
@@ -486,6 +492,9 @@ SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 
     if (res && (fault == No_Fault))
         *res = memReq->result;
+
+    if (!dcacheInterface && (memReq->flags & UNCACHEABLE))
+        Stats::recordEvent("Uncached Write");
 
     return fault;
 }
@@ -708,8 +717,7 @@ SimpleCPU::tick()
                                          xc->regs.pc);
 
 #ifdef FULL_SYSTEM
-        xc->regs.opcode = (inst >> 26) & 0x3f;
-        xc->regs.ra = (inst >> 21) & 0x1f;
+        xc->setInst(inst);
 #endif // FULL_SYSTEM
 
         xc->func_exe_inst++;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -130,7 +130,7 @@ BaseCPU::BaseCPU(const string &_name, int _number_of_threads,
 void
 BaseCPU::regStats()
 {
-    using namespace Statistics;
+    using namespace Stats;
 
     numCycles
         .name(name() + ".numCycles")
@@ -240,6 +240,21 @@ BaseCPU::clear_interrupts()
 
     memset(interrupts, 0, sizeof(interrupts));
     intstatus = 0;
+}
+
+
+void
+BaseCPU::serialize(std::ostream &os)
+{
+    SERIALIZE_ARRAY(interrupts, NumInterruptLevels);
+    SERIALIZE_SCALAR(intstatus);
+}
+
+void
+BaseCPU::unserialize(Checkpoint *cp, const std::string &section)
+{
+    UNSERIALIZE_ARRAY(interrupts, NumInterruptLevels);
+    UNSERIALIZE_SCALAR(intstatus);
 }
 
 #endif // FULL_SYSTEM

@@ -1,4 +1,30 @@
-/* $Id$ */
+/*
+ * Copyright (c) 2004 The Regents of The University of Michigan
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met: redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer;
+ * redistributions in binary form must reproduce the above copyright
+ * notice, this list of conditions and the following disclaimer in the
+ * documentation and/or other materials provided with the distribution;
+ * neither the name of the copyright holders nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 /* @file
  * Tsunami PChip (pci)
@@ -9,14 +35,12 @@
 #include <vector>
 
 #include "base/trace.hh"
-#include "cpu/exec_context.hh"
-#include "dev/console.hh"
-#include "dev/etherdev.hh"
-#include "dev/scsi_ctrl.hh"
-#include "dev/tlaser_clock.hh"
 #include "dev/tsunami_pchip.hh"
 #include "dev/tsunamireg.h"
 #include "dev/tsunami.hh"
+#include "mem/bus/bus.hh"
+#include "mem/bus/pio_interface.hh"
+#include "mem/bus/pio_interface_impl.hh"
 #include "mem/functional_mem/memory_control.hh"
 #include "mem/functional_mem/physical_memory.hh"
 #include "sim/builder.hh"
@@ -25,8 +49,9 @@
 using namespace std;
 
 TsunamiPChip::TsunamiPChip(const string &name, Tsunami *t, Addr a,
-                           MemoryController *mmu)
-    : FunctionalMemory(name), addr(a), tsunami(t)
+                           MemoryController *mmu, HierParams *hier,
+                           Bus *bus)
+    : PioDevice(name), addr(a), tsunami(t)
 {
     mmu->add_child(this, Range<Addr>(addr, addr + size));
 
@@ -35,6 +60,16 @@ TsunamiPChip::TsunamiPChip(const string &name, Tsunami *t, Addr a,
         wsm[i] = 0;
         tba[i] = 0;
     }
+
+    if (bus) {
+        pioInterface = newPioInterface(name, hier, bus, this,
+                                      &TsunamiPChip::cacheAccess);
+        pioInterface->addAddrRange(addr, addr + size - 1);
+    }
+
+
+    // initialize pchip control register
+    pctl = (ULL(0x1) << 20) | (ULL(0x1) << 32) | (ULL(0x2) << 36);
 
     //Set back pointer in tsunami
     tsunami->pchip = this;
@@ -47,8 +82,6 @@ TsunamiPChip::read(MemReqPtr &req, uint8_t *data)
             req->vaddr, req->size);
 
     Addr daddr = (req->paddr - (addr & PA_IMPL_MASK)) >> 6;
-//    ExecContext *xc = req->xc;
-//    int cpuid = xc->cpu_id;
 
     switch (req->size) {
 
@@ -91,17 +124,18 @@ TsunamiPChip::read(MemReqPtr &req, uint8_t *data)
                     *(uint64_t*)data = tba[3];
                     return No_Fault;
               case TSDEV_PC_PCTL:
-                    // might want to change the clock??
-                    *(uint64_t*)data = 0x00; // try this
+                    *(uint64_t*)data = pctl;
                     return No_Fault;
               case TSDEV_PC_PLAT:
                     panic("PC_PLAT not implemented\n");
               case TSDEV_PC_RES:
                     panic("PC_RES not implemented\n");
               case TSDEV_PC_PERROR:
-                    panic("PC_PERROR not implemented\n");
+                    *(uint64_t*)data = 0x00;
+                    return No_Fault;
               case TSDEV_PC_PERRMASK:
-                    panic("PC_PERRMASK not implemented\n");
+                    *(uint64_t*)data = 0x00;
+                    return No_Fault;
               case TSDEV_PC_PERRSET:
                     panic("PC_PERRSET not implemented\n");
               case TSDEV_PC_TLBIV:
@@ -179,15 +213,14 @@ TsunamiPChip::write(MemReqPtr &req, const uint8_t *data)
                     tba[3] = *(uint64_t*)data;
                     return No_Fault;
               case TSDEV_PC_PCTL:
-                    // might want to change the clock??
-                    //*(uint64_t*)data; // try this
+                    pctl = *(uint64_t*)data;
                     return No_Fault;
               case TSDEV_PC_PLAT:
                     panic("PC_PLAT not implemented\n");
               case TSDEV_PC_RES:
                     panic("PC_RES not implemented\n");
               case TSDEV_PC_PERROR:
-                    panic("PC_PERROR not implemented\n");
+                    return No_Fault;
               case TSDEV_PC_PERRMASK:
                     panic("PC_PERRMASK not implemented\n");
               case TSDEV_PC_PERRSET:
@@ -235,12 +268,29 @@ TsunamiPChip::translatePciToDma(Addr busAddr)
     Addr pteAddr;
     Addr dmaAddr;
 
+#if 0
+    DPRINTF(IdeDisk, "Translation for bus address: %#x\n", busAddr);
     for (int i = 0; i < 4; i++) {
+        DPRINTF(IdeDisk, "(%d) base:%#x mask:%#x\n",
+                i, wsba[i], wsm[i]);
+
         windowBase = wsba[i];
-        windowMask = ~wsm[i] & (0x7ff << 20);
+        windowMask = ~wsm[i] & (ULL(0xfff) << 20);
 
         if ((busAddr & windowMask) == (windowBase & windowMask)) {
+            DPRINTF(IdeDisk, "Would have matched %d (wb:%#x wm:%#x --> ba&wm:%#x wb&wm:%#x)\n",
+                    i, windowBase, windowMask, (busAddr & windowMask),
+                    (windowBase & windowMask));
+        }
+    }
+#endif
 
+    for (int i = 0; i < 4; i++) {
+
+        windowBase = wsba[i];
+        windowMask = ~wsm[i] & (ULL(0xfff) << 20);
+
+        if ((busAddr & windowMask) == (windowBase & windowMask)) {
 
             if (wsba[i] & 0x1) {   // see if enabled
                 if (wsba[i] & 0x2) { // see if SG bit is set
@@ -254,8 +304,8 @@ TsunamiPChip::translatePciToDma(Addr busAddr)
                         to create an address for the SG page
                     */
 
-                    tbaMask = ~(((wsm[i] & (0x7ff << 20)) >> 10) | 0x3ff);
-                    baMask = (wsm[i] & (0x7ff << 20)) | (0x7f << 13);
+                    tbaMask = ~(((wsm[i] & (ULL(0xfff) << 20)) >> 10) | ULL(0x3ff));
+                    baMask = (wsm[i] & (ULL(0xfff) << 20)) | (ULL(0x7f) << 13);
                     pteAddr = (tba[i] & tbaMask) | ((busAddr & baMask) >> 10);
 
                     memcpy((void *)&pteEntry,
@@ -263,10 +313,10 @@ TsunamiPChip::translatePciToDma(Addr busAddr)
                            physmem->dma_addr(pteAddr, sizeof(uint64_t)),
                            sizeof(uint64_t));
 
-                    dmaAddr = ((pteEntry & ~0x1) << 12) | (busAddr & 0x1fff);
+                    dmaAddr = ((pteEntry & ~ULL(0x1)) << 12) | (busAddr & ULL(0x1fff));
 
                 } else {
-                    baMask = (wsm[i] & (0x7ff << 20)) | 0xfffff;
+                    baMask = (wsm[i] & (ULL(0xfff) << 20)) | ULL(0xfffff);
                     tbaMask = ~baMask;
                     dmaAddr = (tba[i] & tbaMask) | (busAddr & baMask);
                 }
@@ -276,12 +326,14 @@ TsunamiPChip::translatePciToDma(Addr busAddr)
         }
     }
 
-    return 0;
+    // if no match was found, then return the original address
+    return busAddr;
 }
 
 void
 TsunamiPChip::serialize(std::ostream &os)
 {
+    SERIALIZE_SCALAR(pctl);
     SERIALIZE_ARRAY(wsba, 4);
     SERIALIZE_ARRAY(wsm, 4);
     SERIALIZE_ARRAY(tba, 4);
@@ -290,9 +342,16 @@ TsunamiPChip::serialize(std::ostream &os)
 void
 TsunamiPChip::unserialize(Checkpoint *cp, const std::string &section)
 {
+    UNSERIALIZE_SCALAR(pctl);
     UNSERIALIZE_ARRAY(wsba, 4);
     UNSERIALIZE_ARRAY(wsm, 4);
     UNSERIALIZE_ARRAY(tba, 4);
+}
+
+Tick
+TsunamiPChip::cacheAccess(MemReqPtr &req)
+{
+    return curTick + 1000;
 }
 
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(TsunamiPChip)
@@ -300,6 +359,8 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(TsunamiPChip)
     SimObjectParam<Tsunami *> tsunami;
     SimObjectParam<MemoryController *> mmu;
     Param<Addr> addr;
+    SimObjectParam<Bus*> io_bus;
+    SimObjectParam<HierParams *> hier;
 
 END_DECLARE_SIM_OBJECT_PARAMS(TsunamiPChip)
 
@@ -307,13 +368,15 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(TsunamiPChip)
 
     INIT_PARAM(tsunami, "Tsunami"),
     INIT_PARAM(mmu, "Memory Controller"),
-    INIT_PARAM(addr, "Device Address")
+    INIT_PARAM(addr, "Device Address"),
+    INIT_PARAM_DFLT(io_bus, "The IO Bus to attach to", NULL),
+    INIT_PARAM_DFLT(hier, "Hierarchy global variables", &defaultHierParams)
 
 END_INIT_SIM_OBJECT_PARAMS(TsunamiPChip)
 
 CREATE_SIM_OBJECT(TsunamiPChip)
 {
-    return new TsunamiPChip(getInstanceName(), tsunami, addr, mmu);
+    return new TsunamiPChip(getInstanceName(), tsunami, addr, mmu, hier, io_bus);
 }
 
 REGISTER_SIM_OBJECT("TsunamiPChip", TsunamiPChip)

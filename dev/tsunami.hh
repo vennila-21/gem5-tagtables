@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,7 @@
 
 class IdeController;
 class TlaserClock;
-class EtherDev;
+class NSGigE;
 class TsunamiCChip;
 class TsunamiPChip;
 class TsunamiIO;
@@ -67,7 +67,7 @@ class Tsunami : public Platform
     /** Pointer to the disk controller device */
     IdeController *disk_controller;
     /** Pointer to the ethernet controller device */
-    EtherDev *ethernet;
+    NSGigE *ethernet;
 
     /** Pointer to the Tsunami CChip.
       * The chip contains some configuration information and
@@ -95,10 +95,33 @@ class Tsunami : public Platform
     Tsunami(const std::string &name, System *s, IntrControl *intctrl,
             PciConfigAll *pci, int intrFreq);
 
+    /**
+     * Return the interrupting frequency to AlphaAccess
+     * @return frequency of RTC interrupts
+     */
+     virtual Tick intrFrequency();
+
+    /**
+     * Cause the cpu to post a serial interrupt to the CPU.
+     */
     virtual void postConsoleInt();
+
+    /**
+     * Clear a posted CPU interrupt (id=55)
+     */
     virtual void clearConsoleInt();
 
+    /**
+     * Serialize this object to the given output stream.
+     * @param os The stream to serialize to.
+     */
     virtual void serialize(std::ostream &os);
+
+    /**
+     * Reconstruct the state of this object from a checkpoint.
+     * @param cp The checkpoint use.
+     * @param section The section name of this object
+     */
     virtual void unserialize(Checkpoint *cp, const std::string &section);
 };
 

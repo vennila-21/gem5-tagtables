@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2000-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -236,7 +236,7 @@ main(int argc, char **argv)
     sayHello(cerr);
 
     // Initialize statistics database
-    Statistics::InitSimStats();
+    Stats::InitSimStats();
 
     vector<char *> cppArgs;
 
@@ -390,10 +390,10 @@ main(int argc, char **argv)
 #endif
 
     // Check to make sure that the stats package is properly initialized
-    Statistics::check();
+    Stats::check();
 
     // Reset to put the stats in a consistent state.
-    Statistics::reset();
+    Stats::reset();
 
     // Nothing to simulate if we don't have at least one CPU somewhere.
     if (BaseCPU::numSimulatedCPUs() == 0) {
@@ -418,14 +418,14 @@ main(int argc, char **argv)
             if (async_dump) {
                 async_dump = false;
 
-                using namespace Statistics;
+                using namespace Stats;
                 SetupEvent(Dump, curTick);
             }
 
             if (async_dumpreset) {
                 async_dumpreset = false;
 
-                using namespace Statistics;
+                using namespace Stats;
                 SetupEvent(Dump | Reset, curTick);
             }
 

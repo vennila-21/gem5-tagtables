@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,10 +73,6 @@
 #define SIDETIM (4)
 #define UDMACTL (5)
 #define UDMATIM (6)
-
-// PCI Command bit fields
-#define BME     0x04 // Bus master function enable
-#define IOSE    0x01 // I/O space enable
 
 typedef enum RegType {
     COMMAND_BLOCK = 0,
@@ -199,12 +195,6 @@ class IdeController : public PciDev
     virtual Fault write(MemReqPtr &req, const uint8_t *data);
 
     /**
-     * Cache access timing specific to device
-     * @param req Memory request
-     */
-    Tick cacheAccess(MemReqPtr &req);
-
-    /**
      * Serialize this object to the given output stream.
      * @param os The stream to serialize to.
      */
@@ -217,5 +207,11 @@ class IdeController : public PciDev
      */
     virtual void unserialize(Checkpoint *cp, const std::string &section);
 
+    /**
+     * Return how long this access will take.
+     * @param req the memory request to calcuate
+     * @return Tick when the request is done
+     */
+    Tick cacheAccess(MemReqPtr &req);
 };
 #endif // __IDE_CTRL_HH_

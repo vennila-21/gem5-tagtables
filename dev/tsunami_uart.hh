@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,12 +48,26 @@ class TsunamiUart : public PioDevice
     Addr addr;
     static const Addr size = 0x8;
 
+
   protected:
     SimConsole *cons;
     int status_store;
     uint8_t next_char;
     bool valid_char;
     uint8_t IER;
+
+    class IntrEvent : public Event
+    {
+        protected:
+            TsunamiUart *uart;
+        public:
+            IntrEvent(TsunamiUart *u);
+            virtual void process();
+            virtual const char *description();
+            void scheduleIntr();
+    };
+
+    IntrEvent intrEvent;
 
   public:
     TsunamiUart(const string &name, SimConsole *c, MemoryController *mmu,
@@ -66,7 +80,11 @@ class TsunamiUart : public PioDevice
     virtual void serialize(std::ostream &os);
     virtual void unserialize(Checkpoint *cp, const std::string &section);
 
-  public:
+    /**
+     * Return how long this access will take.
+     * @param req the memory request to calcuate
+     * @return Tick when the request is done
+     */
     Tick cacheAccess(MemReqPtr &req);
 };
 

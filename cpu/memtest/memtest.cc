@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -186,7 +186,7 @@ MemTest::completeRequest(MemReqPtr &req, uint8_t *data)
 void
 MemTest::regStats()
 {
-    using namespace Statistics;
+    using namespace Stats;
 
 
     numReadsStat

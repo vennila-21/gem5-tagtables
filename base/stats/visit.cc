@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
 
 #include "base/stats/visit.hh"
 
-namespace Statistics {
+namespace Stats {
 namespace Detail {
 
 Visit::Visit()
@@ -38,4 +38,4 @@ Visit::~Visit()
 {}
 
 /* namespace Detail */ }
-/* namespace Statistics */ }
+/* namespace Stats */ }

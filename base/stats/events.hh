@@ -26,38 +26,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __BASE_STATS_VISIT_HH__
-#define __BASE_STATS_VISIT_HH__
+#ifndef __BASE_STATS_EVENTS_HH__
+#define __BASE_STATS_EVENTS_HH__
 
 #include <string>
 
-#include "base/time.hh"
-#include "sim/host.hh"
+#include "base/trace.hh"
 
 namespace Stats {
 
-class StatData;
-class ScalarData;
-class VectorData;
-class DistDataData;
-class DistData;
-class VectorDistData;
-class Vector2dData;
-class FormulaData;
+extern Tick EventStart;
 
-struct Visit
+#ifdef USE_MYSQL
+void __event(const std::string &stat);
+bool MySqlConnected();
+#endif
+
+inline void
+recordEvent(const std::string &stat)
 {
-    Visit();
-    virtual ~Visit();
+    if (EventStart > curTick)
+        return;
 
-    virtual void visit(const ScalarData &data) = 0;
-    virtual void visit(const VectorData &data) = 0;
-    virtual void visit(const DistData &data) = 0;
-    virtual void visit(const VectorDistData &data) = 0;
-    virtual void visit(const Vector2dData &data) = 0;
-    virtual void visit(const FormulaData &data) = 0;
-};
+    DPRINTF(StatEvents, "Statistics Event: %s\n", stat);
+
+#ifdef USE_MYSQL
+    if (!MySqlConnected())
+        return;
+
+    __event(stat);
+#endif
+}
 
 /* namespace Stats */ }
 
-#endif // __BASE_STATS_VISIT_HH__
+#endif // __BASE_STATS_EVENTS_HH__
