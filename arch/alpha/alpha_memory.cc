@@ -44,20 +44,19 @@ using namespace std;
 //
 //  Alpha TLB
 //
-
 #ifdef DEBUG
-    bool uncacheBit39 = false;
-    bool uncacheBit40 = false;
+bool uncacheBit39 = false;
+bool uncacheBit40 = false;
 #endif
 
-AlphaTlb::AlphaTlb(const string &name, int s)
+AlphaTLB::AlphaTLB(const string &name, int s)
     : SimObject(name), size(s), nlu(0)
 {
     table = new AlphaISA::PTE[size];
     memset(table, 0, sizeof(AlphaISA::PTE[size]));
 }
 
-AlphaTlb::~AlphaTlb()
+AlphaTLB::~AlphaTLB()
 {
     if (table)
         delete [] table;
@@ -65,7 +64,7 @@ AlphaTlb::~AlphaTlb()
 
 // look up an entry in the TLB
 AlphaISA::PTE *
-AlphaTlb::lookup(Addr vpn, uint8_t asn) const
+AlphaTLB::lookup(Addr vpn, uint8_t asn) const
 {
     DPRINTF(TLB, "lookup %#x\n", vpn);
 
@@ -89,7 +88,7 @@ AlphaTlb::lookup(Addr vpn, uint8_t asn) const
 
 
 void
-AlphaTlb::checkCacheability(MemReqPtr &req)
+AlphaTLB::checkCacheability(MemReqPtr &req)
 {
     // in Alpha, cacheability is controlled by upper-level bits of the
     // physical address
@@ -135,7 +134,7 @@ AlphaTlb::checkCacheability(MemReqPtr &req)
 
 // insert a new TLB entry
 void
-AlphaTlb::insert(Addr vaddr, AlphaISA::PTE &pte)
+AlphaTLB::insert(Addr vaddr, AlphaISA::PTE &pte)
 {
     if (table[nlu].valid) {
         Addr oldvpn = table[nlu].tag;
@@ -169,7 +168,7 @@ AlphaTlb::insert(Addr vaddr, AlphaISA::PTE &pte)
 }
 
 void
-AlphaTlb::flushAll()
+AlphaTLB::flushAll()
 {
     memset(table, 0, sizeof(AlphaISA::PTE[size]));
     lookupTable.clear();
@@ -177,7 +176,7 @@ AlphaTlb::flushAll()
 }
 
 void
-AlphaTlb::flushProcesses()
+AlphaTLB::flushProcesses()
 {
     PageTable::iterator i = lookupTable.begin();
     PageTable::iterator end = lookupTable.end();
@@ -197,7 +196,7 @@ AlphaTlb::flushProcesses()
 }
 
 void
-AlphaTlb::flushAddr(Addr vaddr, uint8_t asn)
+AlphaTLB::flushAddr(Addr vaddr, uint8_t asn)
 {
     Addr vpn = VA_VPN(vaddr);
 
@@ -225,7 +224,7 @@ AlphaTlb::flushAddr(Addr vaddr, uint8_t asn)
 
 
 void
-AlphaTlb::serialize(ostream &os)
+AlphaTLB::serialize(ostream &os)
 {
     SERIALIZE_SCALAR(size);
     SERIALIZE_SCALAR(nlu);
@@ -237,7 +236,7 @@ AlphaTlb::serialize(ostream &os)
 }
 
 void
-AlphaTlb::unserialize(Checkpoint *cp, const string &section)
+AlphaTLB::unserialize(Checkpoint *cp, const string &section)
 {
     UNSERIALIZE_SCALAR(size);
     UNSERIALIZE_SCALAR(nlu);
@@ -255,13 +254,13 @@ AlphaTlb::unserialize(Checkpoint *cp, const string &section)
 //
 //  Alpha ITB
 //
-AlphaItb::AlphaItb(const std::string &name, int size)
-    : AlphaTlb(name, size)
+AlphaITB::AlphaITB(const std::string &name, int size)
+    : AlphaTLB(name, size)
 {}
 
 
 void
-AlphaItb::regStats()
+AlphaITB::regStats()
 {
     hits
         .name(name() + ".hits")
@@ -280,7 +279,7 @@ AlphaItb::regStats()
 }
 
 void
-AlphaItb::fault(Addr pc, ExecContext *xc) const
+AlphaITB::fault(Addr pc, ExecContext *xc) const
 {
     uint64_t *ipr = xc->regs.ipr;
 
@@ -293,7 +292,7 @@ AlphaItb::fault(Addr pc, ExecContext *xc) const
 
 
 Fault
-AlphaItb::translate(MemReqPtr &req) const
+AlphaITB::translate(MemReqPtr &req) const
 {
     InternalProcReg *ipr = req->xc->regs.ipr;
 
@@ -311,7 +310,7 @@ AlphaItb::translate(MemReqPtr &req) const
         if (!validVirtualAddress(req->vaddr)) {
             fault(req->vaddr, req->xc);
             acv++;
-            return Itb_Acv_Fault;
+            return ITB_Acv_Fault;
         }
 
         // Check for "superpage" mapping: when SP<1> is set, and
@@ -323,7 +322,7 @@ AlphaItb::translate(MemReqPtr &req) const
             if (ICM_CM(ipr[AlphaISA::IPR_ICM]) != AlphaISA::mode_kernel) {
                 fault(req->vaddr, req->xc);
                 acv++;
-                return Itb_Acv_Fault;
+                return ITB_Acv_Fault;
             }
 
             req->paddr = req->vaddr & PA_IMPL_MASK;
@@ -343,7 +342,7 @@ AlphaItb::translate(MemReqPtr &req) const
             if (!pte) {
                 fault(req->vaddr, req->xc);
                 misses++;
-                return Itb_Fault_Fault;
+                return ITB_Fault_Fault;
             }
 
             req->paddr = PA_PFN2PA(pte->ppn) + VA_POFS(req->vaddr & ~3);
@@ -353,7 +352,7 @@ AlphaItb::translate(MemReqPtr &req) const
                 // instruction access fault
                 fault(req->vaddr, req->xc);
                 acv++;
-                return Itb_Acv_Fault;
+                return ITB_Acv_Fault;
             }
 
             hits++;
@@ -373,12 +372,12 @@ AlphaItb::translate(MemReqPtr &req) const
 //
 //  Alpha DTB
 //
-AlphaDtb::AlphaDtb(const std::string &name, int size)
-    : AlphaTlb(name, size)
+AlphaDTB::AlphaDTB(const std::string &name, int size)
+    : AlphaTLB(name, size)
 {}
 
 void
-AlphaDtb::regStats()
+AlphaDTB::regStats()
 {
     read_hits
         .name(name() + ".read_hits")
@@ -447,7 +446,7 @@ AlphaDtb::regStats()
 }
 
 void
-AlphaDtb::fault(Addr vaddr, uint64_t flags, ExecContext *xc) const
+AlphaDTB::fault(Addr vaddr, uint64_t flags, ExecContext *xc) const
 {
     uint64_t *ipr = xc->regs.ipr;
 
@@ -471,7 +470,7 @@ AlphaDtb::fault(Addr vaddr, uint64_t flags, ExecContext *xc) const
 }
 
 Fault
-AlphaDtb::translate(MemReqPtr &req, bool write) const
+AlphaDTB::translate(MemReqPtr &req, bool write) const
 {
     RegFile *regs = &req->xc->regs;
     Addr pc = regs->pc;
@@ -497,7 +496,7 @@ AlphaDtb::translate(MemReqPtr &req, bool write) const
                   req->xc);
 
             if (write) { write_acv++; } else { read_acv++; }
-            return Dtb_Fault_Fault;
+            return DTB_Fault_Fault;
         }
 
         // Check for "superpage" mapping: when SP<1> is set, and
@@ -512,7 +511,7 @@ AlphaDtb::translate(MemReqPtr &req, bool write) const
                       ((write ? MM_STAT_WR_MASK : 0) | MM_STAT_ACV_MASK),
                       req->xc);
                 if (write) { write_acv++; } else { read_acv++; }
-                return Dtb_Acv_Fault;
+                return DTB_Acv_Fault;
             }
 
             req->paddr = req->vaddr & PA_IMPL_MASK;
@@ -552,13 +551,13 @@ AlphaDtb::translate(MemReqPtr &req, bool write) const
                           (pte->fonw ? MM_STAT_FONW_MASK : 0),
                           req->xc);
                     write_acv++;
-                    return Dtb_Fault_Fault;
+                    return DTB_Fault_Fault;
                 }
                 if (pte->fonw) {
                     fault(req->vaddr, MM_STAT_WR_MASK | MM_STAT_FONW_MASK,
                           req->xc);
                     write_acv++;
-                    return Dtb_Fault_Fault;
+                    return DTB_Fault_Fault;
                 }
             } else {
                 if (!(pte->xre & MODE2MASK(mode))) {
@@ -567,12 +566,12 @@ AlphaDtb::translate(MemReqPtr &req, bool write) const
                           (pte->fonr ? MM_STAT_FONR_MASK : 0),
                           req->xc);
                     read_acv++;
-                    return Dtb_Acv_Fault;
+                    return DTB_Acv_Fault;
                 }
                 if (pte->fonr) {
                     fault(req->vaddr, MM_STAT_FONR_MASK, req->xc);
                     read_acv++;
-                    return Dtb_Fault_Fault;
+                    return DTB_Fault_Fault;
                 }
             }
         }
@@ -593,7 +592,7 @@ AlphaDtb::translate(MemReqPtr &req, bool write) const
 }
 
 AlphaISA::PTE &
-AlphaTlb::index(bool advance)
+AlphaTLB::index(bool advance)
 {
     AlphaISA::PTE *pte = &table[nlu];
 
@@ -603,43 +602,45 @@ AlphaTlb::index(bool advance)
     return *pte;
 }
 
-BEGIN_DECLARE_SIM_OBJECT_PARAMS(AlphaItb)
+DEFINE_SIM_OBJECT_CLASS_NAME("AlphaTLB", AlphaTLB)
+
+BEGIN_DECLARE_SIM_OBJECT_PARAMS(AlphaITB)
 
     Param<int> size;
 
-END_DECLARE_SIM_OBJECT_PARAMS(AlphaItb)
+END_DECLARE_SIM_OBJECT_PARAMS(AlphaITB)
 
-BEGIN_INIT_SIM_OBJECT_PARAMS(AlphaItb)
+BEGIN_INIT_SIM_OBJECT_PARAMS(AlphaITB)
 
     INIT_PARAM_DFLT(size, "TLB size", 48)
 
-END_INIT_SIM_OBJECT_PARAMS(AlphaItb)
+END_INIT_SIM_OBJECT_PARAMS(AlphaITB)
 
 
-CREATE_SIM_OBJECT(AlphaItb)
+CREATE_SIM_OBJECT(AlphaITB)
 {
-    return new AlphaItb(getInstanceName(), size);
+    return new AlphaITB(getInstanceName(), size);
 }
 
-REGISTER_SIM_OBJECT("AlphaITB", AlphaItb)
+REGISTER_SIM_OBJECT("AlphaITB", AlphaITB)
 
-BEGIN_DECLARE_SIM_OBJECT_PARAMS(AlphaDtb)
+BEGIN_DECLARE_SIM_OBJECT_PARAMS(AlphaDTB)
 
     Param<int> size;
 
-END_DECLARE_SIM_OBJECT_PARAMS(AlphaDtb)
+END_DECLARE_SIM_OBJECT_PARAMS(AlphaDTB)
 
-BEGIN_INIT_SIM_OBJECT_PARAMS(AlphaDtb)
+BEGIN_INIT_SIM_OBJECT_PARAMS(AlphaDTB)
 
     INIT_PARAM_DFLT(size, "TLB size", 64)
 
-END_INIT_SIM_OBJECT_PARAMS(AlphaDtb)
+END_INIT_SIM_OBJECT_PARAMS(AlphaDTB)
 
 
-CREATE_SIM_OBJECT(AlphaDtb)
+CREATE_SIM_OBJECT(AlphaDTB)
 {
-    return new AlphaDtb(getInstanceName(), size);
+    return new AlphaDTB(getInstanceName(), size);
 }
 
-REGISTER_SIM_OBJECT("AlphaDTB", AlphaDtb)
+REGISTER_SIM_OBJECT("AlphaDTB", AlphaDTB)
 
