@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -113,6 +113,11 @@ union PCIConfig {
 #define PCI_LATENCY_TIMER	0x0D	// Latency Timer		ro+
 #define PCI_HEADER_TYPE		0x0E	// Header Type			ro
 #define PCI_BIST		0x0F	// Built in self test		rw
+
+// some pci command reg bitfields
+#define PCI_CMD_BME     0x04 // Bus master function enable
+#define PCI_CMD_MSE     0x02 // Memory Space Access enable
+#define PCI_CMD_IOSE    0x01 // I/O space enable
 
 // Type 0 PCI offsets
 #define PCI0_BASE_ADDR0		0x10	// Base Address 0		rw

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,12 +35,13 @@
 
 #include <iosfwd>
 #include <memory>
+#include <assert.h>
 
 #include "sim/host.hh"
 #include "base/refcnt.hh"
+#include "base/inet_hdrs.hh"
 
 class Checkpoint;
-
 /*
  * Reference counted class containing ethernet packet data
  */
@@ -60,6 +61,33 @@ class EtherPacket : public RefCounted
     bool IsUnicast() { return data[0] == 0x00; }
     bool IsMulticast() { return data[0] == 0x01; }
     bool IsBroadcast() { return data[0] == 0xff; }
+
+    bool isIpPkt() {
+        eth_header *eth = (eth_header *) data;
+        return (eth->type == 0x800);
+    }
+    bool isTcpPkt() {
+        ip_header *ip = getIpHdr();
+        return (ip->protocol == 6);
+    }
+    bool isUdpPkt() {
+        ip_header *ip = getIpHdr();
+        return (ip->protocol == 17);
+    }
+
+    ip_header *getIpHdr() {
+        assert(isIpPkt());
+        return (ip_header *) (data + sizeof(eth_header));
+    }
+
+    tcp_header *getTcpHdr(ip_header *ip) {
+        return (tcp_header *) (ip + (ip->vers_len & 0xf));
+    }
+
+    udp_header *getUdpHdr(ip_header *ip) {
+        return (udp_header *) (ip + (ip->vers_len & 0xf));
+    }
+    typedef RefCountingPtr<EtherPacket> PacketPtr;
 
     void serialize(std::ostream &os);
     void unserialize(Checkpoint *cp, const std::string &section);

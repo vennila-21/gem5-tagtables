@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,6 +52,9 @@ System::System(const std::string _name,
       bin(_bin),
       binned_fns(binned_fns)
 {
+    // increment the number of running systems
+    numSystemsRunning++;
+
     // add self to global system list
     systemList.push_back(this);
     if (bin == true) {

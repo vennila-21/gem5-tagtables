@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,11 +48,12 @@ using namespace std;
 //
 
 
-const SymbolTable *debugSymbolTable = NULL;
+SymbolTable *debugSymbolTable = NULL;
 
 void
 Trace::InstRecord::dump(ostream &outs)
 {
+
     if (flags[PRINT_CYCLE])
         ccprintf(outs, "%7d: ", cycle);
 
@@ -64,7 +65,12 @@ Trace::InstRecord::dump(ostream &outs)
     if (flags[PRINT_THREAD_NUM])
         outs << "T" << thread << " : ";
 
-    outs << "0x" << hex << PC << " : ";
+
+    std::string str;
+    if ((debugSymbolTable) && (debugSymbolTable->findNearestSymbol(PC, str)))
+        outs << "@" << setw(17) << str << " : ";
+    else
+        outs << "0x" << hex << PC << " : ";
 
     //
     //  Print decoded instruction

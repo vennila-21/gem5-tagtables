@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,14 +29,14 @@
 #ifndef __SYMTAB_HH__
 #define __SYMTAB_HH__
 
-#include "base/hashmap.hh"
+#include <map>
 #include "targetarch/isa_traits.hh"	// for Addr
 
 class SymbolTable
 {
   private:
-    typedef m5::hash_map<Addr, std::string> ATable;
-    typedef m5::hash_map<std::string, Addr> STable;
+    typedef std::map<Addr, std::string> ATable;
+    typedef std::map<std::string, Addr> STable;
 
     ATable addrTable;
     STable symbolTable;
@@ -49,6 +49,7 @@ class SymbolTable
     bool insert(Addr address, std::string symbol);
     bool load(const std::string &file);
 
+    bool findNearestSymbol(Addr address, std::string &symbol) const;
     bool findSymbol(Addr address, std::string &symbol) const;
     bool findAddress(const std::string &symbol, Addr &address) const;
 
