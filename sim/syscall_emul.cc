@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,17 +47,17 @@ SyscallDesc::doSyscall(int callnum, Process *process, ExecContext *xc)
     DPRINTFR(SyscallVerbose, "%s: syscall %s called\n",
              xc->cpu->name(), name);
 
-    int retval = (*funcPtr)(this, callnum, process, xc);
+    SyscallReturn retval = (*funcPtr)(this, callnum, process, xc);
 
     DPRINTFR(SyscallVerbose, "%s: syscall %s returns %d\n",
-             xc->cpu->name(), name, retval);
+             xc->cpu->name(), name, retval.value());
 
-    if (!((flags & SyscallDesc::SuppressReturnValue) && retval == 0))
+    if (!(flags & SyscallDesc::SuppressReturnValue))
         xc->setSyscallReturn(retval);
 }
 
 
-int
+SyscallReturn
 unimplementedFunc(SyscallDesc *desc, int callnum, Process *process,
                   ExecContext *xc)
 {
@@ -70,7 +70,7 @@ unimplementedFunc(SyscallDesc *desc, int callnum, Process *process,
 }
 
 
-int
+SyscallReturn
 ignoreFunc(SyscallDesc *desc, int callnum, Process *process,
            ExecContext *xc)
 {
@@ -83,7 +83,7 @@ ignoreFunc(SyscallDesc *desc, int callnum, Process *process,
 }
 
 
-int
+SyscallReturn
 exitFunc(SyscallDesc *desc, int callnum, Process *process,
          ExecContext *xc)
 {
@@ -93,25 +93,28 @@ exitFunc(SyscallDesc *desc, int callnum, Process *process,
 }
 
 
-int
+SyscallReturn
 getpagesizeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     return VMPageSize;
 }
 
 
-int
+SyscallReturn
 obreakFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     // change brk addr to first arg
     Addr new_brk = xc->getSyscallArg(0);
     if (new_brk != 0)
+    {
         p->brk_point = xc->getSyscallArg(0);
+    }
+    DPRINTF(SyscallVerbose, "Break Point changed to: %#X\n", p->brk_point);
     return p->brk_point;
 }
 
 
-int
+SyscallReturn
 closeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     int fd = p->sim_fd(xc->getSyscallArg(0));
@@ -119,7 +122,7 @@ closeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 }
 
 
-int
+SyscallReturn
 readFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     int fd = p->sim_fd(xc->getSyscallArg(0));
@@ -134,7 +137,7 @@ readFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
     return bytes_read;
 }
 
-int
+SyscallReturn
 writeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     int fd = p->sim_fd(xc->getSyscallArg(0));
@@ -151,7 +154,7 @@ writeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 }
 
 
-int
+SyscallReturn
 lseekFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     int fd = p->sim_fd(xc->getSyscallArg(0));
@@ -164,7 +167,7 @@ lseekFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 }
 
 
-int
+SyscallReturn
 munmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     // given that we don't really implement mmap, munmap is really easy
@@ -174,7 +177,7 @@ munmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 
 const char *hostname = "m5.eecs.umich.edu";
 
-int
+SyscallReturn
 gethostnameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     int name_len = xc->getSyscallArg(1);
@@ -187,19 +190,19 @@ gethostnameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
     return 0;
 }
 
-int
+SyscallReturn
 unlinkFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     std::string path;
 
     if (xc->mem->readString(path, xc->getSyscallArg(0)) != No_Fault)
-        return -EFAULT;
+        return (TheISA::IntReg)-EFAULT;
 
     int result = unlink(path.c_str());
     return (result == -1) ? -errno : result;
 }
 
-int
+SyscallReturn
 renameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     std::string old_name;
@@ -212,7 +215,7 @@ renameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
     if (xc->mem->readString(new_name, xc->getSyscallArg(1)) != No_Fault)
         return -EFAULT;
 
-    int result = rename(old_name.c_str(),new_name.c_str());
+    int64_t result = rename(old_name.c_str(),new_name.c_str());
     return (result == -1) ? -errno : result;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -232,7 +232,7 @@ class Linux {
     static const char *hostname;
 
     /// Target uname() handler.
-    static int
+    static SyscallReturn
     unameFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
     {
@@ -251,7 +251,7 @@ class Linux {
     /// Target osf_getsysyinfo() handler.  Even though this call is
     /// borrowed from Tru64, the subcases that get used appear to be
     /// different in practice from those used by Tru64 processes.
-    static int
+    static SyscallReturn
     osf_getsysinfoFunc(SyscallDesc *desc, int callnum, Process *process,
                        ExecContext *xc)
     {
@@ -278,7 +278,7 @@ class Linux {
     }
 
     /// Target osf_setsysinfo() handler.
-    static int
+    static SyscallReturn
     osf_setsysinfoFunc(SyscallDesc *desc, int callnum, Process *process,
                        ExecContext *xc)
     {
@@ -306,7 +306,7 @@ class Linux {
     }
 
     /// Target fnctl() handler.
-    static int
+    static SyscallReturn
     fcntlFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
     {

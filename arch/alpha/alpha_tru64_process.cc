@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001-2004 The Regents of The University of Michigan
+ * Copyright (c) 2001-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -476,7 +476,7 @@ class Tru64 {
     static const char *hostname;
 
     /// Target uname() handler.
-    static int
+    static SyscallReturn
     unameFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
     {
@@ -494,7 +494,7 @@ class Tru64 {
 
 
     /// Target getsysyinfo() handler.
-    static int
+    static SyscallReturn
     getsysinfoFunc(SyscallDesc *desc, int callnum, Process *process,
                    ExecContext *xc)
     {
@@ -574,7 +574,7 @@ class Tru64 {
     }
 
     /// Target fnctl() handler.
-    static int
+    static SyscallReturn
     fcntlFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
     {
@@ -618,7 +618,7 @@ class Tru64 {
 
 
     /// Target getdirentries() handler.
-    static int
+    static SyscallReturn
     getdirentriesFunc(SyscallDesc *desc, int callnum, Process *process,
                       ExecContext *xc)
     {
@@ -669,11 +669,11 @@ class Tru64 {
         *basep = host_basep;
         basep.copyOut(xc->mem);
 
-        return (tgt_buf_ptr - tgt_buf);
+        return tgt_buf_ptr - tgt_buf;
     }
 
     /// Target sigreturn() handler.
-    static int
+    static SyscallReturn
     sigreturnFunc(SyscallDesc *desc, int callnum, Process *process,
                   ExecContext *xc)
     {
@@ -699,7 +699,7 @@ class Tru64 {
     }
 
     /// Target table() handler.
-    static int
+    static SyscallReturn
     tableFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
     {
@@ -749,7 +749,7 @@ class Tru64 {
     //
 
     /// Create a stack region for a thread.
-    static int
+    static SyscallReturn
     stack_createFunc(SyscallDesc *desc, int callnum, Process *process,
                      ExecContext *xc)
     {
@@ -776,7 +776,7 @@ class Tru64 {
     /// This call sets up the interface between the user and kernel
     /// schedulers by creating a shared-memory region.  The shared memory
     /// region has several structs, some global, some per-RAD, some per-VP.
-    static int
+    static SyscallReturn
     nxm_task_initFunc(SyscallDesc *desc, int callnum, Process *process,
                       ExecContext *xc)
     {
@@ -899,7 +899,7 @@ class Tru64 {
     }
 
     /// Create thread.
-    static int
+    static SyscallReturn
     nxm_thread_createFunc(SyscallDesc *desc, int callnum, Process *process,
                           ExecContext *xc)
     {
@@ -1011,7 +1011,7 @@ class Tru64 {
     }
 
     /// Thread idle call (like yield()).
-    static int
+    static SyscallReturn
     nxm_idleFunc(SyscallDesc *desc, int callnum, Process *process,
                  ExecContext *xc)
     {
@@ -1019,7 +1019,7 @@ class Tru64 {
     }
 
     /// Block thread.
-    static int
+    static SyscallReturn
     nxm_thread_blockFunc(SyscallDesc *desc, int callnum, Process *process,
                          ExecContext *xc)
     {
@@ -1036,7 +1036,7 @@ class Tru64 {
     }
 
     /// block.
-    static int
+    static SyscallReturn
     nxm_blockFunc(SyscallDesc *desc, int callnum, Process *process,
                   ExecContext *xc)
     {
@@ -1057,7 +1057,7 @@ class Tru64 {
     }
 
     /// Unblock thread.
-    static int
+    static SyscallReturn
     nxm_unblockFunc(SyscallDesc *desc, int callnum, Process *process,
                     ExecContext *xc)
     {
@@ -1070,7 +1070,7 @@ class Tru64 {
     }
 
     /// Switch thread priority.
-    static int
+    static SyscallReturn
     swtch_priFunc(SyscallDesc *desc, int callnum, Process *process,
                   ExecContext *xc)
     {
@@ -1081,7 +1081,7 @@ class Tru64 {
         //
         // Since we assume at most one "kernel" thread per CPU, it's
         // always safe to return false here.
-        return false;
+        return 0; //false;
     }
 
 
@@ -1154,7 +1154,7 @@ class Tru64 {
     }
 
     /// Lock acquire syscall handler.
-    static int
+    static SyscallReturn
     m5_mutex_lockFunc(SyscallDesc *desc, int callnum, Process *process,
                       ExecContext *xc)
     {
@@ -1169,7 +1169,7 @@ class Tru64 {
     }
 
     /// Try lock (non-blocking).
-    static int
+    static SyscallReturn
     m5_mutex_trylockFunc(SyscallDesc *desc, int callnum, Process *process,
                          ExecContext *xc)
     {
@@ -1189,7 +1189,7 @@ class Tru64 {
     }
 
     /// Unlock syscall handler.
-    static int
+    static SyscallReturn
     m5_mutex_unlockFunc(SyscallDesc *desc, int callnum, Process *process,
                         ExecContext *xc)
     {
@@ -1201,7 +1201,7 @@ class Tru64 {
     }
 
     /// Signal ocndition.
-    static int
+    static SyscallReturn
     m5_cond_signalFunc(SyscallDesc *desc, int callnum, Process *process,
                        ExecContext *xc)
     {
@@ -1214,7 +1214,7 @@ class Tru64 {
     }
 
     /// Wake up all processes waiting on the condition variable.
-    static int
+    static SyscallReturn
     m5_cond_broadcastFunc(SyscallDesc *desc, int callnum, Process *process,
                           ExecContext *xc)
     {
@@ -1226,7 +1226,7 @@ class Tru64 {
     }
 
     /// Wait on a condition.
-    static int
+    static SyscallReturn
     m5_cond_waitFunc(SyscallDesc *desc, int callnum, Process *process,
                      ExecContext *xc)
     {
@@ -1248,7 +1248,7 @@ class Tru64 {
     }
 
     /// Thread exit.
-    static int
+    static SyscallReturn
     m5_thread_exitFunc(SyscallDesc *desc, int callnum, Process *process,
                        ExecContext *xc)
     {
@@ -1291,7 +1291,7 @@ class Tru64 {
     }
 
     /// Indirect syscall invocation (call #0).
-    static int
+    static SyscallReturn
     indirectSyscallFunc(SyscallDesc *desc, int callnum, Process *process,
                         ExecContext *xc)
     {

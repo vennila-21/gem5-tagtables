@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -289,6 +289,43 @@ const int ArgumentReg0 = TheISA::ArgumentReg0;
 const int ArgumentReg1 = TheISA::ArgumentReg1;
 const int BranchPredAddrShiftAmt = TheISA::BranchPredAddrShiftAmt;
 const int MaxAddr = (Addr)-1;
+
+#ifndef FULL_SYSTEM
+class SyscallReturn {
+        public:
+           template <class T>
+           SyscallReturn(T v, bool s)
+           {
+               retval = (uint64_t)v;
+               success = s;
+           }
+
+           template <class T>
+           SyscallReturn(T v)
+           {
+               success = (v >= 0);
+               retval = (uint64_t)v;
+           }
+
+           ~SyscallReturn() {}
+
+           SyscallReturn& operator=(const SyscallReturn& s) {
+               retval = s.retval;
+               success = s.success;
+               return *this;
+           }
+
+           bool successful() { return success; }
+           uint64_t value() { return retval; }
+
+
+       private:
+           uint64_t retval;
+           bool success;
+};
+
+#endif
+
 
 #ifdef FULL_SYSTEM
 typedef TheISA::InternalProcReg InternalProcReg;

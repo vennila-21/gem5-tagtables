@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@ class SyscallDesc {
   public:
 
     /// Typedef for target syscall handler functions.
-    typedef int (*FuncPtr)(SyscallDesc *, int num,
+    typedef SyscallReturn (*FuncPtr)(SyscallDesc *, int num,
                            Process *, ExecContext *);
 
     const char *name;	//!< Syscall name (e.g., "open").
@@ -158,46 +158,46 @@ class TypedBufferArg : public BaseBufferArg
 
 
 /// Handler for unimplemented syscalls that we haven't thought about.
-int unimplementedFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn unimplementedFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Handler for unimplemented syscalls that we never intend to
 /// implement (signal handling, etc.) and should not affect the correct
 /// behavior of the program.  Print a warning only if the appropriate
 /// trace flag is enabled.  Return success to the target program.
-int ignoreFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn ignoreFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target exit() handler: terminate simulation.
-int exitFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn exitFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target getpagesize() handler.
-int getpagesizeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn getpagesizeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target obreak() handler: set brk address.
-int obreakFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn obreakFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target close() handler.
-int closeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn closeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target read() handler.
-int readFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn readFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target write() handler.
-int writeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn writeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target lseek() handler.
-int lseekFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn lseekFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target munmap() handler.
-int munmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn munmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target gethostname() handler.
-int gethostnameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn gethostnameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target unlink() handler.
-int unlinkFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn unlinkFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target rename() handler.
-int renameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn renameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// This struct is used to build an target-OS-dependent table that
 /// maps the target's open() flags to the host open() flags.
@@ -240,7 +240,7 @@ getElapsedTime(T1 &sec, T2 &usec)
 /// only to find out if their stdout is a tty, to determine whether to
 /// do line or block buffering.
 template <class OS>
-int
+SyscallReturn
 ioctlFunc(SyscallDesc *desc, int callnum, Process *process,
           ExecContext *xc)
 {
@@ -272,7 +272,7 @@ ioctlFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target open() handler.
 template <class OS>
-int
+SyscallReturn
 openFunc(SyscallDesc *desc, int callnum, Process *process,
          ExecContext *xc)
 {
@@ -317,7 +317,7 @@ openFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target stat() handler.
 template <class OS>
-int
+SyscallReturn
 statFunc(SyscallDesc *desc, int callnum, Process *process,
          ExecContext *xc)
 {
@@ -330,7 +330,7 @@ statFunc(SyscallDesc *desc, int callnum, Process *process,
     int result = stat(path.c_str(), &hostBuf);
 
     if (result < 0)
-        return -errno;
+        return errno;
 
     OS::copyOutStatBuf(xc->mem, xc->getSyscallArg(1), &hostBuf);
 
@@ -340,7 +340,7 @@ statFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target lstat() handler.
 template <class OS>
-int
+SyscallReturn
 lstatFunc(SyscallDesc *desc, int callnum, Process *process,
           ExecContext *xc)
 {
@@ -362,7 +362,7 @@ lstatFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target fstat() handler.
 template <class OS>
-int
+SyscallReturn
 fstatFunc(SyscallDesc *desc, int callnum, Process *process,
           ExecContext *xc)
 {
@@ -398,7 +398,7 @@ fstatFunc(SyscallDesc *desc, int callnum, Process *process,
 /// file descriptor, and fail (or implement!) a non-anonymous mmap to
 /// anything else.
 template <class OS>
-int
+SyscallReturn
 mmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     Addr start = xc->getSyscallArg(0);
@@ -424,7 +424,7 @@ mmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 
 /// Target getrlimit() handler.
 template <class OS>
-int
+SyscallReturn
 getrlimitFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
 {
@@ -449,7 +449,7 @@ getrlimitFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target gettimeofday() handler.
 template <class OS>
-int
+SyscallReturn
 gettimeofdayFunc(SyscallDesc *desc, int callnum, Process *process,
                  ExecContext *xc)
 {
@@ -466,7 +466,7 @@ gettimeofdayFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target getrusage() function.
 template <class OS>
-int
+SyscallReturn
 getrusageFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
 {
