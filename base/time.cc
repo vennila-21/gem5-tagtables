@@ -26,18 +26,105 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __HOSTINFO_HH__
-#define __HOSTINFO_HH__
-
+#include <sys/types.h>
+#include <sys/time.h>
+#include <time.h>
+#include <iostream>
 #include <string>
 
-#include "sim/host.hh"
+#include "base/time.hh"
 
-std::string &hostname();
+using namespace std;
 
-uint64_t procInfo(char *filename, char *target);
+struct _timeval
+{
+    timeval tv;
+};
 
-inline uint64_t memUsage()
-{ return procInfo("/proc/self/status", "VmSize:"); }
+double
+convert(const timeval &tv)
+{
+    return (double)tv.tv_sec + (double)tv.tv_usec / 1000000.0;
+}
 
-#endif // __HOSTINFO_HH__
+Time::Time()
+{
+    time = new _timeval;
+    ::gettimeofday(&time->tv, NULL);
+}
+
+Time::Time(const timeval &val)
+{
+    time = new _timeval;
+    set(val);
+}
+
+Time::Time(const Time &val)
+{
+    time = new _timeval;
+    set(val.get());
+}
+
+Time::~Time()
+{
+    delete time;
+}
+
+const timeval &
+Time::get() const
+{
+    return time->tv;
+}
+
+void
+Time::set(const timeval &tv)
+{
+    memcpy(&time->tv, &tv, sizeof(timeval));
+}
+
+void
+Time::reset()
+{
+    ::gettimeofday(&time->tv, NULL);
+}
+
+double
+Time::operator()() const
+{
+    return convert(get());
+}
+
+string
+Time::date(string format) const
+{
+    const timeval &tv = get();
+    time_t sec = tv.tv_sec;
+    char buf[256];
+
+    if (format.empty()) {
+        ctime_r(&sec, buf);
+        buf[24] = '\0';
+        return buf;
+    }
+
+    struct tm *tm = localtime(&sec);
+    strftime(buf, sizeof(buf), format.c_str(), tm);
+    return buf;
+}
+
+ostream &
+operator<<(ostream &out, const Time &start)
+{
+    out << start.date();
+    return out;
+}
+
+Time
+operator-(const Time &l, const Time &r)
+{
+    timeval tv;
+    timersub(&l.get(), &r.get(), &tv);
+    return tv;
+}
+
+const Time Time::start;
