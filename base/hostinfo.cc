@@ -42,14 +42,14 @@ procInfo(char *filename, char *target)
     int  done = 0;
     char line[80];
     char format[80];
-    uint64_t usage;
+    long usage;
 
     FILE *fp = fopen(filename, "r");
 
     while (fp && !feof(fp) && !done) {
         if (fgets(line, 80, fp)) {
             if (strncmp(line, target, strlen(target)) == 0) {
-                sprintf(format, "%s %%ld", target);
+                sprintf(format, "%s %%lld", target);
                 sscanf(line, format, &usage);
 
                 fclose(fp);
