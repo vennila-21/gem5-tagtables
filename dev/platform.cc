@@ -26,35 +26,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYMTAB_HH__
-#define __SYMTAB_HH__
+#include "dev/platform.hh"
+#include "sim/builder.hh"
+#include "sim/sim_exit.hh"
 
-#include <map>
-#include "targetarch/isa_traits.hh"	// for Addr
+using namespace std;
 
-class SymbolTable
-{
-  private:
-    typedef std::map<Addr, std::string> ATable;
-    typedef std::map<std::string, Addr> STable;
+DEFINE_SIM_OBJECT_CLASS_NAME("Platform", Platform)
 
-    ATable addrTable;
-    STable symbolTable;
-
-  public:
-    SymbolTable() {}
-    SymbolTable(const std::string &file) { load(file); }
-    ~SymbolTable() {}
-
-    bool insert(Addr address, std::string symbol);
-    bool load(const std::string &file);
-
-    bool findNearestSymbol(Addr address, std::string &symbol) const;
-    bool findSymbol(Addr address, std::string &symbol) const;
-    bool findAddress(const std::string &symbol, Addr &address) const;
-
-    std::string find(Addr addr) const;
-    Addr find(const std::string &symbol) const;
-};
-
-#endif // __SYMTAB_HH__

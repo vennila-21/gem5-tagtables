@@ -41,6 +41,7 @@
 
 class MemoryController;
 class PhysicalMemory;
+class Platform;
 class RemoteGDB;
 class GDBListener;
 
@@ -87,6 +88,7 @@ class System : public SimObject
     const uint64_t init_param;
     MemoryController *memCtrl;
     PhysicalMemory *physmem;
+    Platform *platform;
     bool bin;
     std::vector<string> binned_fns;
 

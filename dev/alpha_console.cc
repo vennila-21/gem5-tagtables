@@ -49,11 +49,13 @@
 #include "mem/functional_mem/memory_control.hh"
 #include "sim/builder.hh"
 #include "sim/system.hh"
+#include "dev/tsunami_io.hh"
+#include "sim/sim_object.hh"
 
 using namespace std;
 
 AlphaConsole::AlphaConsole(const string &name, SimConsole *cons, SimpleDisk *d,
-                           System *system, BaseCPU *cpu, TlaserClock *clock,
+                           System *system, BaseCPU *cpu, SimObject *clock,
                            int num_cpus, MemoryController *mmu, Addr a,
                            HierParams *hier, Bus *bus)
     : PioDevice(name), disk(d), console(cons), addr(a)
@@ -78,8 +80,14 @@ AlphaConsole::AlphaConsole(const string &name, SimConsole *cons, SimpleDisk *d,
     alphaAccess->numCPUs = num_cpus;
     alphaAccess->mem_size = system->physmem->size();
     alphaAccess->cpuClock = cpu->getFreq() / 1000000;
-    alphaAccess->intrClockFrequency = clock->frequency();
-
+    TsunamiIO *clock_linux = dynamic_cast<TsunamiIO *>(clock);
+    TlaserClock *clock_tru64 = dynamic_cast<TlaserClock *>(clock);
+    if (clock_linux)
+        alphaAccess->intrClockFrequency = clock_linux->frequency();
+    else if (clock_tru64)
+        alphaAccess->intrClockFrequency = clock_tru64->frequency();
+    else
+        panic("clock must be of type TlaserClock or TsunamiIO\n");
     alphaAccess->diskUnit = 1;
 }
 
@@ -89,7 +97,7 @@ AlphaConsole::read(MemReqPtr &req, uint8_t *data)
     memset(data, 0, req->size);
     uint64_t val;
 
-    Addr daddr = req->paddr - addr;
+    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
 
     switch (daddr) {
       case offsetof(AlphaAccess, inputChar):
@@ -137,7 +145,7 @@ AlphaConsole::write(MemReqPtr &req, const uint8_t *data)
         return Machine_Check_Fault;
     }
 
-    Addr daddr = req->paddr - addr;
+    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
     ExecContext *other_xc;
 
     switch (daddr) {
@@ -266,7 +274,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(AlphaConsole)
     Param<Addr> addr;
     SimObjectParam<System *> system;
     SimObjectParam<BaseCPU *> cpu;
-    SimObjectParam<TlaserClock *> clock;
+    SimObjectParam<SimObject *> clock;
     SimObjectParam<Bus*> io_bus;
     SimObjectParam<HierParams *> hier;
 
@@ -281,7 +289,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(AlphaConsole)
     INIT_PARAM(addr, "Device Address"),
     INIT_PARAM(system, "system object"),
     INIT_PARAM(cpu, "Processor"),
-    INIT_PARAM(clock, "Turbolaser Clock"),
+    INIT_PARAM(clock, "Clock"),
     INIT_PARAM_DFLT(io_bus, "The IO Bus to attach to", NULL),
     INIT_PARAM_DFLT(hier, "Hierarchy global variables", &defaultHierParams)
 

@@ -26,35 +26,40 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYMTAB_HH__
-#define __SYMTAB_HH__
+/**
+ * @file
+ * Generic interface for platforms
+ */
 
-#include <map>
-#include "targetarch/isa_traits.hh"	// for Addr
+#ifndef __PLATFORM_HH_
+#define __PLATFORM_HH_
 
-class SymbolTable
+#include "sim/sim_object.hh"
+
+class PciConfigAll;
+class IntrControl;
+class SimConsole;
+
+class Platform : public SimObject
 {
-  private:
-    typedef std::map<Addr, std::string> ATable;
-    typedef std::map<std::string, Addr> STable;
+  public:
+    /** Pointer to the interrupt controller */
+    IntrControl *intrctrl;
+    /** Pointer to the simulation console */
+    SimConsole *cons;
+    /** Pointer to the PCI configuration space */
+    PciConfigAll *pciconfig;
 
-    ATable addrTable;
-    STable symbolTable;
+    int interrupt_frequency;
 
   public:
-    SymbolTable() {}
-    SymbolTable(const std::string &file) { load(file); }
-    ~SymbolTable() {}
-
-    bool insert(Addr address, std::string symbol);
-    bool load(const std::string &file);
-
-    bool findNearestSymbol(Addr address, std::string &symbol) const;
-    bool findSymbol(Addr address, std::string &symbol) const;
-    bool findAddress(const std::string &symbol, Addr &address) const;
-
-    std::string find(Addr addr) const;
-    Addr find(const std::string &symbol) const;
+    Platform(const std::string &name, IntrControl *intctrl,
+             PciConfigAll *pci, int intrFreq)
+        : SimObject(name), intrctrl(intctrl), pciconfig(pci),
+          interrupt_frequency(intrFreq) {}
+    virtual ~Platform() {}
+    virtual void postConsoleInt() = 0;
+    virtual void clearConsoleInt() = 0;
 };
 
-#endif // __SYMTAB_HH__
+#endif // __PLATFORM_HH_

@@ -26,35 +26,48 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYMTAB_HH__
-#define __SYMTAB_HH__
+/* @file
+ * Tsunami UART
+ */
 
-#include <map>
-#include "targetarch/isa_traits.hh"	// for Addr
+#ifndef __TSUNAMI_UART_HH__
+#define __TSUNAMI_UART_HH__
 
-class SymbolTable
+#include "dev/tsunamireg.h"
+#include "base/range.hh"
+#include "dev/io_device.hh"
+
+class SimConsole;
+
+/*
+ * Tsunami UART
+ */
+class TsunamiUart : public PioDevice
 {
   private:
-    typedef std::map<Addr, std::string> ATable;
-    typedef std::map<std::string, Addr> STable;
+    Addr addr;
+    static const Addr size = 0x8;
 
-    ATable addrTable;
-    STable symbolTable;
+  protected:
+    SimConsole *cons;
+    int status_store;
+    uint8_t next_char;
+    bool valid_char;
+    uint8_t IER;
 
   public:
-    SymbolTable() {}
-    SymbolTable(const std::string &file) { load(file); }
-    ~SymbolTable() {}
+    TsunamiUart(const string &name, SimConsole *c, MemoryController *mmu,
+            Addr a, HierParams *hier, Bus *bus);
 
-    bool insert(Addr address, std::string symbol);
-    bool load(const std::string &file);
+    Fault read(MemReqPtr &req, uint8_t *data);
+    Fault write(MemReqPtr &req, const uint8_t *data);
 
-    bool findNearestSymbol(Addr address, std::string &symbol) const;
-    bool findSymbol(Addr address, std::string &symbol) const;
-    bool findAddress(const std::string &symbol, Addr &address) const;
 
-    std::string find(Addr addr) const;
-    Addr find(const std::string &symbol) const;
+    virtual void serialize(std::ostream &os);
+    virtual void unserialize(Checkpoint *cp, const std::string &section);
+
+  public:
+    Tick cacheAccess(MemReqPtr &req);
 };
 
-#endif // __SYMTAB_HH__
+#endif // __TSUNAMI_UART_HH__

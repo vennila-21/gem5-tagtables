@@ -44,6 +44,11 @@ using namespace std;
 //
 //  Alpha TLB
 //
+#ifdef DEBUG
+bool uncacheBit39 = false;
+bool uncacheBit40 = false;
+#endif
+
 AlphaTLB::AlphaTLB(const string &name, int s)
     : SimObject(name), size(s), nlu(0)
 {
@@ -87,24 +92,42 @@ AlphaTLB::checkCacheability(MemReqPtr &req)
 {
     // in Alpha, cacheability is controlled by upper-level bits of the
     // physical address
-    if (req->paddr & PA_UNCACHED_BIT) {
-        if (PA_IPR_SPACE(req->paddr)) {
-            // IPR memory space not implemented
-            if (!req->xc->misspeculating()) {
-                switch (req->paddr) {
-                  case ULL(0xFFFFF00188):
-                    req->data = 0;
-                    break;
 
-                  default:
-                    panic("IPR memory space not implemented! PA=%x\n",
-                          req->paddr);
-                }
-            }
-        } else {
-            // mark request as uncacheable
-            req->flags |= UNCACHEABLE;
+    /*
+     * We support having the uncacheable bit in either bit 39 or bit 40.
+     * The Turbolaser platform (and EV5) support having the bit in 39, but
+     * Tsunami (which Linux assumes uses an EV6) generates accesses with
+     * the bit in 40.  So we must check for both, but we have debug flags
+     * to catch a weird case where both are used, which shouldn't happen.
+     */
+
+    if (req->paddr & PA_UNCACHED_BIT_40 ||
+        req->paddr & PA_UNCACHED_BIT_39) {
+
+#ifdef DEBUG
+        if (req->paddr & PA_UNCACHED_BIT_40) {
+            if(uncacheBit39)
+                panic("Bit 40 access follows bit 39 access, PA=%x\n",
+                      req->paddr);
+
+            uncacheBit40 = true;
+        } else if (req->paddr & PA_UNCACHED_BIT_39) {
+            if(uncacheBit40)
+                panic("Bit 39 acceess follows bit 40 access, PA=%x\n",
+                      req->paddr);
+
+            uncacheBit39 = true;
         }
+#endif
+
+        // IPR memory space not implemented
+        if (PA_IPR_SPACE(req->paddr))
+            if (!req->xc->misspeculating())
+                panic("IPR memory space not implemented! PA=%x\n",
+                      req->paddr);
+
+        // mark request as uncacheable
+        req->flags |= UNCACHEABLE;
     }
 }
 
@@ -303,6 +326,14 @@ AlphaITB::translate(MemReqPtr &req) const
             }
 
             req->paddr = req->vaddr & PA_IMPL_MASK;
+
+            // sign extend the physical address properly
+            if (req->paddr & PA_UNCACHED_BIT_39 ||
+                req->paddr & PA_UNCACHED_BIT_40)
+                req->paddr |= 0xf0000000000ULL;
+            else
+                req->paddr &= 0xffffffffffULL;
+
         } else {
             // not a physical address: need to look up pte
             AlphaISA::PTE *pte = lookup(VA_VPN(req->vaddr),
@@ -484,6 +515,14 @@ AlphaDTB::translate(MemReqPtr &req, bool write) const
             }
 
             req->paddr = req->vaddr & PA_IMPL_MASK;
+
+            // sign extend the physical address properly
+            if (req->paddr & PA_UNCACHED_BIT_39 ||
+                req->paddr & PA_UNCACHED_BIT_40)
+                req->paddr |= 0xf0000000000ULL;
+            else
+                req->paddr &= 0xffffffffffULL;
+
         } else {
             if (write)
                 write_accesses++;

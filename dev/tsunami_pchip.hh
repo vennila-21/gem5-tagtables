@@ -26,35 +26,45 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYMTAB_HH__
-#define __SYMTAB_HH__
+/* @file
+ * Tsunami PChip
+ */
 
-#include <map>
-#include "targetarch/isa_traits.hh"	// for Addr
+#ifndef __TSUNAMI_PCHIP_HH__
+#define __TSUNAMI_PCHIP_HH__
 
-class SymbolTable
+#include "mem/functional_mem/functional_memory.hh"
+#include "dev/tsunami.hh"
+
+/*
+ * Tsunami PChip
+ */
+class TsunamiPChip : public FunctionalMemory
 {
   private:
-    typedef std::map<Addr, std::string> ATable;
-    typedef std::map<std::string, Addr> STable;
+    Addr addr;
+    static const Addr size = 0xfff;
 
-    ATable addrTable;
-    STable symbolTable;
+  protected:
+    Tsunami *tsunami;
+
+    uint64_t wsba[4];
+    uint64_t wsm[4];
+    uint64_t tba[4];
 
   public:
-    SymbolTable() {}
-    SymbolTable(const std::string &file) { load(file); }
-    ~SymbolTable() {}
+    TsunamiPChip(const std::string &name, Tsunami *t, Addr a,
+                 MemoryController *mmu);
 
-    bool insert(Addr address, std::string symbol);
-    bool load(const std::string &file);
+    // @todo This hack does a quick and dirty translation of the PCI bus address to
+    //  a valid DMA address.  This is described in 10-10 of the Tsunami book, should be fixed
+    Addr translatePciToDma(Addr busAddr);
 
-    bool findNearestSymbol(Addr address, std::string &symbol) const;
-    bool findSymbol(Addr address, std::string &symbol) const;
-    bool findAddress(const std::string &symbol, Addr &address) const;
+    virtual Fault read(MemReqPtr &req, uint8_t *data);
+    virtual Fault write(MemReqPtr &req, const uint8_t *data);
 
-    std::string find(Addr addr) const;
-    Addr find(const std::string &symbol) const;
+    virtual void serialize(std::ostream &os);
+    virtual void unserialize(Checkpoint *cp, const std::string &section);
 };
 
-#endif // __SYMTAB_HH__
+#endif // __TSUNAMI_PCHIP_HH__

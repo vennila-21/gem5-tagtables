@@ -26,35 +26,53 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYMTAB_HH__
-#define __SYMTAB_HH__
+/*
+ * @file
+ * PCI Config space implementation.
+ */
 
-#include <map>
-#include "targetarch/isa_traits.hh"	// for Addr
+#ifndef __PCICONFIGALL_HH__
+#define __PCICONFIGALL_HH__
 
-class SymbolTable
+#include "mem/functional_mem/functional_memory.hh"
+#include "dev/pcireg.h"
+
+#define MAX_PCI_DEV     32
+#define MAX_PCI_FUNC    8
+
+class PciDev;
+
+/**
+ * PCI Config Space
+ * All of PCI config space needs to return -1 on Tsunami, except
+ * the devices that exist. This device maps the entire bus config
+ * space and passes the requests on to TsunamiPCIDev devices as
+ * appropriate.
+ */
+class PciConfigAll : public FunctionalMemory
 {
   private:
-    typedef std::map<Addr, std::string> ATable;
-    typedef std::map<std::string, Addr> STable;
-
-    ATable addrTable;
-    STable symbolTable;
+    Addr addr;
+    static const Addr size = 0xffffff;
 
   public:
-    SymbolTable() {}
-    SymbolTable(const std::string &file) { load(file); }
-    ~SymbolTable() {}
+    /**
+      * Pointers to all the devices that are registered with this
+      * particular config space.
+      */
+    PciDev* devices[MAX_PCI_DEV][MAX_PCI_FUNC];
 
-    bool insert(Addr address, std::string symbol);
-    bool load(const std::string &file);
+    /**
+      * The default constructor.
+      */
+    PciConfigAll(const std::string &name, Addr a, MemoryController *mmu);
 
-    bool findNearestSymbol(Addr address, std::string &symbol) const;
-    bool findSymbol(Addr address, std::string &symbol) const;
-    bool findAddress(const std::string &symbol, Addr &address) const;
+    virtual Fault read(MemReqPtr &req, uint8_t *data);
+    virtual Fault write(MemReqPtr &req, const uint8_t *data);
 
-    std::string find(Addr addr) const;
-    Addr find(const std::string &symbol) const;
+    virtual void serialize(std::ostream &os);
+    virtual void unserialize(Checkpoint *cp, const std::string &section);
+
 };
 
-#endif // __SYMTAB_HH__
+#endif // __PCICONFIGALL_HH__

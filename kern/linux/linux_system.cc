@@ -27,33 +27,39 @@
  */
 
 #include "base/loader/aout_object.hh"
-#include "base/loader/ecoff_object.hh"
+#include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
 #include "base/remote_gdb.hh"
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
-#include "kern/tru64/tru64_events.hh"
-#include "kern/tru64/tru64_system.hh"
-#include "kern/system_events.hh"
+#include "cpu/base_cpu.hh"
+#include "kern/linux/linux_events.hh"
+#include "kern/linux/linux_system.hh"
 #include "mem/functional_mem/memory_control.hh"
 #include "mem/functional_mem/physical_memory.hh"
 #include "sim/builder.hh"
+#include "dev/platform.hh"
 #include "targetarch/isa_traits.hh"
 #include "targetarch/vtophys.hh"
 
+extern SymbolTable *debugSymbolTable;
+
+//un-comment this to see the state of call stack when it changes.
+//#define SW_DEBUG
+
 using namespace std;
 
-Tru64System::Tru64System(const string _name, const uint64_t _init_param,
+LinuxSystem::LinuxSystem(const string _name, const uint64_t _init_param,
                          MemoryController *_memCtrl, PhysicalMemory *_physmem,
                          const string &kernel_path, const string &console_path,
                          const string &palcode, const string &boot_osflags,
-                         const bool _bin, const vector<string> &binned_fns)
-    : System(_name, _init_param, _memCtrl, _physmem, _bin, binned_fns),
-      bin(_bin), binned_fns(binned_fns)
+                         const string &bootloader_path, const bool _bin)
+     : System(_name, _init_param, _memCtrl, _physmem, _bin), bin(_bin)
 {
     kernelSymtab = new SymbolTable;
     consoleSymtab = new SymbolTable;
+    bootloaderSymtab = new SymbolTable;
 
     ObjectFile *kernel = createObjectFile(kernel_path);
     if (kernel == NULL)
@@ -63,11 +69,22 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
     if (console == NULL)
         fatal("Could not load console file %s", console_path);
 
+    ObjectFile *bootloader = createObjectFile(bootloader_path);
+    if (bootloader == NULL)
+        fatal("Could not load bootloader file %s", bootloader_path);
+
     if (!kernel->loadGlobalSymbols(kernelSymtab))
         panic("could not load kernel symbols\n");
+    debugSymbolTable = kernelSymtab;
+
+    if (!kernel->loadLocalSymbols(kernelSymtab))
+        panic("could not load kernel local symbols\n");
 
     if (!console->loadGlobalSymbols(consoleSymtab))
         panic("could not load console symbols\n");
+
+    if (!bootloader->loadGlobalSymbols(bootloaderSymtab))
+        panic("could not load bootloader symbols\n");
 
     // Load pal file
     ObjectFile *pal = createObjectFile(palcode);
@@ -82,7 +99,10 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
     kernel->loadSections(physmem, true);
     kernelStart = kernel->textBase();
     kernelEnd = kernel->bssBase() + kernel->bssSize();
+    /* FIXME: entrypoint not in kernel, but in bootloader,
+       variable should be re-named appropriately */
     kernelEntry = kernel->entryPoint();
+
 
     DPRINTF(Loader, "Kernel start = %#x\n"
             "Kernel end   = %#x\n"
@@ -91,30 +111,58 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
 
     DPRINTF(Loader, "Kernel loaded...\n");
 
+    // Load bootloader file
+    bootloader->loadSections(physmem, true);
+    kernelEntry = bootloader->entryPoint();
+    kernelStart = bootloader->textBase();
+    DPRINTF(Loader, "Bootloader entry at %#x\n", kernelEntry);
+
 #ifdef DEBUG
     kernelPanicEvent = new BreakPCEvent(&pcEventQueue, "kernel panic");
     consolePanicEvent = new BreakPCEvent(&pcEventQueue, "console panic");
 #endif
-    badaddrEvent = new BadAddrEvent(&pcEventQueue, "badaddr");
-    skipPowerStateEvent = new SkipFuncEvent(&pcEventQueue,
+
+    badaddrEvent = new LinuxBadAddrEvent(&pcEventQueue, "badaddr");
+    skipPowerStateEvent = new LinuxSkipFuncEvent(&pcEventQueue,
                                             "tl_v48_capture_power_state");
-    skipScavengeBootEvent = new SkipFuncEvent(&pcEventQueue,
+    skipScavengeBootEvent = new LinuxSkipFuncEvent(&pcEventQueue,
                                               "pmap_scavenge_boot");
-    printfEvent = new PrintfEvent(&pcEventQueue, "printf");
-    debugPrintfEvent = new DebugPrintfEvent(&pcEventQueue,
+    printfEvent = new LinuxPrintfEvent(&pcEventQueue, "printf");
+
+    skipIdeDelay50msEvent = new LinuxSkipIdeDelay50msEvent(&pcEventQueue,
+                                                     "ide_delay_50ms");
+
+    skipDelayLoopEvent = new LinuxSkipDelayLoopEvent(&pcEventQueue,
+                                                     "calibrate_delay");
+
+    skipCacheProbeEvent = new LinuxSkipFuncEvent(&pcEventQueue, "determine_cpu_caches");
+
+   /* debugPrintfEvent = new DebugPrintfEvent(&pcEventQueue,
                                             "debug_printf", false);
     debugPrintfrEvent = new DebugPrintfEvent(&pcEventQueue,
                                              "debug_printfr", true);
     dumpMbufEvent = new DumpMbufEvent(&pcEventQueue, "dump_mbuf");
+*/
 
     Addr addr = 0;
-    if (kernelSymtab->findAddress("enable_async_printf", addr)) {
+
+    if (kernelSymtab->findAddress("est_cycle_freq", addr)) {
         Addr paddr = vtophys(physmem, addr);
-        uint8_t *enable_async_printf =
+        uint8_t *est_cycle_frequency =
+            physmem->dma_addr(paddr, sizeof(uint64_t));
+
+        if (est_cycle_frequency)
+            *(uint64_t *)est_cycle_frequency = ticksPerSecond;
+    }
+
+    if (kernelSymtab->findAddress("aic7xxx_no_reset", addr)) {
+        Addr paddr = vtophys(physmem, addr);
+        uint8_t *aic7xxx_no_reset =
             physmem->dma_addr(paddr, sizeof(uint32_t));
 
-        if (enable_async_printf)
-            *(uint32_t *)enable_async_printf = 0;
+        if (aic7xxx_no_reset) {
+            *(uint32_t *)aic7xxx_no_reset = 1;
+        }
     }
 
     if (consoleSymtab->findAddress("env_booted_osflags", addr)) {
@@ -130,14 +178,14 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
         char *hwprb = (char *)physmem->dma_addr(paddr, sizeof(uint64_t));
 
         if (hwprb) {
-            *(uint64_t*)(hwprb+0x50) = 12;      // Tlaser
-            *(uint64_t*)(hwprb+0x58) = (2<<1);
+            *(uint64_t*)(hwprb+0x50) = 34;      // Tsunami
+            *(uint64_t*)(hwprb+0x58) = (1<<10);
         }
         else
             panic("could not translate hwprb addr to set system type/variation\n");
+
     } else
         panic("could not find hwprb to set system type/variation\n");
-
 
 #ifdef DEBUG
     if (kernelSymtab->findAddress("panic", addr))
@@ -151,8 +199,8 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
 
     if (kernelSymtab->findAddress("badaddr", addr))
         badaddrEvent->schedule(addr);
-    else
-        panic("could not find kernel symbol \'badaddr\'");
+   // else
+        //panic("could not find kernel symbol \'badaddr\'");
 
     if (kernelSymtab->findAddress("tl_v48_capture_power_state", addr))
         skipPowerStateEvent->schedule(addr);
@@ -160,8 +208,17 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
     if (kernelSymtab->findAddress("pmap_scavenge_boot", addr))
         skipScavengeBootEvent->schedule(addr);
 
+    if (kernelSymtab->findAddress("ide_delay_50ms", addr))
+        skipIdeDelay50msEvent->schedule(addr+8);
+
+    if (kernelSymtab->findAddress("calibrate_delay", addr))
+        skipDelayLoopEvent->schedule(addr+8);
+
+    if (kernelSymtab->findAddress("determine_cpu_caches", addr))
+        skipCacheProbeEvent->schedule(addr+8);
+
 #if TRACING_ON
-    if (kernelSymtab->findAddress("printf", addr))
+    if (kernelSymtab->findAddress("printk", addr))
         printfEvent->schedule(addr);
 
     if (kernelSymtab->findAddress("m5printf", addr))
@@ -173,45 +230,48 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
     if (kernelSymtab->findAddress("m5_dump_mbuf", addr))
         dumpMbufEvent->schedule(addr);
 #endif
-
-    // BINNING STUFF
-    if (bin == true) {
-        int end = binned_fns.size();
-        Addr address = 0;
-
-        for (int i = 0; i < end; i +=2) {
-            if (kernelSymtab->findAddress(binned_fns[i], address))
-                fnEvents[(i>>1)]->schedule(address);
-            else
-                panic("could not find kernel symbol %s\n", binned_fns[i]);
-        }
-    }
-    //
 }
 
-Tru64System::~Tru64System()
+LinuxSystem::~LinuxSystem()
 {
     delete kernel;
     delete console;
 
     delete kernelSymtab;
     delete consoleSymtab;
+    delete bootloaderSymtab;
 
-#ifdef DEBUG
     delete kernelPanicEvent;
     delete consolePanicEvent;
-#endif
     delete badaddrEvent;
     delete skipPowerStateEvent;
     delete skipScavengeBootEvent;
     delete printfEvent;
-    delete debugPrintfEvent;
+    /*delete debugPrintfEvent;
     delete debugPrintfrEvent;
     delete dumpMbufEvent;
+*/
+}
+
+void
+LinuxSystem::setDelayLoop(ExecContext *xc)
+{
+    Addr addr = 0;
+    if (kernelSymtab->findAddress("loops_per_jiffy", addr)) {
+        Addr paddr = vtophys(physmem, addr);
+
+        uint8_t *loops_per_jiffy =
+            physmem->dma_addr(paddr, sizeof(uint32_t));
+
+        Tick cpuFreq = xc->cpu->getFreq();
+        Tick intrFreq = platform->interrupt_frequency;
+        *(uint32_t *)loops_per_jiffy =
+            (uint32_t)((cpuFreq / intrFreq) * 0.9988);
+    }
 }
 
 int
-Tru64System::registerExecContext(ExecContext *xc)
+LinuxSystem::registerExecContext(ExecContext *xc)
 {
     int xcIndex = System::registerExecContext(xc);
 
@@ -224,6 +284,7 @@ Tru64System::registerExecContext(ExecContext *xc)
     RemoteGDB *rgdb = new RemoteGDB(this, xc);
     GDBListener *gdbl = new GDBListener(rgdb, 7000 + xcIndex);
     gdbl->listen();
+//    gdbl->accept();
 
     if (remoteGDB.size() <= xcIndex) {
         remoteGDB.resize(xcIndex+1);
@@ -236,56 +297,99 @@ Tru64System::registerExecContext(ExecContext *xc)
 
 
 void
-Tru64System::replaceExecContext(ExecContext *xc, int xcIndex)
+LinuxSystem::replaceExecContext(ExecContext *xc, int xcIndex)
 {
     System::replaceExecContext(xcIndex, xc);
     remoteGDB[xcIndex]->replaceExecContext(xc);
 }
 
 bool
-Tru64System::breakpoint()
+LinuxSystem::breakpoint()
 {
-    return remoteGDB[0]->trap(ALPHA_KENTRY_INT);
+    return remoteGDB[0]->trap(ALPHA_KENTRY_IF);
 }
 
-BEGIN_DECLARE_SIM_OBJECT_PARAMS(Tru64System)
+void
+LinuxSystem::populateMap(std::string callee, std::string caller)
+{
+    multimap<const string, string>::const_iterator i;
+    i = callerMap.insert(make_pair(callee, caller));
+    assert(i != callerMap.end() && "should not fail populating callerMap");
+}
+
+bool
+LinuxSystem::findCaller(std::string callee, std::string caller) const
+{
+    typedef multimap<const std::string, std::string>::const_iterator iter;
+    pair<iter, iter> range;
+
+    range = callerMap.equal_range(callee);
+    for (iter i = range.first; i != range.second; ++i) {
+        if ((*i).second == caller)
+            return true;
+    }
+    return false;
+}
+
+void
+LinuxSystem::dumpState(ExecContext *xc) const
+{
+#ifndef SW_DEBUG
+    return;
+#endif
+    if (xc->swCtx) {
+        stack<fnCall *> copy(xc->swCtx->callStack);
+        if (copy.empty())
+            return;
+        cprintf("xc->swCtx:\n");
+        fnCall *top;
+        cprintf("||   call: %d\n",xc->swCtx->calls);
+        for (top = copy.top(); !copy.empty(); copy.pop() ) {
+            top = copy.top();
+            cprintf("||  %13s : %s \n", top->name, top->myBin->name());
+        }
+    }
+}
+
+BEGIN_DECLARE_SIM_OBJECT_PARAMS(LinuxSystem)
 
     Param<bool> bin;
     SimObjectParam<MemoryController *> mem_ctl;
     SimObjectParam<PhysicalMemory *> physmem;
-    Param<unsigned int> init_param;
+    Param<uint64_t> init_param;
 
     Param<string> kernel_code;
     Param<string> console_code;
     Param<string> pal_code;
     Param<string> boot_osflags;
-    VectorParam<string> binned_fns;
+    Param<string> bootloader_code;
 
-END_DECLARE_SIM_OBJECT_PARAMS(Tru64System)
+END_DECLARE_SIM_OBJECT_PARAMS(LinuxSystem)
 
-BEGIN_INIT_SIM_OBJECT_PARAMS(Tru64System)
+BEGIN_INIT_SIM_OBJECT_PARAMS(LinuxSystem)
+
 
     INIT_PARAM_DFLT(bin, "is this system to be binned", false),
     INIT_PARAM(mem_ctl, "memory controller"),
     INIT_PARAM(physmem, "phsyical memory"),
     INIT_PARAM_DFLT(init_param, "numerical value to pass into simulator", 0),
-    INIT_PARAM(kernel_code, "file that contains the kernel code"),
+    INIT_PARAM(kernel_code, "file that contains the code"),
     INIT_PARAM(console_code, "file that contains the console code"),
     INIT_PARAM(pal_code, "file that contains palcode"),
     INIT_PARAM_DFLT(boot_osflags, "flags to pass to the kernel during boot",
-                    "a"),
-    INIT_PARAM(binned_fns, "functions to be broken down and binned")
+                                   "a"),
+    INIT_PARAM(bootloader_code, "file that contains the bootloader")
 
-END_INIT_SIM_OBJECT_PARAMS(Tru64System)
 
-CREATE_SIM_OBJECT(Tru64System)
+END_INIT_SIM_OBJECT_PARAMS(LinuxSystem)
+
+CREATE_SIM_OBJECT(LinuxSystem)
 {
-    Tru64System *sys = new Tru64System(getInstanceName(), init_param, mem_ctl,
+    LinuxSystem *sys = new LinuxSystem(getInstanceName(), init_param, mem_ctl,
                                        physmem, kernel_code, console_code,
-                                       pal_code, boot_osflags, bin,
-                                       binned_fns);
+                                       pal_code, boot_osflags, bootloader_code, bin);
 
     return sys;
 }
 
-REGISTER_SIM_OBJECT("Tru64System", Tru64System)
+REGISTER_SIM_OBJECT("LinuxSystem", LinuxSystem)

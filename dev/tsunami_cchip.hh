@@ -26,35 +26,70 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYMTAB_HH__
-#define __SYMTAB_HH__
+/* @file
+ * Emulation of the Tsunami CChip CSRs
+ */
 
-#include <map>
-#include "targetarch/isa_traits.hh"	// for Addr
+#ifndef __TSUNAMI_CCHIP_HH__
+#define __TSUNAMI_CCHIP_HH__
 
-class SymbolTable
+#include "mem/functional_mem/functional_memory.hh"
+#include "dev/tsunami.hh"
+
+/*
+ * Tsunami CChip
+ */
+class TsunamiCChip : public FunctionalMemory
 {
   private:
-    typedef std::map<Addr, std::string> ATable;
-    typedef std::map<std::string, Addr> STable;
+    Addr addr;
+    static const Addr size = 0xfff;
 
-    ATable addrTable;
-    STable symbolTable;
+  protected:
+      /**
+       * pointer to the tsunami object.
+       * This is our access to all the other tsunami
+       * devices.
+       */
+    Tsunami *tsunami;
+
+    /**
+     * The dims are device interrupt mask registers.
+     * One exists for each CPU, the DRIR X DIM = DIR
+     */
+    uint64_t dim[Tsunami::Max_CPUs];
+
+    /**
+     * The dirs are device interrupt registers.
+     * One exists for each CPU, the DRIR X DIM = DIR
+     */
+    uint64_t dir[Tsunami::Max_CPUs];
+    bool dirInterrupting[Tsunami::Max_CPUs];
+
+    /**
+     * This register contains bits for each PCI interrupt
+     * that can occur.
+     */
+    uint64_t drir;
+
+    uint64_t misc;
+
+    uint64_t ipiInterrupting[Tsunami::Max_CPUs];
+    bool RTCInterrupting[Tsunami::Max_CPUs];
 
   public:
-    SymbolTable() {}
-    SymbolTable(const std::string &file) { load(file); }
-    ~SymbolTable() {}
+    TsunamiCChip(const std::string &name, Tsunami *t, Addr a,
+                 MemoryController *mmu);
 
-    bool insert(Addr address, std::string symbol);
-    bool load(const std::string &file);
+    virtual Fault read(MemReqPtr &req, uint8_t *data);
+    virtual Fault write(MemReqPtr &req, const uint8_t *data);
 
-    bool findNearestSymbol(Addr address, std::string &symbol) const;
-    bool findSymbol(Addr address, std::string &symbol) const;
-    bool findAddress(const std::string &symbol, Addr &address) const;
+    void postRTC();
+    void postDRIR(uint32_t interrupt);
+    void clearDRIR(uint32_t interrupt);
 
-    std::string find(Addr addr) const;
-    Addr find(const std::string &symbol) const;
+    virtual void serialize(std::ostream &os);
+    virtual void unserialize(Checkpoint *cp, const std::string &section);
 };
 
-#endif // __SYMTAB_HH__
+#endif // __TSUNAMI_CCHIP_HH__

@@ -26,35 +26,39 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYMTAB_HH__
-#define __SYMTAB_HH__
+/* @file
+ * This devices just panics when touched. For example if you have a
+ * kernel that touches the frame buffer which isn't allowed.
+ */
 
-#include <map>
-#include "targetarch/isa_traits.hh"	// for Addr
+#ifndef __BADDEV_HH__
+#define __BADDEV_HH__
 
-class SymbolTable
+#include "mem/functional_mem/functional_memory.hh"
+
+/**
+ * BadDevice
+ * This device just panics when accessed. It is supposed to warn
+ * the user that the kernel they are running has unsupported
+ * options (i.e. frame buffer)
+ */
+class BadDevice : public FunctionalMemory
 {
   private:
-    typedef std::map<Addr, std::string> ATable;
-    typedef std::map<std::string, Addr> STable;
+    Addr addr;
+    static const Addr size = 0xf;
 
-    ATable addrTable;
-    STable symbolTable;
+    std::string devname;
 
   public:
-    SymbolTable() {}
-    SymbolTable(const std::string &file) { load(file); }
-    ~SymbolTable() {}
+    /**
+     * The default constructor.
+     */
+    BadDevice(const std::string &name, Addr a, MemoryController *mmu,
+              const std::string &devicename);
 
-    bool insert(Addr address, std::string symbol);
-    bool load(const std::string &file);
-
-    bool findNearestSymbol(Addr address, std::string &symbol) const;
-    bool findSymbol(Addr address, std::string &symbol) const;
-    bool findAddress(const std::string &symbol, Addr &address) const;
-
-    std::string find(Addr addr) const;
-    Addr find(const std::string &symbol) const;
+    virtual Fault read(MemReqPtr &req, uint8_t *data);
+    virtual Fault write(MemReqPtr &req, const uint8_t *data);
 };
 
-#endif // __SYMTAB_HH__
+#endif // __BADDEV_HH__

@@ -26,35 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYMTAB_HH__
-#define __SYMTAB_HH__
+#ifndef __LINUX_HH__
+#define __LINUX_HH__
 
-#include <map>
-#include "targetarch/isa_traits.hh"	// for Addr
+class Linux {};
 
-class SymbolTable
-{
-  private:
-    typedef std::map<Addr, std::string> ATable;
-    typedef std::map<std::string, Addr> STable;
-
-    ATable addrTable;
-    STable symbolTable;
-
-  public:
-    SymbolTable() {}
-    SymbolTable(const std::string &file) { load(file); }
-    ~SymbolTable() {}
-
-    bool insert(Addr address, std::string symbol);
-    bool load(const std::string &file);
-
-    bool findNearestSymbol(Addr address, std::string &symbol) const;
-    bool findSymbol(Addr address, std::string &symbol) const;
-    bool findAddress(const std::string &symbol, Addr &address) const;
-
-    std::string find(Addr addr) const;
-    Addr find(const std::string &symbol) const;
-};
-
-#endif // __SYMTAB_HH__
+#endif // __LINUX_HH__
