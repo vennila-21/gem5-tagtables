@@ -39,6 +39,7 @@
 #include "cpu/static_inst.hh"
 #include "kern/kernel_stats.hh"
 #include "kern/linux/linux_syscalls.hh"
+#include "kern/tru64/tru64_syscalls.hh"
 
 using namespace std;
 using namespace Stats;
@@ -294,6 +295,10 @@ Statistics::serialize(ostream &os)
 {
     int exemode = themode;
     SERIALIZE_SCALAR(exemode);
+    SERIALIZE_SCALAR(idleProcess);
+    SERIALIZE_SCALAR(iplLast);
+    SERIALIZE_SCALAR(iplLastTick);
+    SERIALIZE_SCALAR(lastModeTick);
 }
 
 void
@@ -301,6 +306,10 @@ Statistics::unserialize(Checkpoint *cp, const string &section)
 {
     int exemode;
     UNSERIALIZE_SCALAR(exemode);
+    UNSERIALIZE_SCALAR(idleProcess);
+    UNSERIALIZE_SCALAR(iplLast);
+    UNSERIALIZE_SCALAR(iplLastTick);
+    UNSERIALIZE_SCALAR(lastModeTick);
     themode = (cpu_mode)exemode;
 }
 

@@ -29,9 +29,9 @@
 #ifndef __ISA_TRAITS_HH__
 #define __ISA_TRAITS_HH__
 
-#include "sim/host.hh"
-#include "targetarch/faults.hh"
+#include "arch/alpha/faults.hh"
 #include "base/misc.hh"
+#include "sim/host.hh"
 
 class FastCPU;
 class FullCPU;
@@ -121,11 +121,16 @@ class AlphaISA
         Addr		lock_addr;	// lock address for LL/SC
     } MiscRegFile;
 
+static const Addr PageShift = 13;
+static const Addr PageBytes = ULL(1) << PageShift;
+static const Addr PageMask = ~(PageBytes - 1);
+static const Addr PageOffset = PageBytes - 1;
+
 #ifdef FULL_SYSTEM
 
     typedef uint64_t InternalProcReg;
 
-#include "targetarch/isa_fullsys_traits.hh"
+#include "arch/alpha/isa_fullsys_traits.hh"
 
 #else
     enum {
@@ -278,7 +283,7 @@ const int NumInterruptLevels = TheISA::NumInterruptLevels;
 
 // more stuff that should be imported here, but I'm too tired to do it
 // right now...
-#include "targetarch/ev5.hh"
+#include "arch/alpha/ev5.hh"
 #endif
 
 #endif // __ALPHA_ISA_H__

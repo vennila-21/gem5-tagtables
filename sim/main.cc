@@ -111,7 +111,7 @@ static void
 showBriefHelp(ostream &out)
 {
     out << "Usage: " << myProgName
-         << " [-hn] [-Dname[=def]] [-Uname] [-I[dir]] "
+         << " [-hnu] [-Dname[=def]] [-Uname] [-I[dir]] "
          << "[--<section>:<param>=<value>] [<config file> ...]" << endl
          << "   -h: print long help (including parameter listing)" << endl
          << "   -n: don't load default.ini" << endl
@@ -396,7 +396,7 @@ main(int argc, char **argv)
 
     // Echo command line and all parameter settings to stats file as well.
     echoCommandLine(argc, argv, *outputStream);
-    ParamContext::showAllContexts(builderStream());
+    ParamContext::showAllContexts(*configStream);
 
     // Now process the configuration hierarchy and create the SimObjects.
     ConfigHierarchy configHierarchy(simConfigDB);

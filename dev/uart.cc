@@ -92,13 +92,13 @@ Uart::Uart(const string &name, SimConsole *c, MemoryController *mmu, Addr a,
     : PioDevice(name), addr(a), size(s), cons(c), txIntrEvent(this, TX_INT),
       rxIntrEvent(this, RX_INT), platform(p)
 {
-    mmu->add_child(this, Range<Addr>(addr, addr + size));
+    mmu->add_child(this, RangeSize(addr, size));
 
 
     if (bus) {
         pioInterface = newPioInterface(name, hier, bus, this,
                                       &Uart::cacheAccess);
-        pioInterface->addAddrRange(addr, addr + size - 1);
+        pioInterface->addAddrRange(RangeSize(addr, size));
         pioLatency = pio_latency * bus->clockRatio;
     }
 
@@ -287,7 +287,7 @@ Uart::write(MemReqPtr &req, const uint8_t *data)
     switch (daddr) {
         case 0x0:
             if (!(LCR & 0x80)) { // write byte
-                cons->out(*(uint64_t *)data);
+                cons->out(*(uint8_t *)data);
                 platform->clearConsoleInt();
                 status &= ~TX_INT;
                 if (UART_IER_THRI & IER)
