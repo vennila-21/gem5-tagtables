@@ -48,11 +48,12 @@ using namespace std;
 //
 
 
-const SymbolTable *debugSymbolTable = NULL;
+SymbolTable *debugSymbolTable = NULL;
 
 void
 Trace::InstRecord::dump(ostream &outs)
 {
+
     if (flags[PRINT_CYCLE])
         ccprintf(outs, "%7d: ", cycle);
 
@@ -64,7 +65,16 @@ Trace::InstRecord::dump(ostream &outs)
     if (flags[PRINT_THREAD_NUM])
         outs << "T" << thread << " : ";
 
-    outs << "0x" << hex << PC << " : ";
+
+    std::string str;
+    if(debugSymbolTable->findSymbol(PC, str))
+        outs << "@" << setw(17) << str << " : ";
+    else if(debugSymbolTable->findSymbol(PC - 4, str))
+        outs << "@" << setw(15) << str << "+4 : ";
+    else if(debugSymbolTable->findSymbol(PC - 8, str))
+        outs << "@" << setw(15) << str << "+8 : ";
+    else
+        outs << "0x" << hex << PC << " : ";
 
     //
     //  Print decoded instruction

@@ -26,41 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* @file
- * Class representing the actual interface between two ethernet
- * components.
- */
+#ifndef __LINUX_HH__
+#define __LINUX_HH__
 
-#ifndef __ETHERINT_HH__
-#define __ETHERINT_HH__
+class Linux {};
 
-#include <string>
-
-#include "dev/etherpkt.hh"
-#include "sim/sim_object.hh"
-
-/*
- * Class representing the actual interface between two ethernet
- * components.  These components are intended to attach to another
- * ethernet interface on one side and whatever device on the other.
- */
-class EtherInt : public SimObject
-{
-  protected:
-    EtherInt *peer;
-
-  public:
-    EtherInt(const std::string &name) : SimObject(name), peer(NULL) {}
-    virtual ~EtherInt() {}
-
-    void setPeer(EtherInt *p);
-    virtual bool recvPacket(PacketPtr &packet) = 0;
-    void recvDone() { peer->sendDone(); }
-    bool sendPacket(PacketPtr &packet)
-    {
-        return peer ? peer->recvPacket(packet) : true;
-    }
-    virtual void sendDone() = 0;
-};
-
-#endif // __ETHERINT_HH__
+#endif // __LINUX_HH__

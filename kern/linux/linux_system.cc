@@ -27,34 +27,37 @@
  */
 
 #include "base/loader/aout_object.hh"
-#include "base/loader/ecoff_object.hh"
+#include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
 #include "base/remote_gdb.hh"
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
-#include "kern/tru64/tru64_events.hh"
-#include "kern/tru64/tru64_system.hh"
+#include "kern/linux/linux_events.hh"
+#include "kern/linux/linux_system.hh"
 #include "mem/functional_mem/memory_control.hh"
 #include "mem/functional_mem/physical_memory.hh"
 #include "sim/builder.hh"
 #include "targetarch/isa_traits.hh"
 #include "targetarch/vtophys.hh"
 
+extern SymbolTable *debugSymbolTable;
+
 //un-comment this to see the state of call stack when it changes.
 //#define SW_DEBUG
 
 using namespace std;
 
-Tru64System::Tru64System(const string _name, const uint64_t _init_param,
+LinuxSystem::LinuxSystem(const string _name, const uint64_t _init_param,
                          MemoryController *_memCtrl, PhysicalMemory *_physmem,
                          const string &kernel_path, const string &console_path,
                          const string &palcode, const string &boot_osflags,
-                         const bool _bin)
+                         const string &bootloader_path, const bool _bin)
      : System(_name, _init_param, _memCtrl, _physmem, _bin), bin(_bin)
 {
     kernelSymtab = new SymbolTable;
     consoleSymtab = new SymbolTable;
+    bootloaderSymtab = new SymbolTable;
 
     ObjectFile *kernel = createObjectFile(kernel_path);
     if (kernel == NULL)
@@ -64,11 +67,19 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
     if (console == NULL)
         fatal("Could not load console file %s", console_path);
 
+    ObjectFile *bootloader = createObjectFile(bootloader_path);
+    if (bootloader == NULL)
+        fatal("Could not load bootloader file %s", bootloader_path);
+
     if (!kernel->loadGlobalSymbols(kernelSymtab))
         panic("could not load kernel symbols\n");
+    debugSymbolTable = kernelSymtab;
 
     if (!console->loadGlobalSymbols(consoleSymtab))
         panic("could not load console symbols\n");
+
+    if (!bootloader->loadGlobalSymbols(bootloaderSymtab))
+        panic("could not load bootloader symbols\n");
 
     // Load pal file
     ObjectFile *pal = createObjectFile(palcode);
@@ -83,7 +94,10 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
     kernel->loadSections(physmem, true);
     kernelStart = kernel->textBase();
     kernelEnd = kernel->bssBase() + kernel->bssSize();
+    /* FIXME: entrypoint not in kernel, but in bootloader,
+       variable should be re-named appropriately */
     kernelEntry = kernel->entryPoint();
+
 
     DPRINTF(Loader, "Kernel start = %#x\n"
             "Kernel end   = %#x\n"
@@ -91,6 +105,12 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
             kernelStart, kernelEnd, kernelEntry);
 
     DPRINTF(Loader, "Kernel loaded...\n");
+
+    // Load bootloader file
+    bootloader->loadSections(physmem, true);
+    kernelEntry = bootloader->entryPoint();
+    kernelStart = bootloader->textBase();
+    DPRINTF(Loader, "Bootloader entry at %#x\n", kernelEntry);
 
 #ifdef FS_MEASURE
     //INSTRUMENTATION CODEGEN BEGIN ONE
@@ -192,22 +212,20 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
     //INSTRUMENTATION CODEGEN END
 #endif //FS_MEASURE
 
-#ifdef DEBUG
     kernelPanicEvent = new BreakPCEvent(&pcEventQueue, "kernel panic");
     consolePanicEvent = new BreakPCEvent(&pcEventQueue, "console panic");
-#endif
-    badaddrEvent = new BadAddrEvent(&pcEventQueue, "badaddr");
-    skipPowerStateEvent = new SkipFuncEvent(&pcEventQueue,
+    badaddrEvent = new LinuxBadAddrEvent(&pcEventQueue, "badaddr");
+    skipPowerStateEvent = new LinuxSkipFuncEvent(&pcEventQueue,
                                             "tl_v48_capture_power_state");
-    skipScavengeBootEvent = new SkipFuncEvent(&pcEventQueue,
+    skipScavengeBootEvent = new LinuxSkipFuncEvent(&pcEventQueue,
                                               "pmap_scavenge_boot");
-    printfEvent = new PrintfEvent(&pcEventQueue, "printf");
-    debugPrintfEvent = new DebugPrintfEvent(&pcEventQueue,
+    printfEvent = new LinuxPrintfEvent(&pcEventQueue, "printf");
+   /* debugPrintfEvent = new DebugPrintfEvent(&pcEventQueue,
                                             "debug_printf", false);
     debugPrintfrEvent = new DebugPrintfEvent(&pcEventQueue,
                                              "debug_printfr", true);
     dumpMbufEvent = new DumpMbufEvent(&pcEventQueue, "dump_mbuf");
-
+*/
 #ifdef FS_MEASURE
     //INSTRUMENTATION CODEGEN BEGIN TWO
     if (bin == true) {
@@ -247,13 +265,13 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
 #endif //FS_MEASURE
 
     Addr addr = 0;
-    if (kernelSymtab->findAddress("enable_async_printf", addr)) {
+    if (kernelSymtab->findAddress("est_cycle_freq", addr)) {
         Addr paddr = vtophys(physmem, addr);
-        uint8_t *enable_async_printf =
-            physmem->dma_addr(paddr, sizeof(uint32_t));
+        uint8_t *est_cycle_frequency =
+            physmem->dma_addr(paddr, sizeof(uint64_t));
 
-        if (enable_async_printf)
-            *(uint32_t *)enable_async_printf = 0;
+        if (est_cycle_frequency)
+            *(uint64_t *)est_cycle_frequency = ticksPerSecond;
     }
 
     if (consoleSymtab->findAddress("env_booted_osflags", addr)) {
@@ -264,7 +282,6 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
             strcpy(osflags, boot_osflags.c_str());
     }
 
-#ifdef DEBUG
     if (kernelSymtab->findAddress("panic", addr))
         kernelPanicEvent->schedule(addr);
     else
@@ -272,12 +289,11 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
 
     if (consoleSymtab->findAddress("panic", addr))
         consolePanicEvent->schedule(addr);
-#endif
 
     if (kernelSymtab->findAddress("badaddr", addr))
         badaddrEvent->schedule(addr);
-    else
-        panic("could not find kernel symbol \'badaddr\'");
+   // else
+        //panic("could not find kernel symbol \'badaddr\'");
 
     if (kernelSymtab->findAddress("tl_v48_capture_power_state", addr))
         skipPowerStateEvent->schedule(addr);
@@ -286,7 +302,7 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
         skipScavengeBootEvent->schedule(addr);
 
 #if TRACING_ON
-    if (kernelSymtab->findAddress("printf", addr))
+    if (kernelSymtab->findAddress("printk", addr))
         printfEvent->schedule(addr);
 
     if (kernelSymtab->findAddress("m5printf", addr))
@@ -507,26 +523,25 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
 #endif //FS_MEASURE
 }
 
-Tru64System::~Tru64System()
+LinuxSystem::~LinuxSystem()
 {
     delete kernel;
     delete console;
 
     delete kernelSymtab;
     delete consoleSymtab;
+    delete bootloaderSymtab;
 
-#ifdef DEBUG
     delete kernelPanicEvent;
     delete consolePanicEvent;
-#endif
     delete badaddrEvent;
     delete skipPowerStateEvent;
     delete skipScavengeBootEvent;
     delete printfEvent;
-    delete debugPrintfEvent;
+    /*delete debugPrintfEvent;
     delete debugPrintfrEvent;
     delete dumpMbufEvent;
-
+*/
 #ifdef FS_MEASURE
     //INSTRUMENTATION CODEGEN BEGIN FOUR
     if (bin == true) {
@@ -567,7 +582,7 @@ Tru64System::~Tru64System()
 }
 
 int
-Tru64System::registerExecContext(ExecContext *xc)
+LinuxSystem::registerExecContext(ExecContext *xc)
 {
     int xcIndex = System::registerExecContext(xc);
 
@@ -592,21 +607,21 @@ Tru64System::registerExecContext(ExecContext *xc)
 
 
 void
-Tru64System::replaceExecContext(ExecContext *xc, int xcIndex)
+LinuxSystem::replaceExecContext(ExecContext *xc, int xcIndex)
 {
     System::replaceExecContext(xcIndex, xc);
     remoteGDB[xcIndex]->replaceExecContext(xc);
 }
 
 bool
-Tru64System::breakpoint()
+LinuxSystem::breakpoint()
 {
-    return remoteGDB[0]->trap(ALPHA_KENTRY_INT);
+    return remoteGDB[0]->trap(ALPHA_KENTRY_IF);
 }
 
 #ifdef FS_MEASURE
 void
-Tru64System::populateMap(std::string callee, std::string caller)
+LinuxSystem::populateMap(std::string callee, std::string caller)
 {
     multimap<const string, string>::const_iterator i;
     i = callerMap.insert(make_pair(callee, caller));
@@ -614,7 +629,7 @@ Tru64System::populateMap(std::string callee, std::string caller)
 }
 
 bool
-Tru64System::findCaller(std::string callee, std::string caller) const
+LinuxSystem::findCaller(std::string callee, std::string caller) const
 {
     typedef multimap<const std::string, std::string>::const_iterator iter;
     pair<iter, iter> range;
@@ -628,7 +643,7 @@ Tru64System::findCaller(std::string callee, std::string caller) const
 }
 
 void
-Tru64System::dumpState(ExecContext *xc) const
+LinuxSystem::dumpState(ExecContext *xc) const
 {
 #ifndef SW_DEBUG
     return;
@@ -648,7 +663,7 @@ Tru64System::dumpState(ExecContext *xc) const
 }
 #endif //FS_MEASURE
 
-BEGIN_DECLARE_SIM_OBJECT_PARAMS(Tru64System)
+BEGIN_DECLARE_SIM_OBJECT_PARAMS(LinuxSystem)
 
     Param<bool> bin;
     SimObjectParam<MemoryController *> mem_ctl;
@@ -659,10 +674,11 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(Tru64System)
     Param<string> console_code;
     Param<string> pal_code;
     Param<string> boot_osflags;
+    Param<string> bootloader_code;
 
-END_DECLARE_SIM_OBJECT_PARAMS(Tru64System)
+END_DECLARE_SIM_OBJECT_PARAMS(LinuxSystem)
 
-BEGIN_INIT_SIM_OBJECT_PARAMS(Tru64System)
+BEGIN_INIT_SIM_OBJECT_PARAMS(LinuxSystem)
 
     INIT_PARAM_DFLT(bin, "is this system to be binned", false),
     INIT_PARAM(mem_ctl, "memory controller"),
@@ -672,18 +688,19 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(Tru64System)
     INIT_PARAM(console_code, "file that contains the console code"),
     INIT_PARAM(pal_code, "file that contains palcode"),
     INIT_PARAM_DFLT(boot_osflags, "flags to pass to the kernel during boot",
-                                   "a")
+                                   "a"),
+    INIT_PARAM(bootloader_code, "file that contains the bootloader")
 
 
-END_INIT_SIM_OBJECT_PARAMS(Tru64System)
+END_INIT_SIM_OBJECT_PARAMS(LinuxSystem)
 
-CREATE_SIM_OBJECT(Tru64System)
+CREATE_SIM_OBJECT(LinuxSystem)
 {
-    Tru64System *sys = new Tru64System(getInstanceName(), init_param, mem_ctl,
+    LinuxSystem *sys = new LinuxSystem(getInstanceName(), init_param, mem_ctl,
                                        physmem, kernel_code, console_code,
-                                       pal_code, boot_osflags, bin);
+                                       pal_code, boot_osflags, bootloader_code, bin);
 
     return sys;
 }
 
-REGISTER_SIM_OBJECT("Tru64System", Tru64System)
+REGISTER_SIM_OBJECT("LinuxSystem", LinuxSystem)

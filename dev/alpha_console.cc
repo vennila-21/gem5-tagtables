@@ -46,12 +46,13 @@
 #include "mem/functional_mem/memory_control.hh"
 #include "sim/builder.hh"
 #include "sim/system.hh"
+#include "dev/tsunami_io.hh"
 
 using namespace std;
 
 AlphaConsole::AlphaConsole(const string &name, SimConsole *cons,
                            SimpleDisk *d, int size, System *system,
-                           BaseCPU *cpu, TlaserClock *clock, int num_cpus,
+                           BaseCPU *cpu, TsunamiIO *clock, int num_cpus,
                            Addr addr, Addr mask, MemoryController *mmu)
     : MmapDevice(name, addr, mask, mmu), disk(d), console(cons)
 {
@@ -73,7 +74,7 @@ AlphaConsole::AlphaConsole(const string &name, SimConsole *cons,
 }
 
 Fault
-AlphaConsole::read(MemReqPtr req, uint8_t *data)
+AlphaConsole::read(MemReqPtr &req, uint8_t *data)
 {
     memset(data, 0, req->size);
     uint64_t val;
@@ -81,7 +82,7 @@ AlphaConsole::read(MemReqPtr req, uint8_t *data)
     Addr daddr = req->paddr & addr_mask;
     switch (daddr) {
       case offsetof(AlphaAccess, inputChar):
-        val = console->in();
+        val = console->console_in();
         break;
 
       default:
@@ -109,7 +110,7 @@ AlphaConsole::read(MemReqPtr req, uint8_t *data)
 }
 
 Fault
-AlphaConsole::write(MemReqPtr req, const uint8_t *data)
+AlphaConsole::write(MemReqPtr &req, const uint8_t *data)
 {
     uint64_t val;
 
@@ -250,7 +251,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(AlphaConsole)
     Param<Addr> mask;
     SimObjectParam<System *> system;
     SimObjectParam<BaseCPU *> cpu;
-    SimObjectParam<TlaserClock *> clock;
+    SimObjectParam<TsunamiIO *> clock;
 
 END_DECLARE_SIM_OBJECT_PARAMS(AlphaConsole)
 
