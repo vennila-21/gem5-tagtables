@@ -1,0 +1,317 @@
+/* $Id$ */
+
+/* @file
+ * Tsunami PChip (pci)
+ */
+
+#include <deque>
+#include <string>
+#include <vector>
+
+#include "base/trace.hh"
+#include "cpu/exec_context.hh"
+#include "dev/console.hh"
+#include "dev/etherdev.hh"
+#include "dev/scsi_ctrl.hh"
+#include "dev/tlaser_clock.hh"
+#include "dev/tsunami_pchip.hh"
+#include "dev/tsunamireg.h"
+#include "dev/tsunami.hh"
+#include "mem/functional_mem/memory_control.hh"
+#include "mem/functional_mem/physical_memory.hh"
+#include "sim/builder.hh"
+#include "sim/system.hh"
+
+using namespace std;
+
+TsunamiPChip::TsunamiPChip(const string &name, Tsunami *t, Addr a,
+                           MemoryController *mmu)
+    : FunctionalMemory(name), addr(a), tsunami(t)
+{
+    mmu->add_child(this, Range<Addr>(addr, addr + size));
+
+    for (int i = 0; i < 4; i++) {
+        wsba[i] = 0;
+        wsm[i] = 0;
+        tba[i] = 0;
+    }
+
+    //Set back pointer in tsunami
+    tsunami->pchip = this;
+}
+
+Fault
+TsunamiPChip::read(MemReqPtr &req, uint8_t *data)
+{
+    DPRINTF(Tsunami, "read  va=%#x size=%d\n",
+            req->vaddr, req->size);
+
+    Addr daddr = (req->paddr - (addr & PA_IMPL_MASK)) >> 6;
+
+    switch (req->size) {
+
+      case sizeof(uint64_t):
+          switch(daddr) {
+              case TSDEV_PC_WSBA0:
+                    *(uint64_t*)data = wsba[0];
+                    return No_Fault;
+              case TSDEV_PC_WSBA1:
+                    *(uint64_t*)data = wsba[1];
+                    return No_Fault;
+              case TSDEV_PC_WSBA2:
+                    *(uint64_t*)data = wsba[2];
+                    return No_Fault;
+              case TSDEV_PC_WSBA3:
+                    *(uint64_t*)data = wsba[3];
+                    return No_Fault;
+              case TSDEV_PC_WSM0:
+                    *(uint64_t*)data = wsm[0];
+                    return No_Fault;
+              case TSDEV_PC_WSM1:
+                    *(uint64_t*)data = wsm[1];
+                    return No_Fault;
+              case TSDEV_PC_WSM2:
+                    *(uint64_t*)data = wsm[2];
+                    return No_Fault;
+              case TSDEV_PC_WSM3:
+                    *(uint64_t*)data = wsm[3];
+                    return No_Fault;
+              case TSDEV_PC_TBA0:
+                    *(uint64_t*)data = tba[0];
+                    return No_Fault;
+              case TSDEV_PC_TBA1:
+                    *(uint64_t*)data = tba[1];
+                    return No_Fault;
+              case TSDEV_PC_TBA2:
+                    *(uint64_t*)data = tba[2];
+                    return No_Fault;
+              case TSDEV_PC_TBA3:
+                    *(uint64_t*)data = tba[3];
+                    return No_Fault;
+              case TSDEV_PC_PCTL:
+                    // might want to change the clock??
+                    *(uint64_t*)data = 0x00; // try this
+                    return No_Fault;
+              case TSDEV_PC_PLAT:
+                    panic("PC_PLAT not implemented\n");
+              case TSDEV_PC_RES:
+                    panic("PC_RES not implemented\n");
+              case TSDEV_PC_PERROR:
+                    panic("PC_PERROR not implemented\n");
+              case TSDEV_PC_PERRMASK:
+                    panic("PC_PERRMASK not implemented\n");
+              case TSDEV_PC_PERRSET:
+                    panic("PC_PERRSET not implemented\n");
+              case TSDEV_PC_TLBIV:
+                    panic("PC_TLBIV not implemented\n");
+              case TSDEV_PC_TLBIA:
+                    *(uint64_t*)data = 0x00; // shouldn't be readable, but linux
+                    return No_Fault;
+              case TSDEV_PC_PMONCTL:
+                    panic("PC_PMONCTL not implemented\n");
+              case TSDEV_PC_PMONCNT:
+                    panic("PC_PMONCTN not implemented\n");
+              default:
+                  panic("Default in PChip Read reached reading 0x%x\n", daddr);
+
+           } // uint64_t
+
+      break;
+      case sizeof(uint32_t):
+      case sizeof(uint16_t):
+      case sizeof(uint8_t):
+      default:
+        panic("invalid access size(?) for tsunami register!\n\n");
+    }
+    DPRINTFN("Tsunami PChip ERROR: read  daddr=%#x size=%d\n", daddr, req->size);
+
+    return No_Fault;
+}
+
+Fault
+TsunamiPChip::write(MemReqPtr &req, const uint8_t *data)
+{
+    DPRINTF(Tsunami, "write - va=%#x size=%d \n",
+            req->vaddr, req->size);
+
+    Addr daddr = (req->paddr - (addr & PA_IMPL_MASK)) >> 6;
+
+    switch (req->size) {
+
+      case sizeof(uint64_t):
+          switch(daddr) {
+              case TSDEV_PC_WSBA0:
+                    wsba[0] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_WSBA1:
+                    wsba[1] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_WSBA2:
+                    wsba[2] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_WSBA3:
+                    wsba[3] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_WSM0:
+                    wsm[0] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_WSM1:
+                    wsm[1] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_WSM2:
+                    wsm[2] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_WSM3:
+                    wsm[3] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_TBA0:
+                    tba[0] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_TBA1:
+                    tba[1] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_TBA2:
+                    tba[2] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_TBA3:
+                    tba[3] = *(uint64_t*)data;
+                    return No_Fault;
+              case TSDEV_PC_PCTL:
+                    // might want to change the clock??
+                    //*(uint64_t*)data; // try this
+                    return No_Fault;
+              case TSDEV_PC_PLAT:
+                    panic("PC_PLAT not implemented\n");
+              case TSDEV_PC_RES:
+                    panic("PC_RES not implemented\n");
+              case TSDEV_PC_PERROR:
+                    panic("PC_PERROR not implemented\n");
+              case TSDEV_PC_PERRMASK:
+                    panic("PC_PERRMASK not implemented\n");
+              case TSDEV_PC_PERRSET:
+                    panic("PC_PERRSET not implemented\n");
+              case TSDEV_PC_TLBIV:
+                    panic("PC_TLBIV not implemented\n");
+              case TSDEV_PC_TLBIA:
+                    return No_Fault; // value ignored, supposted to invalidate SG TLB
+              case TSDEV_PC_PMONCTL:
+                    panic("PC_PMONCTL not implemented\n");
+              case TSDEV_PC_PMONCNT:
+                    panic("PC_PMONCTN not implemented\n");
+              default:
+                  panic("Default in PChip Read reached reading 0x%x\n", daddr);
+
+           } // uint64_t
+
+      break;
+      case sizeof(uint32_t):
+      case sizeof(uint16_t):
+      case sizeof(uint8_t):
+      default:
+        panic("invalid access size(?) for tsunami register!\n\n");
+    }
+
+    DPRINTFN("Tsunami ERROR: write daddr=%#x size=%d\n", daddr, req->size);
+
+    return No_Fault;
+}
+
+#define DMA_ADDR_MASK ULL(0x3ffffffff)
+
+Addr
+TsunamiPChip::translatePciToDma(Addr busAddr)
+{
+    // compare the address to the window base registers
+    uint64_t tbaMask = 0;
+    uint64_t baMask = 0;
+
+    uint64_t windowMask = 0;
+    uint64_t windowBase = 0;
+
+    uint64_t pteEntry = 0;
+
+    Addr pteAddr;
+    Addr dmaAddr;
+
+    for (int i = 0; i < 4; i++) {
+        windowBase = wsba[i];
+        windowMask = ~wsm[i] & (0x7ff << 20);
+
+        if ((busAddr & windowMask) == (windowBase & windowMask)) {
+
+
+            if (wsba[i] & 0x1) {   // see if enabled
+                if (wsba[i] & 0x2) { // see if SG bit is set
+                    /** @todo
+                        This currently is faked by just doing a direct
+                        read from memory, however, to be realistic, this
+                        needs to actually do a bus transaction.  The process
+                        is explained in the tsunami documentation on page
+                        10-12 and basically munges the address to look up a
+                        PTE from a table in memory and then uses that mapping
+                        to create an address for the SG page
+                    */
+
+                    tbaMask = ~(((wsm[i] & (0x7ff << 20)) >> 10) | 0x3ff);
+                    baMask = (wsm[i] & (0x7ff << 20)) | (0x7f << 13);
+                    pteAddr = (tba[i] & tbaMask) | ((busAddr & baMask) >> 10);
+
+                    memcpy((void *)&pteEntry,
+                           tsunami->system->
+                           physmem->dma_addr(pteAddr, sizeof(uint64_t)),
+                           sizeof(uint64_t));
+
+                    dmaAddr = ((pteEntry & ~0x1) << 12) | (busAddr & 0x1fff);
+
+                } else {
+                    baMask = (wsm[i] & (0x7ff << 20)) | 0xfffff;
+                    tbaMask = ~baMask;
+                    dmaAddr = (tba[i] & tbaMask) | (busAddr & baMask);
+                }
+
+                return (dmaAddr & DMA_ADDR_MASK);
+            }
+        }
+    }
+
+    return 0;
+}
+
+void
+TsunamiPChip::serialize(std::ostream &os)
+{
+    SERIALIZE_ARRAY(wsba, 4);
+    SERIALIZE_ARRAY(wsm, 4);
+    SERIALIZE_ARRAY(tba, 4);
+}
+
+void
+TsunamiPChip::unserialize(Checkpoint *cp, const std::string &section)
+{
+    UNSERIALIZE_ARRAY(wsba, 4);
+    UNSERIALIZE_ARRAY(wsm, 4);
+    UNSERIALIZE_ARRAY(tba, 4);
+}
+
+BEGIN_DECLARE_SIM_OBJECT_PARAMS(TsunamiPChip)
+
+    SimObjectParam<Tsunami *> tsunami;
+    SimObjectParam<MemoryController *> mmu;
+    Param<Addr> addr;
+
+END_DECLARE_SIM_OBJECT_PARAMS(TsunamiPChip)
+
+BEGIN_INIT_SIM_OBJECT_PARAMS(TsunamiPChip)
+
+    INIT_PARAM(tsunami, "Tsunami"),
+    INIT_PARAM(mmu, "Memory Controller"),
+    INIT_PARAM(addr, "Device Address")
+
+END_INIT_SIM_OBJECT_PARAMS(TsunamiPChip)
+
+CREATE_SIM_OBJECT(TsunamiPChip)
+{
+    return new TsunamiPChip(getInstanceName(), tsunami, addr, mmu);
+}
+
+REGISTER_SIM_OBJECT("TsunamiPChip", TsunamiPChip)
