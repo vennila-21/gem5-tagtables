@@ -92,7 +92,8 @@ class SimpleCPU : public BaseCPU
         Idle,
         IcacheMissStall,
         IcacheMissComplete,
-        DcacheMissStall
+        DcacheMissStall,
+        SwitchedOut
     };
 
   private:
@@ -117,7 +118,7 @@ class SimpleCPU : public BaseCPU
               Counter max_loads_any_thread, Counter max_loads_all_threads,
               AlphaItb *itb, AlphaDtb *dtb, FunctionalMemory *mem,
               MemInterface *icache_interface, MemInterface *dcache_interface,
-              int cpu_id, Tick freq);
+              Tick freq);
 
 #else
 
@@ -135,6 +136,9 @@ class SimpleCPU : public BaseCPU
     // execution context
     ExecContext *xc;
 
+    void switchOut();
+    void takeOverFrom(BaseCPU *oldCPU);
+
 #ifdef FULL_SYSTEM
     Addr dbg_vtophys(Addr addr);
 
@@ -149,9 +153,6 @@ class SimpleCPU : public BaseCPU
 
     // current instruction
     MachInst inst;
-
-    // current fault status
-    Fault fault;
 
     // Refcounted pointer to the one memory request.
     MemReqPtr memReq;
@@ -171,17 +172,15 @@ class SimpleCPU : public BaseCPU
     CacheCompletionEvent cacheCompletionEvent;
 
     Status status() const { return _status; }
-    virtual void execCtxStatusChg() {
-        if (xc) {
-            if (xc->status() == ExecContext::Active)
-                setStatus(Running);
-            else
-                setStatus(Idle);
-        }
-    }
+
+    virtual void execCtxStatusChg(int thread_num);
 
     void setStatus(Status new_status) {
         Status old_status = status();
+
+        // We should never even get here if the CPU has been switched out.
+        assert(old_status != SwitchedOut);
+
         _status = new_status;
 
         switch (status()) {

@@ -72,10 +72,6 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
         fatal("Could not load PALcode file %s", palcode);
     pal->loadSections(physmem, true);
 
-    // copy of initial reg file contents
-    initRegs = new RegFile;
-    memset(initRegs, 0, sizeof(RegFile));
-
     // Load console file
     console->loadSections(physmem, true);
 
@@ -89,10 +85,6 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
             "Kernel end   = %#x\n"
             "Kernel entry = %#x\n",
             kernelStart, kernelEnd, kernelEntry);
-
-    // Setup kernel boot parameters
-    initRegs->pc = 0x4001;
-    initRegs->npc = initRegs->pc + sizeof(MachInst);
 
     DPRINTF(Loader, "Kernel loaded...\n");
 
@@ -164,8 +156,6 @@ Tru64System::Tru64System(const string _name, const uint64_t _init_param,
 
 Tru64System::~Tru64System()
 {
-    delete initRegs;
-
     delete kernel;
     delete console;
 
@@ -184,24 +174,40 @@ Tru64System::~Tru64System()
 
 }
 
-void
-Tru64System::init(ExecContext *xc)
+int
+Tru64System::registerExecContext(ExecContext *xc)
 {
-    xc->regs = *initRegs;
+    int xcIndex = System::registerExecContext(xc);
 
-    remoteGDB = new RemoteGDB(this, xc);
-    gdbListen = new GDBListener(remoteGDB, 7000);
-    gdbListen->listen();
+    if (xcIndex == 0) {
+        xc->setStatus(ExecContext::Active);
+    }
 
-    // Reset the system
-    //
-    TheISA::init(physmem, &xc->regs);
+    RemoteGDB *rgdb = new RemoteGDB(this, xc);
+    GDBListener *gdbl = new GDBListener(rgdb, 7000 + xcIndex);
+    gdbl->listen();
+
+    if (remoteGDB.size() <= xcIndex) {
+        remoteGDB.resize(xcIndex+1);
+    }
+
+    remoteGDB[xcIndex] = rgdb;
+
+    return xcIndex;
+}
+
+
+void
+Tru64System::replaceExecContext(ExecContext *xc, int xcIndex)
+{
+    System::replaceExecContext(xcIndex, xc);
+    remoteGDB[xcIndex]->replaceExecContext(xc);
 }
 
 bool
 Tru64System::breakpoint()
 {
-    return remoteGDB->trap(ALPHA_KENTRY_IF);
+    return remoteGDB[0]->trap(ALPHA_KENTRY_IF);
 }
 
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(Tru64System)

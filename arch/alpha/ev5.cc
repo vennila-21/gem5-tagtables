@@ -44,9 +44,14 @@ AlphaISA::swap_palshadow(RegFile *regs, bool use_shadow)
 //  Machine dependent functions
 //
 void
-AlphaISA::init(void *mem, RegFile *regs)
+AlphaISA::initCPU(RegFile *regs)
 {
-    ipr_init(mem, regs);
+    initIPRs(regs);
+    // CPU comes up with PAL regs enabled
+    swap_palshadow(regs, true);
+
+    regs->pc = regs->ipr[IPR_PAL_BASE] + fault_addr[Reset_Fault];
+    regs->npc = regs->pc + sizeof(MachInst);
 }
 
 void
@@ -91,12 +96,13 @@ const int AlphaISA::reg_redir[AlphaISA::NumIntRegs] = {
 //
 //
 void
-AlphaISA::ipr_init(void *mem, RegFile *regs)
+AlphaISA::initIPRs(RegFile *regs)
 {
     uint64_t *ipr = regs->ipr;
 
     bzero((char *)ipr, NumInternalProcRegs * sizeof(InternalProcReg));
     ipr[IPR_PAL_BASE] = PAL_BASE;
+    ipr[IPR_MCSR] = 0x6;
 }
 
 
