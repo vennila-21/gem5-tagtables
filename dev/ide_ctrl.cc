@@ -63,9 +63,6 @@ IdeController::IdeController(const string &name, IntrControl *ic,
                              Bus *host_bus, Tick pio_latency, HierParams *hier)
     : PciDev(name, mmu, cf, cd, bus_num, dev_num, func_num), tsunami(t)
 {
-    // put back pointer into Tsunami
-    tsunami->disk_controller = this;
-
     // initialize the PIO interface addresses
     pri_cmd_addr = 0;
     pri_cmd_size = BARSize[0];
@@ -377,8 +374,8 @@ IdeController::WriteConfig(int offset, int size, uint32_t data)
         if (BARAddrs[0] != 0) {
             pri_cmd_addr = BARAddrs[0];
             if (pioInterface)
-                pioInterface->addAddrRange(pri_cmd_addr,
-                                           pri_cmd_addr + pri_cmd_size - 1);
+                pioInterface->addAddrRange(RangeSize(pri_cmd_addr,
+                                                     pri_cmd_size));
 
             pri_cmd_addr &= PA_UNCACHED_MASK;
         }
@@ -388,8 +385,8 @@ IdeController::WriteConfig(int offset, int size, uint32_t data)
         if (BARAddrs[1] != 0) {
             pri_ctrl_addr = BARAddrs[1];
             if (pioInterface)
-                pioInterface->addAddrRange(pri_ctrl_addr,
-                                           pri_ctrl_addr + pri_ctrl_size - 1);
+                pioInterface->addAddrRange(RangeSize(pri_ctrl_addr,
+                                                     pri_ctrl_size));
 
             pri_ctrl_addr &= PA_UNCACHED_MASK;
         }
@@ -399,8 +396,8 @@ IdeController::WriteConfig(int offset, int size, uint32_t data)
         if (BARAddrs[2] != 0) {
             sec_cmd_addr = BARAddrs[2];
             if (pioInterface)
-                pioInterface->addAddrRange(sec_cmd_addr,
-                                           sec_cmd_addr + sec_cmd_size - 1);
+                pioInterface->addAddrRange(RangeSize(sec_cmd_addr,
+                                                     sec_cmd_size));
 
             sec_cmd_addr &= PA_UNCACHED_MASK;
         }
@@ -410,8 +407,8 @@ IdeController::WriteConfig(int offset, int size, uint32_t data)
         if (BARAddrs[3] != 0) {
             sec_ctrl_addr = BARAddrs[3];
             if (pioInterface)
-                pioInterface->addAddrRange(sec_ctrl_addr,
-                                           sec_ctrl_addr + sec_ctrl_size - 1);
+                pioInterface->addAddrRange(RangeSize(sec_ctrl_addr,
+                                                     sec_ctrl_size));
 
             sec_ctrl_addr &= PA_UNCACHED_MASK;
         }
@@ -421,7 +418,7 @@ IdeController::WriteConfig(int offset, int size, uint32_t data)
         if (BARAddrs[4] != 0) {
             bmi_addr = BARAddrs[4];
             if (pioInterface)
-                pioInterface->addAddrRange(bmi_addr, bmi_addr + bmi_size - 1);
+                pioInterface->addAddrRange(RangeSize(bmi_addr, bmi_size));
 
             bmi_addr &= PA_UNCACHED_MASK;
         }
@@ -675,15 +672,11 @@ IdeController::unserialize(Checkpoint *cp, const std::string &section)
     UNSERIALIZE_ARRAY(cmd_in_progress, 4);
 
     if (pioInterface) {
-        pioInterface->addAddrRange(pri_cmd_addr, pri_cmd_addr +
-                                   pri_cmd_size - 1);
-        pioInterface->addAddrRange(pri_ctrl_addr, pri_ctrl_addr +
-                                   pri_ctrl_size - 1);
-        pioInterface->addAddrRange(sec_cmd_addr, sec_cmd_addr +
-                                   sec_cmd_size - 1);
-        pioInterface->addAddrRange(sec_ctrl_addr, sec_ctrl_addr +
-                                   sec_ctrl_size - 1);
-        pioInterface->addAddrRange(bmi_addr, bmi_addr + bmi_size - 1);
+        pioInterface->addAddrRange(RangeSize(pri_cmd_addr, pri_cmd_size));
+        pioInterface->addAddrRange(RangeSize(pri_ctrl_addr, pri_ctrl_size));
+        pioInterface->addAddrRange(RangeSize(sec_cmd_addr, sec_cmd_size));
+        pioInterface->addAddrRange(RangeSize(sec_ctrl_addr, sec_ctrl_size));
+        pioInterface->addAddrRange(RangeSize(bmi_addr, bmi_size));
    }
 }
 

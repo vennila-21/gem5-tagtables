@@ -369,6 +369,34 @@ syscall_emulation_obj_desc_files = Split('''
         sim/Process.od
 	''')
 
+targetarch_files = Split('''
+        alpha_common_syscall_emul.hh
+        alpha_linux_process.hh
+        alpha_memory.hh
+        alpha_tru64_process.hh
+        aout_machdep.h
+        arguments.hh
+        byte_swap.hh
+        ecoff_machdep.h
+        elf_machdep.h
+        ev5.hh
+        faults.hh
+        isa_fullsys_traits.hh
+        isa_traits.hh
+        machine_exo.h
+        osfpal.hh
+        pmap.h
+        pseudo_inst.hh
+        syscalls.hh
+        vptr.hh
+        vtophys.hh
+        ''')
+
+for f in targetarch_files:
+    env.Command('targetarch/' + f, 'arch/alpha/' + f,
+                '''echo '#include "arch/alpha/%s"' > $TARGET''' % f)
+
+
 # Set up complete list of sources based on configuration.
 sources = base_sources
 obj_desc_files = base_obj_desc_files
@@ -417,22 +445,6 @@ env.Command(Split('''arch/alpha/decoder.cc
             '$SRCDIR/arch/isa_parser.py $SOURCE $TARGET.dir arch/alpha')
 
 
-# 'targetarch' is a symlink to arch/$TARGET_ISA.
-def link_targetarch(target, source, env):
-    link_target = str(target[0])
-    link_source = env.subst('$SRCDIR/arch/$TARGET_ISA')
-    if not os.path.isdir(link_target):
-        print "symlinking", link_source, "to", link_target
-        try:
-            os.symlink(link_source, link_target)
-        except OSError, desc:
-            print "Error creating symlink %s: %s" % (link_target, desc)
-            sys.exit(-1)
-
-# Tell SCons to use the link_targetarch function to make 'targetarch'
-env.Command('targetarch', None, link_targetarch)
-
-
 # libelf build is described in its own SConscript file.
 # SConscript-local is the per-config build, which just copies some
 # header files into a place where they can be found.
@@ -446,11 +458,9 @@ SConscript('sim/pyconfig/SConscript', exports = ['env', 'obj_desc_files'],
 # environment, and returns a list of all the corresponding SCons
 # Object nodes (including an extra one for date.cc).  We explicitly
 # add the Object nodes so we can set up special dependencies for
-# targetarch and date.cc.
+# date.cc.
 def make_objs(sources, env):
     objs = [env.Object(s) for s in sources]
-    # make all objects depend on the targetarch link so it gets made first.
-    env.Depends(objs, 'targetarch')
     # make date.cc depend on all other objects so it always gets
     # recompiled whenever anything else does
     date_obj = env.Object('base/date.cc')
