@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,22 +26,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __BASE_STATS_OUTPUT_HH__
-#define __BASE_STATS_OUTPUT_HH__
+#ifndef __BASE_STATS_MYSQL_RUN_HH__
+#define __BASE_STATS_MYSQL_RUN_HH__
 
 #include <string>
 
-#include "base/stats/visit.hh"
+#include "base/mysql.hh"
+#include "sim/host.hh"
 
 namespace Stats {
 
-struct Output : public Visit
+struct MySqlRun
 {
-    inline void operator()() { output(); }
-    virtual void output() = 0;
-    virtual bool valid() const = 0;
+  private:
+    MySQL::Connection mysql;
+    uint16_t run_id;
+
+  public:
+    bool connected() const { return mysql.connected(); }
+    void connect(const std::string &host, const std::string &user,
+                 const std::string &passwd, const std::string &db,
+                 const std::string &name, const std::string &project);
+
+    void setup(const std::string &name, const std::string &user,
+               const std::string &project);
+
+    void remove(const std::string &name);
+    void cleanup();
+
+    MySQL::Connection &conn() { return mysql; }
+    uint16_t run() const { return run_id; }
 };
 
 /* namespace Stats */ }
 
-#endif // __BASE_STATS_OUTPUT_HH__
+#endif // __BASE_STATS_MYSQL_RUN_HH__

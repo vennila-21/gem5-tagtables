@@ -42,11 +42,8 @@
 // forward declarations
 class ExecContext;
 class DynInst;
-typedef DynInst FullCPUExecContext;
 class FastCPU;
-typedef FastCPU FastCPUExecContext;
 class SimpleCPU;
-typedef SimpleCPU SimpleCPUExecContext;
 class SymbolTable;
 
 namespace Trace {
@@ -110,10 +107,12 @@ class StaticInstBase : public RefCounted
 
         IsThreadSync,	///< Thread synchronization operation.
 
-        IsSerializing,	///< Serializes pipeline: won't until all
+        IsSerializing,	///< Serializes pipeline: won't execute until all
                         /// older instructions have committed.
         IsMemBarrier,	///< Is a memory barrier
         IsWriteBarrier,	///< Is a write barrier
+
+        IsNonSpeculative, ///< Should not be executed speculatively
 
         NumFlags
     };
@@ -196,6 +195,7 @@ class StaticInstBase : public RefCounted
     bool isSerializing()  const { return flags[IsSerializing]; }
     bool isMemBarrier()   const { return flags[IsMemBarrier]; }
     bool isWriteBarrier() const { return flags[IsWriteBarrier]; }
+    bool isNonSpeculative() const { return flags[IsNonSpeculative]; }
     //@}
 
     /// Operation class.  Used to select appropriate function unit in issue.
@@ -251,7 +251,8 @@ class StaticInst : public StaticInstBase
      * obtain the dependence info (numSrcRegs and srcRegIdx[]) for
      * just the EA computation.
      */
-    virtual StaticInstPtr<ISA> eaCompInst() { return nullStaticInstPtr; }
+    virtual const
+    StaticInstPtr<ISA> &eaCompInst() const { return nullStaticInstPtr; }
 
     /**
      * Memory references only: returns "fake" instruction representing
@@ -259,7 +260,8 @@ class StaticInst : public StaticInstBase
      * obtain the dependence info (numSrcRegs and srcRegIdx[]) for
      * just the memory access (not the EA computation).
      */
-    virtual StaticInstPtr<ISA> memAccInst() { return nullStaticInstPtr; }
+    virtual const
+    StaticInstPtr<ISA> &memAccInst() const { return nullStaticInstPtr; }
 
     /// The binary machine instruction.
     const MachInst machInst;
@@ -309,20 +311,17 @@ class StaticInst : public StaticInstBase
     /**
      * Execute this instruction under SimpleCPU model.
      */
-    virtual Fault execute(SimpleCPUExecContext *xc,
-                          Trace::InstRecord *traceData) = 0;
+    virtual Fault execute(SimpleCPU *xc, Trace::InstRecord *traceData) = 0;
 
     /**
      * Execute this instruction under FastCPU model.
      */
-    virtual Fault execute(FastCPUExecContext *xc,
-                          Trace::InstRecord *traceData) = 0;
+    virtual Fault execute(FastCPU *xc, Trace::InstRecord *traceData) = 0;
 
     /**
      * Execute this instruction under detailed FullCPU model.
      */
-    virtual Fault execute(FullCPUExecContext *xc,
-                          Trace::InstRecord *traceData) = 0;
+    virtual Fault execute(DynInst *xc, Trace::InstRecord *traceData) = 0;
 
     /**
      * Return the target address for a PC-relative branch.

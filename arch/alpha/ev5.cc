@@ -1,17 +1,15 @@
 /* $Id$ */
 
-#include "targetarch/alpha_memory.hh"
-#include "sim/annotation.hh"
-#ifdef DEBUG
-#include "sim/debug.hh"
-#endif
+#include "arch/alpha/alpha_memory.hh"
+#include "arch/alpha/isa_traits.hh"
+#include "arch/alpha/osfpal.hh"
+#include "base/kgdb.h"
+#include "base/remote_gdb.hh"
+#include "base/stats/events.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/fast_cpu/fast_cpu.hh"
+#include "sim/debug.hh"
 #include "sim/sim_events.hh"
-#include "targetarch/isa_traits.hh"
-#include "base/remote_gdb.hh"
-#include "base/kgdb.h"	// for ALPHA_KENTRY_IF
-#include "targetarch/osfpal.hh"
 
 #ifdef FULL_SYSTEM
 
@@ -162,6 +160,8 @@ AlphaISA::zeroRegisters(XC *xc)
 void
 ExecContext::ev5_trap(Fault fault)
 {
+    Stats::recordEvent(csprintf("Fault %s", FaultName(fault)));
+
     assert(!misspeculating());
     kernelStats.fault(fault);
 
@@ -185,8 +185,6 @@ ExecContext::ev5_trap(Fault fault)
 
     regs.pc = ipr[AlphaISA::IPR_PAL_BASE] + AlphaISA::fault_addr[fault];
     regs.npc = regs.pc + sizeof(MachInst);
-
-    Annotate::Ev5Trap(this, fault);
 }
 
 
@@ -362,6 +360,7 @@ Fault
 ExecContext::setIpr(int idx, uint64_t val)
 {
     uint64_t *ipr = regs.ipr;
+    uint64_t old;
 
     if (misspeculating())
         return No_Fault;
@@ -414,9 +413,9 @@ ExecContext::setIpr(int idx, uint64_t val)
 
       case AlphaISA::IPR_PALtemp23:
         // write entire quad w/ no side-effect
+        old = ipr[idx];
         ipr[idx] = val;
-        kernelStats.context(ipr[idx]);
-        Annotate::Context(this);
+        kernelStats.context(old, val);
         break;
 
       case AlphaISA::IPR_DTB_PTE:
@@ -444,11 +443,9 @@ ExecContext::setIpr(int idx, uint64_t val)
         // only write least significant five bits - interrupt level
         ipr[idx] = val & 0x1f;
         kernelStats.swpipl(ipr[idx]);
-        Annotate::IPL(this, val & 0x1f);
         break;
 
       case AlphaISA::IPR_DTB_CM:
-        Annotate::ChangeMode(this, (val & 0x18) != 0);
         kernelStats.mode((val & 0x18) != 0);
 
       case AlphaISA::IPR_ICM:

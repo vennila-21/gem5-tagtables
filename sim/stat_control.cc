@@ -39,6 +39,7 @@
 #include "base/str.hh"
 #include "base/time.hh"
 #include "base/stats/output.hh"
+#include "cpu/base_cpu.hh"
 #include "sim/eventq.hh"
 #include "sim/sim_object.hh"
 #include "sim/stat_control.hh"
@@ -46,16 +47,17 @@
 
 using namespace std;
 
-Statistics::Formula hostInstRate;
-Statistics::Formula hostMemory;
-Statistics::Formula hostSeconds;
-Statistics::Formula hostTickRate;
+Stats::Formula hostInstRate;
+Stats::Formula hostTickRate;
+Stats::Value hostMemory;
+Stats::Value hostSeconds;
 
-Statistics::Formula simInsts;
-Statistics::Formula simSeconds;
-Statistics::Formula simTicks;
+Stats::Value simTicks;
+Stats::Value simInsts;
+Stats::Value simFreq;
+Stats::Formula simSeconds;
 
-namespace Statistics {
+namespace Stats {
 
 Time statTime(true);
 Tick startTick;
@@ -84,6 +86,7 @@ void
 InitSimStats()
 {
     simInsts
+        .functor(BaseCPU::numSimulatedInstructions)
         .name("sim_insts")
         .desc("Number of instructions simulated")
         .precision(0)
@@ -95,7 +98,14 @@ InitSimStats()
         .desc("Number of seconds simulated")
         ;
 
+    simFreq
+        .scalar(ticksPerSecond)
+        .name("sim_freq")
+        .desc("Frequency of simulated ticks")
+        ;
+
     simTicks
+        .scalar(curTick)
         .name("sim_ticks")
         .desc("Number of ticks simulated")
         ;
@@ -108,12 +118,14 @@ InitSimStats()
         ;
 
     hostMemory
+        .functor(memUsage)
         .name("host_mem_usage")
         .desc("Number of bytes of host memory used")
         .prereq(hostMemory)
         ;
 
     hostSeconds
+        .functor(statElapsedTime)
         .name("host_seconds")
         .desc("Real time elapsed on the host")
         .precision(2)
@@ -125,11 +137,7 @@ InitSimStats()
         .precision(0)
         ;
 
-    simInsts = constant(0);
-    simTicks = scalar(curTick) - scalar(startTick);
-    simSeconds = simTicks / scalar(ticksPerSecond);
-    hostMemory = functor(memUsage);
-    hostSeconds = functor(statElapsedTime);
+    simSeconds = simTicks / simFreq;
     hostInstRate = simInsts / hostSeconds;
     hostTickRate = simTicks / hostSeconds;
 
@@ -165,10 +173,10 @@ StatEvent::description()
 void
 StatEvent::process()
 {
-    if (flags & Statistics::Dump)
+    if (flags & Stats::Dump)
         DumpNow();
 
-    if (flags & Statistics::Reset)
+    if (flags & Stats::Reset)
         reset();
 
     if (repeat)
@@ -197,11 +205,11 @@ SetupEvent(int flags, Tick when, Tick repeat)
     new StatEvent(flags, when, repeat);
 }
 
-/* namespace Statistics */ }
+/* namespace Stats */ }
 
 extern "C" void
 debugDumpStats()
 {
-    Statistics::DumpNow();
+    Stats::DumpNow();
 }
 

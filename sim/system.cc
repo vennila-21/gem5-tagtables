@@ -30,6 +30,7 @@
 #include "targetarch/vtophys.hh"
 #include "sim/param.hh"
 #include "sim/system.hh"
+#include "base/trace.hh"
 
 using namespace std;
 
@@ -41,19 +42,47 @@ System::System(const std::string _name,
                const uint64_t _init_param,
                MemoryController *_memCtrl,
                PhysicalMemory *_physmem,
-               const bool _bin)
+               const bool _bin,
+               const std::vector<string> &binned_fns)
+
     : SimObject(_name),
       init_param(_init_param),
       memCtrl(_memCtrl),
       physmem(_physmem),
-      bin(_bin)
+      bin(_bin),
+      binned_fns(binned_fns)
 {
     // add self to global system list
     systemList.push_back(this);
     if (bin == true) {
-        Kernel = new Statistics::MainBin("non TCPIP Kernel stats");
+        Kernel = new Stats::MainBin("non TCPIP Kernel stats");
         Kernel->activate();
-        User = new Statistics::MainBin("User stats");
+        User = new Stats::MainBin("User stats");
+
+        int end = binned_fns.size();
+        assert(!(end & 1));
+
+        Stats::MainBin *Bin;
+
+        fnEvents.resize(end>>1);
+
+        for (int i = 0; i < end; i +=2) {
+            Bin = new Stats::MainBin(binned_fns[i]);
+            fnBins.insert(make_pair(binned_fns[i], Bin));
+
+            fnEvents[(i>>1)] = new FnEvent(&pcEventQueue, binned_fns[i], this);
+
+            if (binned_fns[i+1] == "null")
+                populateMap(binned_fns[i], "");
+            else
+                populateMap(binned_fns[i], binned_fns[i+1]);
+        }
+
+        fnCalls
+            .name(name() + ":fnCalls")
+            .desc("all fn calls being tracked")
+            ;
+
     } else
         Kernel = NULL;
 }
@@ -61,6 +90,13 @@ System::System(const std::string _name,
 
 System::~System()
 {
+    if (bin == true) {
+        int end = fnEvents.size();
+        for (int i = 0; i < end; ++i) {
+            delete fnEvents[i];
+        }
+        fnEvents.clear();
+    }
 }
 
 
@@ -103,10 +139,49 @@ printSystems()
     System::printSystems();
 }
 
-Statistics::MainBin *
+void
+System::populateMap(std::string callee, std::string caller)
+{
+    multimap<const string, string>::const_iterator i;
+    i = callerMap.insert(make_pair(callee, caller));
+    assert(i != callerMap.end() && "should not fail populating callerMap");
+}
+
+bool
+System::findCaller(std::string callee, std::string caller) const
+{
+    typedef multimap<const std::string, std::string>::const_iterator iter;
+    pair<iter, iter> range;
+
+    range = callerMap.equal_range(callee);
+    for (iter i = range.first; i != range.second; ++i) {
+        if ((*i).second == caller)
+            return true;
+    }
+    return false;
+}
+
+void
+System::dumpState(ExecContext *xc) const
+{
+    if (xc->swCtx) {
+        stack<fnCall *> copy(xc->swCtx->callStack);
+        if (copy.empty())
+            return;
+        DPRINTF(TCPIP, "xc->swCtx, size: %d:\n", copy.size());
+        fnCall *top;
+        DPRINTF(TCPIP, "||     call : %d\n",xc->swCtx->calls);
+        for (top = copy.top(); !copy.empty(); copy.pop() ) {
+            top = copy.top();
+            DPRINTF(TCPIP, "||  %13s : %s \n", top->name, top->myBin->name());
+        }
+    }
+}
+
+Stats::MainBin *
 System::getBin(const std::string &name)
 {
-    std::map<const std::string, Statistics::MainBin *>::const_iterator i;
+    std::map<const std::string, Stats::MainBin *>::const_iterator i;
     i = fnBins.find(name);
     if (i == fnBins.end())
         panic("trying to getBin %s that is not on system map!", name);

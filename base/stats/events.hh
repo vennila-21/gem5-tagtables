@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,22 +26,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __BASE_STATS_OUTPUT_HH__
-#define __BASE_STATS_OUTPUT_HH__
+#ifndef __BASE_STATS_EVENTS_HH__
+#define __BASE_STATS_EVENTS_HH__
 
 #include <string>
 
-#include "base/stats/visit.hh"
+#include "base/trace.hh"
 
 namespace Stats {
 
-struct Output : public Visit
+extern Tick EventStart;
+
+#ifdef USE_MYSQL
+void __event(const std::string &stat);
+bool MySqlConnected();
+#endif
+
+inline void
+recordEvent(const std::string &stat)
 {
-    inline void operator()() { output(); }
-    virtual void output() = 0;
-    virtual bool valid() const = 0;
-};
+    if (EventStart > curTick)
+        return;
+
+    DPRINTF(StatEvents, "Statistics Event: %s\n", stat);
+
+#ifdef USE_MYSQL
+    if (!MySqlConnected())
+        return;
+
+    __event(stat);
+#endif
+}
 
 /* namespace Stats */ }
 
-#endif // __BASE_STATS_OUTPUT_HH__
+#endif // __BASE_STATS_EVENTS_HH__

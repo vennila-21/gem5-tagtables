@@ -30,7 +30,6 @@
 
 #include "arch/alpha/pseudo_inst.hh"
 #include "cpu/exec_context.hh"
-#include "sim/annotation.hh"
 #include "sim/param.hh"
 #include "sim/serialize.hh"
 #include "sim/sim_exit.hh"
@@ -38,7 +37,7 @@
 #include "sim/stats.hh"
 
 using namespace std;
-using namespace Statistics;
+using namespace Stats;
 
 namespace AlphaPseudo
 {
@@ -47,14 +46,30 @@ namespace AlphaPseudo
     bool doQuiesce;
 
     void
+    arm(ExecContext *xc)
+    {
+        xc->kernelStats.arm();
+    }
+
+    void
     quiesce(ExecContext *xc)
     {
         if (!doQuiesce)
             return;
 
-        Annotate::QUIESCE(xc);
         xc->suspend();
         xc->kernelStats.quiesce();
+    }
+
+    void
+    ivlb(ExecContext *xc)
+    {
+        xc->kernelStats.ivlb();
+    }
+
+    void
+    ivle(ExecContext *xc)
+    {
     }
 
     void
@@ -83,7 +98,7 @@ namespace AlphaPseudo
         Tick when = curTick + NS2Ticks(delay);
         Tick repeat = NS2Ticks(period);
 
-        using namespace Statistics;
+        using namespace Stats;
         SetupEvent(Reset, when, repeat);
     }
 
@@ -99,7 +114,7 @@ namespace AlphaPseudo
         Tick when = curTick + NS2Ticks(delay);
         Tick repeat = NS2Ticks(period);
 
-        using namespace Statistics;
+        using namespace Stats;
         SetupEvent(Dump, when, repeat);
     }
 
@@ -115,7 +130,7 @@ namespace AlphaPseudo
         Tick when = curTick + NS2Ticks(delay);
         Tick repeat = NS2Ticks(period);
 
-        using namespace Statistics;
+        using namespace Stats;
         SetupEvent(Dump|Reset, when, repeat);
     }
 
