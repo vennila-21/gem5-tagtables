@@ -37,6 +37,7 @@
 namespace MySQL { class Connection; }
 namespace Stats {
 
+class MainBin;
 class DistDataData;
 class MySqlRun;
 bool MySqlConnected();
@@ -76,7 +77,7 @@ class InsertData
     MySqlRun *run;
 
   public:
-    uint64_t sample;
+    uint64_t tick;
     double data;
     uint16_t stat;
     uint16_t bin;
@@ -130,7 +131,7 @@ class MySql : public Output
 
   protected:
     // Output helper
-    void output(const std::string &bin);
+    void output(MainBin *bin);
     void output(const DistDataData &data);
     void output(const ScalarData &data);
     void output(const VectorData &data);
@@ -140,7 +141,7 @@ class MySql : public Output
     void output(const FormulaData &data);
 
     void configure();
-    void configure(const StatData &data, std::string type);
+    bool configure(const StatData &data, std::string type);
     void configure(const ScalarData &data);
     void configure(const VectorData &data);
     void configure(const DistData &data);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,57 +26,71 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/**
- * @file
- * Definition of a Intel ITX memory trace format reader.
- */
+#include "base/match.hh"
+#include "base/str.hh"
 
-#ifndef __ITX_READER_HH__
-#define __ITX_READER_HH__
+using namespace std;
 
-#include <stdio.h>
-
-#include "cpu/trace/reader/mem_trace_reader.hh"
-#include "mem/mem_req.hh"
-
-
-/**
- * A memory trace reader for the Intel ITX memory trace format.
- */
-class ITXReader : public MemTraceReader
+ObjectMatch::ObjectMatch()
 {
-    /** Trace file. */
-    FILE *trace;
+}
 
-    bool codeVirtValid;
-    Addr codeVirtAddr;
-    bool codePhysValid;
-    Addr codePhysAddr;
+ObjectMatch::ObjectMatch(const string &expr)
+{
+    setExpression(expr);
+}
 
-    int traceFormat;
+void
+ObjectMatch::setExpression(const string &expr)
+{
+    tokens.resize(1);
+    tokenize(tokens[0], expr, '.');
+}
 
-    enum ITXType {
-        ITXRead,
-        ITXWrite,
-        ITXWriteback,
-        ITXCode,
-        ITXCodeComp
-    };
+void
+ObjectMatch::setExpression(const vector<string> &expr)
+{
+    if (expr.empty()) {
+        tokens.resize(0);
+    } else {
+        tokens.resize(expr.size());
+        for (int i = 0; i < expr.size(); ++i)
+            tokenize(tokens[i], expr[i], '.');
+    }
+}
 
-  public:
-    /**
-     * Construct an ITXReader.
-     */
-    ITXReader(const std::string &name, const std::string &filename);
+/**
+ * @todo this should probably be changed to just use regular
+ * expression code
+ */
+bool
+ObjectMatch::domatch(const string &name) const
+{
+    vector<string> name_tokens;
+    tokenize(name_tokens, name, '.');
+    int ntsize = name_tokens.size();
 
-    /**
-     * Read the next request from the trace. Returns the request in the
-     * provided MemReqPtr and the cycle of the request in the return value.
-     * @param req Return the next request from the trace.
-     * @return ITX traces don't store timing information, return 0
-     */
-    virtual Tick getNextReq(MemReqPtr &req);
-};
+    int num_expr = tokens.size();
+    for (int i = 0; i < num_expr; ++i) {
+        const vector<string> &token = tokens[i];
+        int jstop = token.size();
 
-#endif //__ITX_READER_HH__
+        bool match = true;
+        for (int j = 0; j < jstop; ++j) {
+            if (j >= ntsize)
+                break;
+
+            const string &var = token[j];
+            if (var != "*" && var != name_tokens[j]) {
+                match = false;
+                break;
+            }
+        }
+
+        if (match == true)
+            return true;
+    }
+
+    return false;
+}
 

@@ -28,10 +28,11 @@
 
 /**
  * @file
- * linux_system.cc loads the linux kernel, console, pal and patches certain functions.
- * The symbol tables are loaded so that traces can show the executing function and we can
- * skip functions. Various delay loops are skipped and their final values manually computed to
- * speed up boot time.
+ * This code loads the linux kernel, console, pal and patches certain
+ * functions.  The symbol tables are loaded so that traces can show
+ * the executing function and we can skip functions. Various delay
+ * loops are skipped and their final values manually computed to speed
+ * up boot time.
  */
 
 #include "base/loader/aout_object.hh"
@@ -121,13 +122,15 @@ LinuxSystem::LinuxSystem(const string _name, const uint64_t _init_param,
 #endif
 
     skipIdeDelay50msEvent = new SkipFuncEvent(&pcEventQueue,
-                                                    "ide_delay_50ms");
+                                              "ide_delay_50ms");
 
     skipDelayLoopEvent = new LinuxSkipDelayLoopEvent(&pcEventQueue,
                                                      "calibrate_delay");
 
     skipCacheProbeEvent = new SkipFuncEvent(&pcEventQueue,
-                                                 "determine_cpu_caches");
+                                            "determine_cpu_caches");
+
+    debugPrintkEvent = new DebugPrintkEvent(&pcEventQueue, "dprintk");
 
     Addr addr = 0;
 
@@ -236,6 +239,9 @@ LinuxSystem::LinuxSystem(const string _name, const uint64_t _init_param,
 
     if (kernelSymtab->findAddress("determine_cpu_caches", addr))
         skipCacheProbeEvent->schedule(addr+sizeof(MachInst));
+
+    if (kernelSymtab->findAddress("dprintk", addr))
+        debugPrintkEvent->schedule(addr+sizeof(MachInst)*2);
 }
 
 LinuxSystem::~LinuxSystem()

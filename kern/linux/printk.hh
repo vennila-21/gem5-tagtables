@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,57 +26,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/**
- * @file
- * Definition of a Intel ITX memory trace format reader.
- */
+#ifndef __PRINTK_HH__
+#define __PRINTK_HH__
 
-#ifndef __ITX_READER_HH__
-#define __ITX_READER_HH__
+class AlphaArguments;
 
-#include <stdio.h>
+void Printk(AlphaArguments args);
 
-#include "cpu/trace/reader/mem_trace_reader.hh"
-#include "mem/mem_req.hh"
-
-
-/**
- * A memory trace reader for the Intel ITX memory trace format.
- */
-class ITXReader : public MemTraceReader
-{
-    /** Trace file. */
-    FILE *trace;
-
-    bool codeVirtValid;
-    Addr codeVirtAddr;
-    bool codePhysValid;
-    Addr codePhysAddr;
-
-    int traceFormat;
-
-    enum ITXType {
-        ITXRead,
-        ITXWrite,
-        ITXWriteback,
-        ITXCode,
-        ITXCodeComp
-    };
-
-  public:
-    /**
-     * Construct an ITXReader.
-     */
-    ITXReader(const std::string &name, const std::string &filename);
-
-    /**
-     * Read the next request from the trace. Returns the request in the
-     * provided MemReqPtr and the cycle of the request in the return value.
-     * @param req Return the next request from the trace.
-     * @return ITX traces don't store timing information, return 0
-     */
-    virtual Tick getNextReq(MemReqPtr &req);
-};
-
-#endif //__ITX_READER_HH__
-
+#endif // __PRINTK_HH__

@@ -67,9 +67,16 @@ MySqlRun::connect(const string &host, const string &user, const string &passwd,
     if (mysql.error)
         panic("could not connect to database server\n%s\n", mysql.error);
 
+    mysql.query("LOCK TABLES runs WRITE");
+    if (mysql.error)
+        panic("could not lock tables\n%s\n", mysql.error);
+
     remove(name);
-    cleanup();
+//    cleanup();
     setup(name, sample, user, project);
+    mysql.query("UNLOCK TABLES");
+    if (mysql.error)
+        panic("could not unlock tables\n%s\n", mysql.error);
 }
 
 void
@@ -100,6 +107,8 @@ MySqlRun::remove(const string &name)
     stringstream sql;
     ccprintf(sql, "DELETE FROM runs WHERE rn_name=\"%s\"", name);
     mysql.query(sql);
+    if (mysql.error)
+        panic("could not delete run\n%s\n", mysql.error);
 }
 
 void
@@ -195,13 +204,13 @@ SetupStat::setup()
     mysql.query(select);
     MySQL::Result result = mysql.store_result();
     if (!result)
-        panic("could not get a run\n%s\n", mysql.error);
+        panic("could not find stat\n%s\n", mysql.error);
 
 
     assert(result.num_fields() == 16);
     MySQL::Row row = result.fetch_row();
     if (!row)
-        panic("could not get a run\n%s\n", mysql.error);
+        panic("could not get stat row\n%s\n", mysql.error);
 
     bool tb;
     int8_t ti8;
@@ -274,33 +283,52 @@ SetupStat::setup()
 unsigned
 SetupBin(const string &bin)
 {
-    MySQL::Connection &mysql = MySqlDB.conn();
-    assert(mysql.connected());
+    static map<string, int> binmap;
 
     using namespace MySQL;
+    map<string,int>::const_iterator i = binmap.find(bin);
+    if (i != binmap.end())
+        return (*i).second;
+
+    Connection &mysql = MySqlDB.conn();
+    assert(mysql.connected());
+
+    mysql.query("LOCK TABLES bins WRITE");
+    if (mysql.error)
+        panic("could not lock bin table\n%s\n", mysql.error);
+
+    uint16_t bin_id;
+
     stringstream select;
+    stringstream insert;
     ccprintf(select, "SELECT bn_id FROM bins WHERE bn_name=\"%s\"", bin);
 
     mysql.query(select);
     MySQL::Result result = mysql.store_result();
     if (result) {
         assert(result.num_fields() == 1);
-        Row row = result.fetch_row();
+        MySQL::Row row = result.fetch_row();
         if (row) {
-            uint16_t bin_id;
             to_number(row[0], bin_id);
-            return bin_id;
+            goto exit;
         }
     }
 
-    stringstream insert;
     ccprintf(insert, "INSERT INTO bins(bn_name) values(\"%s\")", bin);
 
     mysql.query(insert);
     if (mysql.error)
-        panic("could not get a run\n%s\n", mysql.error);
+        panic("could not get a bin\n%s\n", mysql.error);
 
-    return mysql.insert_id();
+    bin_id = mysql.insert_id();
+    binmap.insert(make_pair(bin, bin_id));
+
+  exit:
+    mysql.query("UNLOCK TABLES");
+    if (mysql.error)
+        panic("could not unlock tables\n%s\n", mysql.error);
+
+    return bin_id;
 }
 
 InsertData::InsertData()
@@ -322,13 +350,15 @@ InsertData::flush()
         MySQL::Connection &mysql = MySqlDB.conn();
         assert(mysql.connected());
         mysql.query(query);
+        if (mysql.error)
+            panic("could not insert data\n%s\n", mysql.error);
     }
 
     query[0] = '\0';
     size = 0;
     first = true;
     strcpy(query, "INSERT INTO "
-           "data(dt_stat,dt_x,dt_y,dt_run,dt_sample,dt_bin,dt_data) "
+           "data(dt_stat,dt_x,dt_y,dt_run,dt_tick,dt_bin,dt_data) "
            "values");
     size = strlen(query);
 }
@@ -347,7 +377,7 @@ InsertData::insert()
     first = false;
 
     size += sprintf(query + size, "(%u,%d,%d,%u,%llu,%u,\"%f\")",
-                    stat, x, y, MySqlDB.run(), (unsigned long long)sample,
+                    stat, x, y, MySqlDB.run(), (unsigned long long)tick,
                     bin, data);
 }
 
@@ -374,6 +404,8 @@ InsertSubData::setup()
              stat, x, y, name, descr);
 
     mysql.query(insert);
+//    if (mysql.error)
+//	panic("could not insert subdata\n%s\n", mysql.error);
 }
 
 void
@@ -387,13 +419,17 @@ InsertFormula(uint16_t stat, const string &formula)
              stat, formula);
 
     mysql.query(insert_formula);
+//    if (mysql.error)
+//	panic("could not insert formula\n%s\n", mysql.error);
 
     stringstream insert_ref;
     ccprintf(insert_ref,
              "INSERT INTO formula_ref(fr_stat,fr_run) values(%d, %d)",
              stat, MySqlDB.run());
 
-        mysql.query(insert_ref);
+    mysql.query(insert_ref);
+//    if (mysql.error)
+//	panic("could not insert formula reference\n%s\n", mysql.error);
 }
 
 void
@@ -405,6 +441,8 @@ UpdatePrereq(uint16_t stat, uint16_t prereq)
     ccprintf(update, "UPDATE stats SET st_prereq=%d WHERE st_id=%d",
              prereq, stat);
     mysql.query(update);
+    if (mysql.error)
+        panic("could not update prereq\n%s\n", mysql.error);
 }
 
 void
@@ -414,6 +452,17 @@ MySql::configure()
      * set up all stats!
      */
     using namespace Database;
+
+    MySQL::Connection &mysql = MySqlDB.conn();
+    mysql.query("LOCK TABLES "
+                "stats WRITE, "
+                "bins WRITE, "
+                "subdata WRITE, "
+                "formulas WRITE, "
+                "formula_ref WRITE");
+    if (mysql.error)
+        panic("could not lock tables\n%s\n", mysql.error);
+
     stat_list_t::const_iterator i, end = stats().end();
     for (i = stats().begin(); i != end; ++i)
         (*i)->visit(*this);
@@ -429,11 +478,15 @@ MySql::configure()
         }
     }
 
+    mysql.query("UNLOCK TABLES");
+    if (mysql.error)
+        panic("could not unlock tables\n%s\n", mysql.error);
+
     configured = true;
 }
 
 
-void
+bool
 MySql::configure(const StatData &data, string type)
 {
     stat.init();
@@ -447,19 +500,25 @@ MySql::configure(const StatData &data, string type)
     stat.total = data.flags & total;
     stat.pdf = data.flags & pdf;
     stat.cdf = data.flags & cdf;
+
+    return stat.print;
 }
 
 void
 MySql::configure(const ScalarData &data)
 {
-    configure(data, "SCALAR");
+    if (!configure(data, "SCALAR"))
+        return;
+
     insert(data.id, stat.setup());
 }
 
 void
 MySql::configure(const VectorData &data)
 {
-    configure(data, "VECTOR");
+    if (!configure(data, "VECTOR"))
+        return;
+
     uint16_t statid = stat.setup();
 
     if (!data.subnames.empty()) {
@@ -482,7 +541,9 @@ MySql::configure(const VectorData &data)
 void
 MySql::configure(const DistData &data)
 {
-    configure(data, "DIST");
+    if (!configure(data, "DIST"))
+        return;
+
     if (!data.data.fancy) {
         stat.size = data.data.size;
         stat.min = data.data.min;
@@ -495,7 +556,8 @@ MySql::configure(const DistData &data)
 void
 MySql::configure(const VectorDistData &data)
 {
-    configure(data, "VECTORDIST");
+    if (!configure(data, "VECTORDIST"))
+        return;
 
     if (!data.data[0].fancy) {
         stat.size = data.data[0].size;
@@ -525,13 +587,15 @@ MySql::configure(const VectorDistData &data)
 void
 MySql::configure(const Vector2dData &data)
 {
-    configure(data, "VECTOR2D");
+    if (!configure(data, "VECTOR2D"))
+        return;
+
     uint16_t statid = stat.setup();
 
     if (!data.subnames.empty()) {
         InsertSubData subdata;
         subdata.stat = statid;
-        subdata.y = 0;
+        subdata.y = -1;
         for (int i = 0; i < data.subnames.size(); ++i) {
             subdata.x = i;
             subdata.name = data.subnames[i];
@@ -544,7 +608,7 @@ MySql::configure(const Vector2dData &data)
     if (!data.y_subnames.empty()) {
         InsertSubData subdata;
         subdata.stat = statid;
-        subdata.x = 0;
+        subdata.x = -1;
         subdata.descr = "";
         for (int i = 0; i < data.y_subnames.size(); ++i) {
             subdata.y = i;
@@ -562,17 +626,25 @@ MySql::configure(const FormulaData &data)
 {
     configure(data, "FORMULA");
     insert(data.id, stat.setup());
+    InsertFormula(find(data.id), data.str());
 }
 
 void
-MySql::output(const string &bin)
+MySql::output(MainBin *bin)
 {
-    // set up new bin in database if there is a bin name
-    newdata.bin = bin.empty() ? 0 : SetupBin(bin);
+    if (bin) {
+        bin->activate();
+        newdata.bin = SetupBin(bin->name());
+    } else {
+        newdata.bin = 0;
+    }
 
     Database::stat_list_t::const_iterator i, end = Database::stats().end();
-    for (i = Database::stats().begin(); i != end; ++i)
-        (*i)->visit(*this);
+    for (i = Database::stats().begin(); i != end; ++i) {
+        StatData *stat = *i;
+        if (bin && stat->binned() || !bin && !stat->binned())
+            stat->visit(*this);
+    }
 }
 
 bool
@@ -591,17 +663,13 @@ MySql::output()
         configure();
 
     // store sample #
-    newdata.sample = curTick;
+    newdata.tick = curTick;
 
-    if (bins().empty()) {
-        output(string(""));
-    } else {
+    output(NULL);
+    if (!bins().empty()) {
         bin_list_t::iterator i, end = bins().end();
-        for (i = bins().begin(); i != end; ++i) {
-            MainBin *bin = *i;
-            bin->activate();
-            output(bin->name());
-        }
+        for (i = bins().begin(); i != end; ++i)
+            output(*i);
     }
 
     newdata.flush();
@@ -610,6 +678,9 @@ MySql::output()
 void
 MySql::output(const ScalarData &data)
 {
+    if (!(data.flags & print))
+        return;
+
     newdata.stat = find(data.id);
     newdata.x = 0;
     newdata.y = 0;
@@ -621,6 +692,9 @@ MySql::output(const ScalarData &data)
 void
 MySql::output(const VectorData &data)
 {
+    if (!(data.flags & print))
+        return;
+
     newdata.stat = find(data.id);
     newdata.y = 0;
 
@@ -686,6 +760,9 @@ MySql::output(const DistDataData &data)
 void
 MySql::output(const DistData &data)
 {
+    if (!(data.flags & print))
+        return;
+
     newdata.stat = find(data.id);
     newdata.y = 0;
     output(data.data);
@@ -694,6 +771,9 @@ MySql::output(const DistData &data)
 void
 MySql::output(const VectorDistData &data)
 {
+    if (!(data.flags & print))
+        return;
+
     newdata.stat = find(data.id);
 
     int size = data.data.size();
@@ -706,6 +786,9 @@ MySql::output(const VectorDistData &data)
 void
 MySql::output(const Vector2dData &data)
 {
+    if (!(data.flags & print))
+        return;
+
     newdata.stat = find(data.id);
 
     int index = 0;
@@ -722,7 +805,6 @@ MySql::output(const Vector2dData &data)
 void
 MySql::output(const FormulaData &data)
 {
-    InsertFormula(find(data.id), data.str());
 }
 
 /*
