@@ -33,6 +33,7 @@
 #include "cpu/base_cpu.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/pc_event.hh"
+#include "cpu/sampling_cpu/sampling_cpu.hh"
 #include "cpu/static_inst.hh"
 #include "sim/eventq.hh"
 
@@ -105,6 +106,7 @@ class SimpleCPU : public BaseCPU
         IcacheMissStall,
         IcacheMissComplete,
         DcacheMissStall,
+        DcacheMissSwitch,
         SwitchedOut
     };
 
@@ -143,7 +145,7 @@ class SimpleCPU : public BaseCPU
     // execution context
     ExecContext *xc;
 
-    void switchOut();
+    void switchOut(SamplingCPU *s);
     void takeOverFrom(BaseCPU *oldCPU);
 
 #ifdef FULL_SYSTEM
@@ -163,6 +165,13 @@ class SimpleCPU : public BaseCPU
 
     // Refcounted pointer to the one memory request.
     MemReqPtr memReq;
+
+    // Pointer to the sampler that is telling us to switchover.
+    // Used to signal the completion of the pipe drain and schedule
+    // the next switchover
+    SamplingCPU *sampler;
+
+    StaticInstPtr<TheISA> curStaticInst;
 
     class CacheCompletionEvent : public Event
     {
