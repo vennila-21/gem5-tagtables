@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,6 +54,12 @@ Tsunami::Tsunami(const string &name, System *s,
 
     for (int i = 0; i < Tsunami::Max_CPUs; i++)
         intr_sum_type[i] = 0;
+}
+
+Tick
+Tsunami::intrFrequency()
+{
+    return io->frequency();
 }
 
 void

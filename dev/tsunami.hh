@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -94,6 +94,12 @@ class Tsunami : public Platform
       */
     Tsunami(const std::string &name, System *s, IntrControl *intctrl,
             PciConfigAll *pci, int intrFreq);
+
+    /**
+     * Return the interrupting frequency to AlphaAccess
+     * @return frequency of RTC interrupts
+     */
+     virtual Tick intrFrequency();
 
     /**
      * Cause the cpu to post a serial interrupt to the CPU.
