@@ -30,17 +30,17 @@
  * Device module for modelling a fixed bandwidth full duplex ethernet link
  */
 
-#ifndef __ETHERLINK_HH__
-#define __ETHERLINK_HH__
+#ifndef __DEV_ETHERLINK_HH__
+#define __DEV_ETHERLINK_HH__
 
-#include "sim/host.hh"
-#include "sim/eventq.hh"
 #include "dev/etherint.hh"
 #include "dev/etherpkt.hh"
+#include "sim/eventq.hh"
+#include "sim/host.hh"
 #include "sim/sim_object.hh"
 
 class EtherDump;
-
+class Checkpoint;
 /*
  * Model for a fixed bandwidth full duplex ethernet link
  */
@@ -53,9 +53,13 @@ class EtherLink : public SimObject
      /*
       * Model for a single uni-directional link
       */
-    class Link : public Serializable {
+    class Link
+    {
       protected:
         std::string objName;
+
+        EtherLink *parent;
+        int number;
 
         Interface *txint;
         Interface *rxint;
@@ -71,18 +75,18 @@ class EtherLink : public SimObject
         PacketPtr packet;
         void txDone();
         typedef EventWrapper<Link, &Link::txDone> DoneEvent;
-        friend class DoneEvent;
+        friend void DoneEvent::process();
         DoneEvent doneEvent;
 
         friend class LinkDelayEvent;
         void txComplete(PacketPtr packet);
 
       public:
-        Link(const std::string &name, double rate, Tick delay,
-             EtherDump *dump);
+        Link(const std::string &name, EtherLink *p, int num,
+             double rate, Tick delay, EtherDump *dump);
         ~Link() {}
 
-        virtual const std::string name() const { return objName; }
+        const std::string name() const { return objName; }
 
         bool busy() const { return (bool)packet; }
         bool transmit(PacketPtr packet);
@@ -90,8 +94,9 @@ class EtherLink : public SimObject
         void setTxInt(Interface *i) { assert(!txint); txint = i; }
         void setRxInt(Interface *i) { assert(!rxint); rxint = i; }
 
-        virtual void serialize(std::ostream &os);
-        virtual void unserialize(Checkpoint *cp, const std::string &section);
+        void serialize(const std::string &base, std::ostream &os);
+        void unserialize(const std::string &base, Checkpoint *cp,
+                                 const std::string &section);
     };
 
     /*
@@ -108,14 +113,11 @@ class EtherLink : public SimObject
         void sendDone() { peer->sendDone(); }
     };
 
-    Link *link1;
-    Link *link2;
-
-    EtherInt *int1;
-    EtherInt *int2;
+    Link *link[2];
+    EtherInt *interface[2];
 
   public:
-    EtherLink(const std::string &name, EtherInt *i1, EtherInt *i2,
+    EtherLink(const std::string &name, EtherInt *peer0, EtherInt *peer1,
               Tick speed, Tick delay, EtherDump *dump);
     virtual ~EtherLink();
 

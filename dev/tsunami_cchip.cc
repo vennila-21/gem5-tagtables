@@ -51,7 +51,7 @@ using namespace std;
 TsunamiCChip::TsunamiCChip(const string &name, Tsunami *t, Addr a,
                            MemoryController *mmu, HierParams *hier, Bus* bus,
                            Tick pio_latency)
-    : PioDevice(name), addr(a), tsunami(t)
+    : PioDevice(name, t), addr(a), tsunami(t)
 {
     mmu->add_child(this, RangeSize(addr, size));
 
@@ -173,6 +173,13 @@ TsunamiCChip::read(MemReqPtr &req, uint8_t *data)
 
       break;
       case sizeof(uint32_t):
+          if (regnum == TSDEV_CC_DRIR) {
+              warn("accessing DRIR with 32 bit read, "
+                   "hopefully your just reading this for timing");
+              *(uint32_t*)data = drir;
+          } else
+              panic("invalid access size(?) for tsunami register!\n");
+          return No_Fault;
       case sizeof(uint16_t):
       case sizeof(uint8_t):
       default:

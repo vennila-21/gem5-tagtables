@@ -26,9 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
-
 #include <cstring>
 #include <fstream>
 #include <list>
@@ -36,9 +33,11 @@
 #include <vector>
 
 #include "base/misc.hh"
-#include "sim/universe.hh"
+#include "base/output.hh"
+#include "sim/builder.hh"
 #include "sim/host.hh"
-#include "sim/param.hh"
+#include "sim/sim_object.hh"
+#include "sim/universe.hh"
 
 using namespace std;
 
@@ -49,101 +48,61 @@ double __ticksPerUS;
 double __ticksPerNS;
 double __ticksPerPS;
 
-string outputDirectory;
+bool fullSystem;
 ostream *outputStream;
 ostream *configStream;
 
-class UniverseParamContext : public ParamContext
+// Dummy Object
+class Root : public SimObject
 {
   public:
-    UniverseParamContext(const string &is)
-        : ParamContext(is, OutputInitPhase) {}
-    void checkParams();
+    Root(const std::string &name) : SimObject(name) {}
 };
 
-UniverseParamContext universe("Universe");
+BEGIN_DECLARE_SIM_OBJECT_PARAMS(Root)
 
-Param<Tick> universe_freq(&universe, "frequency", "tick frequency",
-                          200000000);
+    Param<bool> full_system;
+    Param<Tick> frequency;
+    Param<string> output_file;
 
-Param<string> universe_output_dir(&universe, "output_dir",
-                                  "directory to output data to",
-                                  ".");
-Param<string> universe_output_file(&universe, "output_file",
-                                   "file to dump simulator output to",
-                                   "cout");
-Param<string> universe_config_output_file(&universe, "config_output_file",
-                                          "file to dump simulator config to",
-                                          "m5config.out");
+END_DECLARE_SIM_OBJECT_PARAMS(Root)
 
-void
-UniverseParamContext::checkParams()
+BEGIN_INIT_SIM_OBJECT_PARAMS(Root)
+
+    INIT_PARAM(full_system, "full system simulation"),
+    INIT_PARAM(frequency, "tick frequency"),
+    INIT_PARAM(output_file, "file to dump simulator output to")
+
+END_INIT_SIM_OBJECT_PARAMS(Root)
+
+CREATE_SIM_OBJECT(Root)
 {
-    ticksPerSecond = universe_freq;
+    static bool created = false;
+    if (created)
+        panic("only one root object allowed!");
+
+    created = true;
+    fullSystem = full_system;
+
+#ifdef FULL_SYSTEM
+    if (!fullSystem)
+        panic("FULL_SYSTEM compiled and configuration not full_system");
+#else
+    if (fullSystem)
+        panic("FULL_SYSTEM not compiled but configuration is full_system");
+#endif
+
+    ticksPerSecond = frequency;
     double freq = double(ticksPerSecond);
     __ticksPerMS = freq / 1.0e3;
     __ticksPerUS = freq / 1.0e6;
     __ticksPerNS = freq / 1.0e9;
     __ticksPerPS = freq / 1.0e12;
 
-    if (universe_output_dir.isValid()) {
-        outputDirectory = universe_output_dir;
+    outputStream = simout.find(output_file);
 
-        // guarantee that directory ends with a '/'
-        if (outputDirectory[outputDirectory.size() - 1] != '/')
-            outputDirectory += "/";
-
-        if (mkdir(outputDirectory.c_str(), 0777) < 0) {
-            if (errno != EEXIST) {
-                panic("%s\ncould not make output directory: %s\n",
-                      strerror(errno), outputDirectory);
-            }
-        }
-    }
-
-    outputStream = makeOutputStream(universe_output_file);
-    configStream = universe_config_output_file.isValid()
-        ? makeOutputStream(universe_config_output_file)
-        : outputStream;
+    return new Root(getInstanceName());
 }
 
-
-std::ostream *
-makeOutputStream(std::string &name)
-{
-    if (name == "cerr" || name == "stderr")
-        return &std::cerr;
-
-    if (name == "cout" || name == "stdout")
-        return &std::cout;
-
-    string path = (name[0] != '/') ? outputDirectory + name : name;
-
-    // have to dynamically allocate a stream since we're going to
-    // return it... though the caller can't easily free it since it
-    // may be cerr or cout.  need GC!
-    ofstream *s = new ofstream(path.c_str(), ios::trunc);
-
-    if (!s->is_open())
-        fatal("Cannot open file %s", path);
-
-    return s;
-}
-
-
-void
-closeOutputStream(std::ostream *os)
-{
-    // can't close cerr or cout
-    if (os == &std::cerr || os == &std::cout)
-        return;
-
-    // can only close ofstreams, not generic ostreams, so try to
-    // downcast and close only if the downcast succeeds
-    std::ofstream *ofs = dynamic_cast<std::ofstream *>(os);
-    if (ofs)
-        ofs->close();
-}
-
-
+REGISTER_SIM_OBJECT("Root", Root)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,24 +26,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>	// for host open() flags
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <string.h>	// for memset()
 #include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>	// for host open() flags
+#include <string.h>	// for memset()
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#include "sim/host.hh"
 #include "cpu/base_cpu.hh"
-#include "mem/functional_mem/functional_memory.hh"
-#include "sim/process.hh"
 #include "cpu/exec_context.hh"
+#include "mem/functional_mem/functional_memory.hh"
 #include "sim/fake_syscall.hh"
+#include "sim/host.hh"
+#include "sim/process.hh"
 #include "sim/sim_events.hh"
 
-#include "sim/syscall_emul.hh"
 #include "arch/alpha/alpha_common_syscall_emul.hh"
+#include "sim/syscall_emul.hh"
 #include "sim/universe.hh"	// for curTick & ticksPerSecond
 
 #include "arch/alpha/alpha_linux_process.hh"
@@ -232,7 +232,7 @@ class Linux {
     static const char *hostname;
 
     /// Target uname() handler.
-    static int
+    static SyscallReturn
     unameFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
     {
@@ -251,7 +251,7 @@ class Linux {
     /// Target osf_getsysyinfo() handler.  Even though this call is
     /// borrowed from Tru64, the subcases that get used appear to be
     /// different in practice from those used by Tru64 processes.
-    static int
+    static SyscallReturn
     osf_getsysinfoFunc(SyscallDesc *desc, int callnum, Process *process,
                        ExecContext *xc)
     {
@@ -278,7 +278,7 @@ class Linux {
     }
 
     /// Target osf_setsysinfo() handler.
-    static int
+    static SyscallReturn
     osf_setsysinfoFunc(SyscallDesc *desc, int callnum, Process *process,
                        ExecContext *xc)
     {
@@ -306,7 +306,7 @@ class Linux {
     }
 
     /// Target fnctl() handler.
-    static int
+    static SyscallReturn
     fcntlFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
     {

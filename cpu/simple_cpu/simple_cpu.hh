@@ -26,15 +26,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SIMPLE_CPU_HH__
-#define __SIMPLE_CPU_HH__
+#ifndef __CPU_SIMPLE_CPU_SIMPLE_CPU_HH__
+#define __CPU_SIMPLE_CPU_SIMPLE_CPU_HH__
 
-#include "cpu/base_cpu.hh"
-#include "sim/eventq.hh"
-#include "cpu/pc_event.hh"
 #include "base/statistics.hh"
+#include "cpu/base_cpu.hh"
 #include "cpu/exec_context.hh"
+#include "cpu/pc_event.hh"
+#include "cpu/sampling_cpu/sampling_cpu.hh"
 #include "cpu/static_inst.hh"
+#include "sim/eventq.hh"
 
 // forward declarations
 #ifdef FULL_SYSTEM
@@ -69,9 +70,9 @@ class SimpleCPU : public BaseCPU
     struct TickEvent : public Event
     {
         SimpleCPU *cpu;
-        int multiplier;
+        int width;
 
-        TickEvent(SimpleCPU *c);
+        TickEvent(SimpleCPU *c, int w);
         void process();
         const char *description();
     };
@@ -94,20 +95,8 @@ class SimpleCPU : public BaseCPU
             tickEvent.squash();
     }
 
-  public:
-    void setTickMultiplier(int multiplier)
-    {
-        tickEvent.multiplier = multiplier;
-    }
-
   private:
     Trace::InstRecord *traceData;
-    template<typename T>
-    void trace_data(T data) {
-      if (traceData) {
-        traceData->setData(data);
-      }
-    };
 
   public:
     //
@@ -117,6 +106,7 @@ class SimpleCPU : public BaseCPU
         IcacheMissStall,
         IcacheMissComplete,
         DcacheMissStall,
+        DcacheMissSwitch,
         SwitchedOut
     };
 
@@ -134,36 +124,28 @@ class SimpleCPU : public BaseCPU
       }
     };
 
+  public:
+    struct Params : public BaseCPU::Params
+    {
+        MemInterface *icache_interface;
+        MemInterface *dcache_interface;
+        int width;
 #ifdef FULL_SYSTEM
-
-    SimpleCPU(const std::string &_name,
-              System *_system,
-              Counter max_insts_any_thread, Counter max_insts_all_threads,
-              Counter max_loads_any_thread, Counter max_loads_all_threads,
-              AlphaITB *itb, AlphaDTB *dtb, FunctionalMemory *mem,
-              MemInterface *icache_interface, MemInterface *dcache_interface,
-              bool _def_reg, Tick freq,
-              bool _function_trace, Tick _function_trace_start);
-
+        AlphaITB *itb;
+        AlphaDTB *dtb;
+        FunctionalMemory *mem;
 #else
-
-    SimpleCPU(const std::string &_name, Process *_process,
-              Counter max_insts_any_thread,
-              Counter max_insts_all_threads,
-              Counter max_loads_any_thread,
-              Counter max_loads_all_threads,
-              MemInterface *icache_interface, MemInterface *dcache_interface,
-              bool _def_reg,
-              bool _function_trace, Tick _function_trace_start);
-
+        Process *process;
 #endif
-
+    };
+    SimpleCPU(Params *params);
     virtual ~SimpleCPU();
 
+  public:
     // execution context
     ExecContext *xc;
 
-    void switchOut();
+    void switchOut(SamplingCPU *s);
     void takeOverFrom(BaseCPU *oldCPU);
 
 #ifdef FULL_SYSTEM
@@ -183,6 +165,13 @@ class SimpleCPU : public BaseCPU
 
     // Refcounted pointer to the one memory request.
     MemReqPtr memReq;
+
+    // Pointer to the sampler that is telling us to switchover.
+    // Used to signal the completion of the pipe drain and schedule
+    // the next switchover
+    SamplingCPU *sampler;
+
+    StaticInstPtr<TheISA> curStaticInst;
 
     class CacheCompletionEvent : public Event
     {
@@ -249,6 +238,11 @@ class SimpleCPU : public BaseCPU
     template <class T>
     Fault write(T data, Addr addr, unsigned flags, uint64_t *res);
 
+    // These functions are only used in CPU models that split
+    // effective address computation from the actual memory access.
+    void setEA(Addr EA) { panic("SimpleCPU::setEA() not implemented\n"); }
+    Addr getEA() 	{ panic("SimpleCPU::getEA() not implemented\n"); }
+
     void prefetch(Addr addr, unsigned flags)
     {
         // need to do this...
@@ -274,47 +268,47 @@ class SimpleCPU : public BaseCPU
     // storage (which is pretty hard to imagine they would have reason
     // to do).
 
-    uint64_t readIntReg(StaticInst<TheISA> *si, int idx)
+    uint64_t readIntReg(const StaticInst<TheISA> *si, int idx)
     {
         return xc->readIntReg(si->srcRegIdx(idx));
     }
 
-    float readFloatRegSingle(StaticInst<TheISA> *si, int idx)
+    float readFloatRegSingle(const StaticInst<TheISA> *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegSingle(reg_idx);
     }
 
-    double readFloatRegDouble(StaticInst<TheISA> *si, int idx)
+    double readFloatRegDouble(const StaticInst<TheISA> *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegDouble(reg_idx);
     }
 
-    uint64_t readFloatRegInt(StaticInst<TheISA> *si, int idx)
+    uint64_t readFloatRegInt(const StaticInst<TheISA> *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegInt(reg_idx);
     }
 
-    void setIntReg(StaticInst<TheISA> *si, int idx, uint64_t val)
+    void setIntReg(const StaticInst<TheISA> *si, int idx, uint64_t val)
     {
         xc->setIntReg(si->destRegIdx(idx), val);
     }
 
-    void setFloatRegSingle(StaticInst<TheISA> *si, int idx, float val)
+    void setFloatRegSingle(const StaticInst<TheISA> *si, int idx, float val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegSingle(reg_idx, val);
     }
 
-    void setFloatRegDouble(StaticInst<TheISA> *si, int idx, double val)
+    void setFloatRegDouble(const StaticInst<TheISA> *si, int idx, double val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegDouble(reg_idx, val);
     }
 
-    void setFloatRegInt(StaticInst<TheISA> *si, int idx, uint64_t val)
+    void setFloatRegInt(const StaticInst<TheISA> *si, int idx, uint64_t val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegInt(reg_idx, val);
@@ -346,4 +340,4 @@ class SimpleCPU : public BaseCPU
     ExecContext *xcBase() { return xc; }
 };
 
-#endif // __SIMPLE_CPU_HH__
+#endif // __CPU_SIMPLE_CPU_SIMPLE_CPU_HH__

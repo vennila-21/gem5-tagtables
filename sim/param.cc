@@ -27,21 +27,21 @@
  */
 
 #include <algorithm>
+#include <cassert>
+#include <cstdio>
 #include <list>
 #include <string>
 #include <vector>
-#include <stdio.h>	// for sscanf()
 
-#include <assert.h>
-
-#include "sim/param.hh"
-#include "sim/sim_object.hh"
 #include "base/inifile.hh"
-#include "sim/configfile.hh"
-#include "sim/config_node.hh"
 #include "base/misc.hh"
+#include "base/range.hh"
 #include "base/str.hh"
 #include "base/trace.hh"
+#include "sim/config_node.hh"
+#include "sim/configfile.hh"
+#include "sim/param.hh"
+#include "sim/sim_object.hh"
 
 using namespace std;
 
@@ -180,6 +180,22 @@ parseParam(const string &s, string &value)
     return true;
 }
 
+template <>
+bool
+parseParam(const string &s, Range<uint32_t> &value)
+{
+    value = s;
+    return value.valid();
+}
+
+template <>
+bool
+parseParam(const string &s, Range<uint64_t> &value)
+{
+    value = s;
+    return value.valid();
+}
+
 //
 // End of parseParam/showParam definitions.  Now we move on to
 // incorporate them into the Param/VectorParam parse() and showValue()
@@ -310,6 +326,9 @@ INSTANTIATE_PARAM_TEMPLATES(double, "double")
 INSTANTIATE_PARAM_TEMPLATES(bool, "bool")
 INSTANTIATE_PARAM_TEMPLATES(string, "string")
 
+INSTANTIATE_PARAM_TEMPLATES(Range<uint64_t>, "uint64 range")
+INSTANTIATE_PARAM_TEMPLATES(Range<uint32_t>, "uint32 range")
+
 #undef INSTANTIATE_PARAM_TEMPLATES
 
 //
@@ -422,6 +441,11 @@ EnumVectorParam<Map>::parse(const string &s)
 {
     vector<string> tokens;
 
+    if (s.empty()) {
+        wasSet = true;
+        return;
+    }
+
     tokenize(tokens, s, ' ');
 
     value.resize(tokens.size());
@@ -474,11 +498,11 @@ EnumVectorParam<Map>::showType(ostream &os) const
     showEnumType(os, map, num_values);
 }
 
-template EnumParam<const char *>;
-template EnumVectorParam<const char *>;
+template class EnumParam<const char *>;
+template class EnumVectorParam<const char *>;
 
-template EnumParam<EnumParamMap>;
-template EnumVectorParam<EnumParamMap>;
+template class EnumParam<EnumParamMap>;
+template class EnumVectorParam<EnumParamMap>;
 
 ////////////////////////////////////////////////////////////////////////
 //
@@ -602,9 +626,8 @@ ParamContext::parseParams(IniFile &iniFile)
     for (i = getParamList()->begin(); i != getParamList()->end(); ++i) {
         string string_value;
 
-        if (iniFile.findDefault(iniSection, (*i)->name, string_value)) {
+        if (iniFile.find(iniSection, (*i)->name, string_value))
             (*i)->parse(string_value);
-        }
     }
 }
 
@@ -680,18 +703,8 @@ ParamContext::printErrorProlog(ostream &os)
 // SimObjectBuilder objects, which return non-NULL for configNode()).
 //
 SimObject *
-ParamContext::resolveSimObject(const string &_name)
+ParamContext::resolveSimObject(const string &name)
 {
-    // look for a colon
-    string::size_type i = _name.find(':');
-    string name = _name;
-    if (i != string::npos) {
-        // colon found: local object
-        // add as child to current node and create it
-        name = _name.substr(0, i);
-        string objConfigClassName = _name.substr(i + 1);
-        getConfigNode()->addChild(name, objConfigClassName);
-    }
     ConfigNode *n = getConfigNode();
     return n ? n->resolveSimObject(name) : NULL;
 }

@@ -71,7 +71,7 @@ Log::init(int _size)
 
     size = _size;
 
-    buffer = new (Record *)[size];
+    buffer = new Record *[size];
 
     for (int i = 0; i < size; ++i) {
         buffer[i] = NULL;
@@ -98,6 +98,8 @@ Log::append(Record *rec)
     // dump record to output stream if there's one open
     if (dprintf_stream != NULL) {
         rec->dump(*dprintf_stream);
+    } else {
+        rec->dump(cout);
     }
 
     // no buffering: justget rid of it now

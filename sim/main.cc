@@ -31,17 +31,23 @@
 ///
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <libgen.h>
 #include <stdlib.h>
 #include <signal.h>
 
+#include <list>
 #include <string>
 #include <vector>
 
 #include "base/copyright.hh"
+#include "base/embedfile.hh"
 #include "base/inifile.hh"
 #include "base/misc.hh"
+#include "base/output.hh"
 #include "base/pollevent.hh"
 #include "base/statistics.hh"
+#include "base/str.hh"
 #include "base/time.hh"
 #include "cpu/base_cpu.hh"
 #include "cpu/full_cpu/smt.hh"
@@ -103,28 +109,35 @@ abortHandler(int sigtype)
 }
 
 /// Simulator executable name
-const char *myProgName = "";
+char *myProgName = "";
 
 /// Show brief help message.
-static void
+void
 showBriefHelp(ostream &out)
 {
-    out << "Usage: " << myProgName
-        << " [-hnu] [-Dname[=def]] [-Uname] [-I[dir]] "
-        << "<config-spec> [<config-spec> ...]\n"
-        << "[] [<config file> ...]\n"
-        << "   -h: print long help (including parameter listing)\n"
-        << "   -u: don't quit on unreferenced parameters\n"
-        << "   -D,-U,-I: passed to cpp for preprocessing .ini files\n"
-        << "   <config-spec>: config file name (.ini or .py) or\n"
-        << "                  single param (--<section>:<param>=<value>)"
-        << endl;
+    char *prog = basename(myProgName);
+
+    ccprintf(out, "Usage:\n");
+    ccprintf(out,
+"%s [-d <dir>] [-E <var>[=<val>]] [-I <dir>] [-P <python>]\n"
+"        [--<var>=<val>] <config file>\n"
+"\n"
+"   -d            set the output directory to <dir>\n"
+"   -E            set the environment variable <var> to <val> (or 'True')\n"
+"   -I            add the directory <dir> to python's path\n"
+"   -P            execute <python> directly in the configuration\n"
+"   --var=val     set the python variable <var> to '<val>'\n"
+"   <configfile>  config file name (.py or .mpy)\n",
+             prog);
+
+    ccprintf(out, "%s -X\n    -X            extract embedded files\n", prog);
+    ccprintf(out, "%s -h\n    -h            print long help\n", prog);
 }
 
 /// Show verbose help message.  Includes parameter listing from
 /// showBriefHelp(), plus an exhaustive list of ini-file parameters
 /// and SimObjects (with their parameters).
-static void
+void
 showLongHelp(ostream &out)
 {
     showBriefHelp(out);
@@ -149,7 +162,7 @@ showLongHelp(ostream &out)
 }
 
 /// Print welcome message.
-static void
+void
 sayHello(ostream &out)
 {
     extern const char *compileDate;	// from date.cc
@@ -173,7 +186,7 @@ sayHello(ostream &out)
 /// Echo the command line for posterity in such a way that it can be
 /// used to rerun the same simulation (given the same .ini files).
 ///
-static void
+void
 echoCommandLine(int argc, char **argv, ostream &out)
 {
     out << "command line: " << argv[0];
@@ -205,16 +218,20 @@ echoCommandLine(int argc, char **argv, ostream &out)
     out << endl << endl;
 }
 
+char *
+getOptionString(int &index, int argc, char **argv)
+{
+    char *option = argv[index] + 2;
+    if (*option != '\0')
+        return option;
 
-///
-/// The simulator configuration database.  This is the union of all
-/// specified .ini files.  This shouldn't need to be visible outside
-/// this file, as it is passed as a parameter to all the param-parsing
-/// routines.
-///
-static IniFile simConfigDB;
+    // We didn't find an argument, it must be in the next variable.
+    if (++index >= argc)
+        panic("option string for option '%s' not found", argv[index - 1]);
 
-/// M5 entry point.
+    return argv[index];
+}
+
 int
 main(int argc, char **argv)
 {
@@ -230,16 +247,9 @@ main(int argc, char **argv)
 
     sayHello(cerr);
 
-    // Initialize statistics database
-    Stats::InitSimStats();
-
-    vector<char *> cppArgs;
-
-    // Should we quit if there are unreferenced parameters?  By
-    // default, yes... it's a good way of catching typos in
-    // section/parameter names (which otherwise go by silently).  Use
-    // -u to override.
-    bool quitOnUnreferenced = true;
+    bool configfile_found = false;
+    PythonConfig pyconfig;
+    string outdir;
 
     // Parse command-line options.
     // Since most of the complex options are handled through the
@@ -248,106 +258,125 @@ main(int argc, char **argv)
     for (int i = 1; i < argc; ++i) {
         char *arg_str = argv[i];
 
-        // if arg starts with '-', parse as option,
-        // else treat it as a configuration file name and load it
-        if (arg_str[0] == '-') {
+        // if arg starts with '--', parse as a special python option
+        // of the format --<python var>=<string value>, if the arg
+        // starts with '-', it should be a simulator option with a
+        // format similar to getopt.  In any other case, treat the
+        // option as a configuration file name and load it.
+        if (arg_str[0] == '-' && arg_str[1] == '-') {
+            string str = &arg_str[2];
+            string var, val;
+
+            if (!split_first(str, var, val, '='))
+                panic("Could not parse configuration argument '%s'\n"
+                      "Expecting --<variable>=<value>\n", arg_str);
+
+            pyconfig.setVariable(var, val);
+        } else if (arg_str[0] == '-') {
+            char *option;
+            string var, val;
 
             // switch on second char
             switch (arg_str[1]) {
+              case 'd':
+                outdir = getOptionString(i, argc, argv);
+                break;
+
               case 'h':
-                // -h: show help
                 showLongHelp(cerr);
                 exit(1);
 
-              case 'u':
-                // -u: don't quit on unreferenced parameters
-                quitOnUnreferenced = false;
+              case 'E':
+                option = getOptionString(i, argc, argv);
+                if (!split_first(option, var, val, '='))
+                    val = "True";
+
+                if (setenv(var.c_str(), val.c_str(), true) == -1)
+                    panic("setenv: %s\n", strerror(errno));
                 break;
 
-              case 'D':
-              case 'U':
               case 'I':
-                // cpp options: record & pass to cpp.  Note that these
-                // cannot have spaces, i.e., '-Dname=val' is OK, but
-                // '-D name=val' is not.  I don't consider this a
-                // problem, since even though gnu cpp accepts the
-                // latter, other cpp implementations do not (Tru64,
-                // for one).
-                cppArgs.push_back(arg_str);
+                option = getOptionString(i, argc, argv);
+                pyconfig.addPath(option);
                 break;
 
-              case '-':
-                // command-line configuration parameter:
-                // '--<section>:<parameter>=<value>'
-                if (!simConfigDB.add(arg_str + 2)) {
-                    // parse error
-                    ccprintf(cerr,
-                             "Could not parse configuration argument '%s'\n"
-                             "Expecting --<section>:<parameter>=<value>\n",
-                             arg_str);
-                    exit(0);
-                }
+              case 'P':
+                option = getOptionString(i, argc, argv);
+                pyconfig.writeLine(option);
                 break;
+
+              case 'X': {
+                  list<EmbedFile> lst;
+                  EmbedMap::all(lst);
+                  list<EmbedFile>::iterator i = lst.begin();
+                  list<EmbedFile>::iterator end = lst.end();
+
+                  while (i != end) {
+                      cprintf("Embedded File: %s\n", i->name);
+                      cout.write(i->data, i->length);
+                      ++i;
+                  }
+
+                  return 0;
+              }
 
               default:
                 showBriefHelp(cerr);
-                ccprintf(cerr, "Fatal: invalid argument '%s'\n", arg_str);
-                exit(0);
+                panic("invalid argument '%s'\n", arg_str);
             }
-        }
-        else {
-            // no '-', treat as config file name
+        } else {
+            string file(arg_str);
+            string base, ext;
 
-            // make STL string out of file name
-            string filename(arg_str);
+            if (!split_last(file, base, ext, '.') ||
+                ext != "py" && ext != "mpy")
+                panic("Config file '%s' must end in '.py' or '.mpy'\n", file);
 
-            int ext_loc = filename.rfind(".");
-
-            string ext =
-                (ext_loc != string::npos) ? filename.substr(ext_loc) : "";
-
-            if (ext == ".ini") {
-                if (!simConfigDB.loadCPP(filename, cppArgs)) {
-                    cprintf("Error processing file %s\n", filename);
-                    exit(1);
-                }
-            } else if (ext == ".py") {
-                if (!loadPythonConfig(filename, &simConfigDB)) {
-                    cprintf("Error processing file %s\n", filename);
-                    exit(1);
-                }
-            }
-            else {
-                cprintf("Config file name '%s' must end in '.py' or '.ini'.\n",
-                        filename);
-                exit(1);
-            }
+            pyconfig.load(file);
+            configfile_found = true;
         }
     }
 
+    if (outdir.empty()) {
+        char *env = getenv("OUTPUT_DIR");
+        outdir = env ? env : ".";
+    }
+
+    simout.setDirectory(outdir);
+
+    char *env = getenv("CONFIG_OUTPUT");
+    if (!env)
+        env = "config.out";
+    configStream = simout.find(env);
+
+    if (!configfile_found)
+        panic("no configuration file specified!");
+
     // The configuration database is now complete; start processing it.
+    IniFile inifile;
+    if (!pyconfig.output(inifile))
+        panic("Error processing python code");
+
+    // Initialize statistics database
+    Stats::InitSimStats();
+
+    // Now process the configuration hierarchy and create the SimObjects.
+    ConfigHierarchy configHierarchy(inifile);
+    configHierarchy.build();
+    configHierarchy.createSimObjects();
 
     // Parse and check all non-config-hierarchy parameters.
-    ParamContext::parseAllContexts(simConfigDB);
+    ParamContext::parseAllContexts(inifile);
     ParamContext::checkAllContexts();
-
-    // Print header info into stats file.  Can't do this sooner since
-    // the stat file name is set via a .ini param... thus it just got
-    // opened above during ParamContext::checkAllContexts().
 
     // Print hello message to stats file if it's actually a file.  If
     // it's not (i.e. it's cout or cerr) then we already did it above.
-    if (outputStream != &cout && outputStream != &cerr)
+    if (simout.isFile(*outputStream))
         sayHello(*outputStream);
 
     // Echo command line and all parameter settings to stats file as well.
     echoCommandLine(argc, argv, *outputStream);
     ParamContext::showAllContexts(*configStream);
-
-    // Now process the configuration hierarchy and create the SimObjects.
-    ConfigHierarchy configHierarchy(simConfigDB);
-    configHierarchy.build();
-    configHierarchy.createSimObjects();
 
     // Do a second pass to finish initializing the sim objects
     SimObject::initAll();
@@ -357,13 +386,8 @@ main(int argc, char **argv)
 
     // Done processing the configuration database.
     // Check for unreferenced entries.
-    if (simConfigDB.printUnreferenced() && quitOnUnreferenced) {
-        cerr << "Fatal: unreferenced .ini sections/entries." << endl
-             << "If this is not an error, add 'unref_section_ok=y' or "
-             << "'unref_entries_ok=y' to the appropriate sections "
-             << "to suppress this message." << endl;
-        exit(1);
-    }
+    if (inifile.printUnreferenced())
+        panic("unreferenced sections/entries in the intermediate ini file");
 
     SimObject::regAllStats();
 
@@ -377,12 +401,6 @@ main(int argc, char **argv)
 
     // Reset to put the stats in a consistent state.
     Stats::reset();
-
-    // Nothing to simulate if we don't have at least one CPU somewhere.
-    if (BaseCPU::numSimulatedCPUs() == 0) {
-        cerr << "Fatal: no CPUs to simulate." << endl;
-        exit(1);
-    }
 
     warn("Entering event queue.  Starting simulation...\n");
     SimStartup();

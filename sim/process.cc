@@ -65,14 +65,14 @@ using namespace std;
 // current number of allocated processes
 int num_processes = 0;
 
-Process::Process(const string &name,
+Process::Process(const string &nm,
                  int stdin_fd, 	// initial I/O descriptors
                  int stdout_fd,
                  int stderr_fd)
-    : SimObject(name)
+    : SimObject(nm)
 {
     // allocate memory space
-    memory = new MainMemory(name + ".MainMem");
+    memory = new MainMemory(nm + ".MainMem");
 
     // allocate initial register file
     init_regs = new RegFile;
@@ -88,8 +88,7 @@ Process::Process(const string &name,
         fd_map[i] = -1;
     }
 
-    num_syscalls = 0;
-
+    mmap_start = mmap_end = 0;
     // other parameters will be initialized when the program is loaded
 }
 
@@ -145,21 +144,28 @@ Process::registerExecContext(ExecContext *xc)
     execContexts.push_back(xc);
 
     if (myIndex == 0) {
-        // first exec context for this process... initialize & enable
-
         // copy process's initial regs struct
         xc->regs = *init_regs;
-
-        // mark this context as active.
-        // activate with zero delay so that we start ticking right
-        // away on cycle 0
-        xc->activate(0);
     }
 
     // return CPU number to caller and increment available CPU count
     return myIndex;
 }
 
+void
+Process::startup()
+{
+    if (execContexts.empty())
+        return;
+
+    // first exec context for this process... initialize & enable
+    ExecContext *xc = execContexts[0];
+
+    // mark this context as active.
+    // activate with zero delay so that we start ticking right
+    // away on cycle 0
+    xc->activate(0);
+}
 
 void
 Process::replaceExecContext(ExecContext *xc, int xcIndex)
@@ -247,10 +253,10 @@ copyStringArray(vector<string> &strings, Addr array_ptr, Addr data_ptr,
     memory->access(Write, array_ptr, &data_ptr, sizeof(Addr));
 }
 
-LiveProcess::LiveProcess(const string &name, ObjectFile *objFile,
+LiveProcess::LiveProcess(const string &nm, ObjectFile *objFile,
                          int stdin_fd, int stdout_fd, int stderr_fd,
                          vector<string> &argv, vector<string> &envp)
-    : Process(name, stdin_fd, stdout_fd, stderr_fd)
+    : Process(nm, stdin_fd, stdout_fd, stderr_fd)
 {
     prog_fname = argv[0];
 
@@ -282,7 +288,7 @@ LiveProcess::LiveProcess(const string &name, ObjectFile *objFile,
 
     // Set up region for mmaps.  Tru64 seems to start just above 0 and
     // grow up from there.
-    mmap_base = 0x10000;
+    mmap_start = mmap_end = 0x10000;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
     next_thread_stack_base = stack_base - (8 * 1024 * 1024);
@@ -334,7 +340,7 @@ LiveProcess::LiveProcess(const string &name, ObjectFile *objFile,
 
 
 LiveProcess *
-LiveProcess::create(const string &name,
+LiveProcess::create(const string &nm,
                     int stdin_fd, int stdout_fd, int stderr_fd,
                     vector<string> &argv, vector<string> &envp)
 {
@@ -348,13 +354,13 @@ LiveProcess::create(const string &name,
     if (objFile->getArch() == ObjectFile::Alpha) {
         switch (objFile->getOpSys()) {
           case ObjectFile::Tru64:
-            process = new AlphaTru64Process(name, objFile,
+            process = new AlphaTru64Process(nm, objFile,
                                             stdin_fd, stdout_fd, stderr_fd,
                                             argv, envp);
             break;
 
           case ObjectFile::Linux:
-            process = new AlphaLinuxProcess(name, objFile,
+            process = new AlphaLinuxProcess(nm, objFile,
                                             stdin_fd, stdout_fd, stderr_fd,
                                             argv, envp);
             break;
@@ -397,19 +403,29 @@ END_INIT_SIM_OBJECT_PARAMS(LiveProcess)
 
 CREATE_SIM_OBJECT(LiveProcess)
 {
-    // initialize file descriptors to default: same as simulator
-    int stdin_fd = input.isValid() ? Process::openInputFile(input) : 0;
-    int stdout_fd = output.isValid() ? Process::openOutputFile(output) : 1;
-    int stderr_fd = output.isValid() ? stdout_fd : 2;
+    string in = input;
+    string out = output;
 
-    // dummy for default env
-    vector<string> null_vec;
+    // initialize file descriptors to default: same as simulator
+    int stdin_fd, stdout_fd, stderr_fd;
+
+    if (in == "stdin" || in == "cin")
+        stdin_fd = STDIN_FILENO;
+    else
+        stdin_fd = Process::openInputFile(input);
+
+    if (out == "stdout" || out == "cout")
+        stdout_fd = STDOUT_FILENO;
+    else if (out == "stderr" || out == "cerr")
+        stdout_fd = STDERR_FILENO;
+    else
+        stdout_fd = Process::openOutputFile(out);
+
+    stderr_fd = (stdout_fd != STDOUT_FILENO) ? stdout_fd : STDERR_FILENO;
 
     return LiveProcess::create(getInstanceName(),
                                stdin_fd, stdout_fd, stderr_fd,
-                               cmd,
-                               env.isValid() ? env : null_vec);
+                               cmd, env);
 }
-
 
 REGISTER_SIM_OBJECT("LiveProcess", LiveProcess)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,8 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYSCALL_EMUL_HH__
-#define __SYSCALL_EMUL_HH__
+#ifndef __SIM_SYSCALL_EMUL_HH__
+#define __SIM_SYSCALL_EMUL_HH__
 
 ///
 /// @file syscall_emul.hh
@@ -35,14 +35,16 @@
 /// This file defines objects used to emulate syscalls from the target
 /// application on the host machine.
 
+#include <errno.h>
 #include <string>
 
 #include "base/intmath.hh"	// for RoundUp
-#include "targetarch/isa_traits.hh"	// for Addr
 #include "mem/functional_mem/functional_memory.hh"
+#include "targetarch/isa_traits.hh"	// for Addr
 
-class Process;
-class ExecContext;
+#include "base/trace.hh"
+#include "cpu/exec_context.hh"
+#include "sim/process.hh"
 
 ///
 /// System call descriptor.
@@ -52,7 +54,7 @@ class SyscallDesc {
   public:
 
     /// Typedef for target syscall handler functions.
-    typedef int (*FuncPtr)(SyscallDesc *, int num,
+    typedef SyscallReturn (*FuncPtr)(SyscallDesc *, int num,
                            Process *, ExecContext *);
 
     const char *name;	//!< Syscall name (e.g., "open").
@@ -156,46 +158,76 @@ class TypedBufferArg : public BaseBufferArg
 
 
 /// Handler for unimplemented syscalls that we haven't thought about.
-int unimplementedFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn unimplementedFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Handler for unimplemented syscalls that we never intend to
 /// implement (signal handling, etc.) and should not affect the correct
 /// behavior of the program.  Print a warning only if the appropriate
 /// trace flag is enabled.  Return success to the target program.
-int ignoreFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn ignoreFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target exit() handler: terminate simulation.
-int exitFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn exitFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target getpagesize() handler.
-int getpagesizeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn getpagesizeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target obreak() handler: set brk address.
-int obreakFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn obreakFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target close() handler.
-int closeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn closeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target read() handler.
-int readFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn readFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target write() handler.
-int writeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn writeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target lseek() handler.
-int lseekFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn lseekFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target munmap() handler.
-int munmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn munmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target gethostname() handler.
-int gethostnameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn gethostnameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target unlink() handler.
-int unlinkFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn unlinkFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 
 /// Target rename() handler.
-int renameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+SyscallReturn renameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
+
+/// This struct is used to build an target-OS-dependent table that
+/// maps the target's open() flags to the host open() flags.
+struct OpenFlagTransTable {
+    int tgtFlag;	//!< Target system flag value.
+    int hostFlag;	//!< Corresponding host system flag value.
+};
+
+
+
+/// A readable name for 1,000,000, for converting microseconds to seconds.
+const int one_million = 1000000;
+
+/// Approximate seconds since the epoch (1/1/1970).  About a billion,
+/// by my reckoning.  We want to keep this a constant (not use the
+/// real-world time) to keep simulations repeatable.
+const unsigned seconds_since_epoch = 1000000000;
+
+/// Helper function to convert current elapsed time to seconds and
+/// microseconds.
+template <class T1, class T2>
+void
+getElapsedTime(T1 &sec, T2 &usec)
+{
+    int cycles_per_usec = ticksPerSecond / one_million;
+
+    int elapsed_usecs = curTick / cycles_per_usec;
+    sec = elapsed_usecs / one_million;
+    usec = elapsed_usecs % one_million;
+}
 
 //////////////////////////////////////////////////////////////////////
 //
@@ -208,7 +240,7 @@ int renameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc);
 /// only to find out if their stdout is a tty, to determine whether to
 /// do line or block buffering.
 template <class OS>
-int
+SyscallReturn
 ioctlFunc(SyscallDesc *desc, int callnum, Process *process,
           ExecContext *xc)
 {
@@ -238,17 +270,9 @@ ioctlFunc(SyscallDesc *desc, int callnum, Process *process,
     }
 }
 
-/// This struct is used to build an target-OS-dependent table that
-/// maps the target's open() flags to the host open() flags.
-struct OpenFlagTransTable {
-    int tgtFlag;	//!< Target system flag value.
-    int hostFlag;	//!< Corresponding host system flag value.
-};
-
-
 /// Target open() handler.
 template <class OS>
-int
+SyscallReturn
 openFunc(SyscallDesc *desc, int callnum, Process *process,
          ExecContext *xc)
 {
@@ -260,7 +284,7 @@ openFunc(SyscallDesc *desc, int callnum, Process *process,
     if (path == "/dev/sysdev0") {
         // This is a memory-mapped high-resolution timer device on Alpha.
         // We don't support it, so just punt.
-        DCOUT(SyscallWarnings) << "Ignoring open(" << path << ", ...)" << endl;
+        DCOUT(SyscallWarnings) << "Ignoring open(" << path << ", ...)" << std::endl;
         return -ENOENT;
     }
 
@@ -278,7 +302,7 @@ openFunc(SyscallDesc *desc, int callnum, Process *process,
 
     // any target flags left?
     if (tgtFlags != 0)
-        cerr << "Syscall: open: cannot decode flags: " <<  tgtFlags << endl;
+        std::cerr << "Syscall: open: cannot decode flags: " <<  tgtFlags << std::endl;
 
 #ifdef __CYGWIN32__
     hostFlags |= O_BINARY;
@@ -293,7 +317,7 @@ openFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target stat() handler.
 template <class OS>
-int
+SyscallReturn
 statFunc(SyscallDesc *desc, int callnum, Process *process,
          ExecContext *xc)
 {
@@ -306,7 +330,7 @@ statFunc(SyscallDesc *desc, int callnum, Process *process,
     int result = stat(path.c_str(), &hostBuf);
 
     if (result < 0)
-        return -errno;
+        return errno;
 
     OS::copyOutStatBuf(xc->mem, xc->getSyscallArg(1), &hostBuf);
 
@@ -316,7 +340,7 @@ statFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target lstat() handler.
 template <class OS>
-int
+SyscallReturn
 lstatFunc(SyscallDesc *desc, int callnum, Process *process,
           ExecContext *xc)
 {
@@ -338,7 +362,7 @@ lstatFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target fstat() handler.
 template <class OS>
-int
+SyscallReturn
 fstatFunc(SyscallDesc *desc, int callnum, Process *process,
           ExecContext *xc)
 {
@@ -374,7 +398,7 @@ fstatFunc(SyscallDesc *desc, int callnum, Process *process,
 /// file descriptor, and fail (or implement!) a non-anonymous mmap to
 /// anything else.
 template <class OS>
-int
+SyscallReturn
 mmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     Addr start = xc->getSyscallArg(0);
@@ -386,8 +410,8 @@ mmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 
     if (start == 0) {
         // user didn't give an address... pick one from our "mmap region"
-        start = p->mmap_base;
-        p->mmap_base += RoundUp<Addr>(length, VMPageSize);
+        start = p->mmap_end;
+        p->mmap_end += RoundUp<Addr>(length, VMPageSize);
     }
 
     if (!(flags & OS::TGT_MAP_ANONYMOUS)) {
@@ -400,7 +424,7 @@ mmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 
 /// Target getrlimit() handler.
 template <class OS>
-int
+SyscallReturn
 getrlimitFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
 {
@@ -414,7 +438,7 @@ getrlimitFunc(SyscallDesc *desc, int callnum, Process *process,
         break;
 
       default:
-        cerr << "getrlimitFunc: unimplemented resource " << resource << endl;
+        std::cerr << "getrlimitFunc: unimplemented resource " << resource << std::endl;
         abort();
         break;
     }
@@ -423,31 +447,9 @@ getrlimitFunc(SyscallDesc *desc, int callnum, Process *process,
     return 0;
 }
 
-/// A readable name for 1,000,000, for converting microseconds to seconds.
-const int one_million = 1000000;
-
-/// Approximate seconds since the epoch (1/1/1970).  About a billion,
-/// by my reckoning.  We want to keep this a constant (not use the
-/// real-world time) to keep simulations repeatable.
-const unsigned seconds_since_epoch = 1000000000;
-
-/// Helper function to convert current elapsed time to seconds and
-/// microseconds.
-template <class T1, class T2>
-void
-getElapsedTime(T1 &sec, T2 &usec)
-{
-    int cycles_per_usec = ticksPerSecond / one_million;
-
-    int elapsed_usecs = curTick / cycles_per_usec;
-    sec = elapsed_usecs / one_million;
-    usec = elapsed_usecs % one_million;
-}
-
-
 /// Target gettimeofday() handler.
 template <class OS>
-int
+SyscallReturn
 gettimeofdayFunc(SyscallDesc *desc, int callnum, Process *process,
                  ExecContext *xc)
 {
@@ -464,7 +466,7 @@ gettimeofdayFunc(SyscallDesc *desc, int callnum, Process *process,
 
 /// Target getrusage() function.
 template <class OS>
-int
+SyscallReturn
 getrusageFunc(SyscallDesc *desc, int callnum, Process *process,
               ExecContext *xc)
 {
@@ -476,7 +478,7 @@ getrusageFunc(SyscallDesc *desc, int callnum, Process *process,
         // plow ahead
         DCOUT(SyscallWarnings)
             << "Warning: getrusage() only supports RUSAGE_SELF."
-            << "  Parameter " << who << " ignored." << endl;
+            << "  Parameter " << who << " ignored." << std::endl;
     }
 
     getElapsedTime(rup->ru_utime.tv_sec, rup->ru_utime.tv_usec);
@@ -502,6 +504,4 @@ getrusageFunc(SyscallDesc *desc, int callnum, Process *process,
     return 0;
 }
 
-
-
-#endif // __SYSCALL_EMUL_HH__
+#endif // __SIM_SYSCALL_EMUL_HH__

@@ -42,6 +42,7 @@
 #include "sim/sim_object.hh"
 #include "sim/stats.hh"
 #include "base/statistics.hh"
+#include "base/trace.hh"
 
 class ExecContext;
 class FunctionalMemory;
@@ -93,7 +94,8 @@ class Process : public SimObject
     Addr next_thread_stack_base;
 
     // Base of region for mmaps (when user doesn't specify an address).
-    Addr mmap_base;
+    Addr mmap_start;
+    Addr mmap_end;
 
     std::string prog_fname;	// file name
     Addr prog_entry;		// entry point (initial PC)
@@ -103,11 +105,13 @@ class Process : public SimObject
 
   protected:
     // constructor
-    Process(const std::string &name,
+    Process(const std::string &nm,
             int stdin_fd, 	// initial I/O descriptors
             int stdout_fd,
             int stderr_fd);
 
+    // post initialization startup
+    virtual void startup();
 
   protected:
     FunctionalMemory *memory;
@@ -156,7 +160,8 @@ class Process : public SimObject
     {
         return ((data_base <= addr && addr < brk_point) ||
                 ((stack_base - 16*1024*1024) <= addr && addr < stack_base) ||
-                (text_base <= addr && addr < (text_base + text_size)));
+                (text_base <= addr && addr < (text_base + text_size)) ||
+                (mmap_start <= addr && addr < mmap_end));
     }
 
     virtual void syscall(ExecContext *xc) = 0;
@@ -171,7 +176,7 @@ class ObjectFile;
 class LiveProcess : public Process
 {
   protected:
-    LiveProcess(const std::string &name, ObjectFile *objFile,
+    LiveProcess(const std::string &nm, ObjectFile *objFile,
                 int stdin_fd, int stdout_fd, int stderr_fd,
                 std::vector<std::string> &argv,
                 std::vector<std::string> &envp);
@@ -180,7 +185,7 @@ class LiveProcess : public Process
     // this function is used to create the LiveProcess object, since
     // we can't tell which subclass of LiveProcess to use until we
     // open and look at the object file.
-    static LiveProcess *create(const std::string &name,
+    static LiveProcess *create(const std::string &nm,
                                int stdin_fd, int stdout_fd, int stderr_fd,
                                std::vector<std::string> &argv,
                                std::vector<std::string> &envp);

@@ -36,7 +36,6 @@
 
 #include "base/inet.hh"
 #include "cpu/exec_context.hh"
-#include "cpu/intr_control.hh"
 #include "dev/dma.hh"
 #include "dev/etherlink.hh"
 #include "dev/ns_gige.hh"
@@ -245,7 +244,6 @@ NSGigE::regStats()
         .precision(0)
         ;
 
-
     txBandwidth
         .name(name() + ".txBandwidth")
         .desc("Transmit Bandwidth (bits/s)")
@@ -258,6 +256,34 @@ NSGigE::regStats()
         .desc("Receive Bandwidth (bits/s)")
         .precision(0)
         .prereq(rxBytes)
+        ;
+
+    totBandwidth
+        .name(name() + ".totBandwidth")
+        .desc("Total Bandwidth (bits/s)")
+        .precision(0)
+        .prereq(totBytes)
+        ;
+
+    totPackets
+        .name(name() + ".totPackets")
+        .desc("Total Packets")
+        .precision(0)
+        .prereq(totBytes)
+        ;
+
+    totBytes
+        .name(name() + ".totBytes")
+        .desc("Total Bytes")
+        .precision(0)
+        .prereq(totBytes)
+        ;
+
+    totPacketRate
+        .name(name() + ".totPPS")
+        .desc("Total Tranmission Rate (packets/s)")
+        .precision(0)
+        .prereq(totBytes)
         ;
 
     txPacketRate
@@ -450,6 +476,10 @@ NSGigE::regStats()
 
     txBandwidth = txBytes * Stats::constant(8) / simSeconds;
     rxBandwidth = rxBytes * Stats::constant(8) / simSeconds;
+    totBandwidth = txBandwidth + rxBandwidth;
+    totBytes = txBytes + rxBytes;
+    totPackets = txPackets + rxPackets;
+
     txPacketRate = txPackets / simSeconds;
     rxPacketRate = rxPackets / simSeconds;
 }
@@ -2353,6 +2383,7 @@ NSGigE::serialize(ostream &os)
     bool txPacketExists = txPacket;
     SERIALIZE_SCALAR(txPacketExists);
     if (txPacketExists) {
+        txPacket->length = txPacketBufPtr - txPacket->data;
         txPacket->serialize("txPacket", os);
         uint32_t txPktBufPtr = (uint32_t) (txPacketBufPtr - txPacket->data);
         SERIALIZE_SCALAR(txPktBufPtr);
@@ -2637,6 +2668,7 @@ REGISTER_SIM_OBJECT("NSGigEInt", NSGigEInt)
 
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(NSGigE)
 
+    Param<Addr> addr;
     Param<Tick> tx_delay;
     Param<Tick> rx_delay;
     Param<Tick> intr_delay;
@@ -2644,7 +2676,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(NSGigE)
     SimObjectParam<PhysicalMemory *> physmem;
     Param<bool> rx_filter;
     Param<string> hardware_address;
-    SimObjectParam<Bus*> header_bus;
+    SimObjectParam<Bus*> io_bus;
     SimObjectParam<Bus*> payload_bus;
     SimObjectParam<HierParams *> hier;
     Param<Tick> pio_latency;
@@ -2667,6 +2699,7 @@ END_DECLARE_SIM_OBJECT_PARAMS(NSGigE)
 
 BEGIN_INIT_SIM_OBJECT_PARAMS(NSGigE)
 
+    INIT_PARAM(addr, "Device Address"),
     INIT_PARAM_DFLT(tx_delay, "Transmit Delay", 1000),
     INIT_PARAM_DFLT(rx_delay, "Receive Delay", 1000),
     INIT_PARAM_DFLT(intr_delay, "Interrupt Delay in microseconds", 0),
@@ -2675,7 +2708,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(NSGigE)
     INIT_PARAM_DFLT(rx_filter, "Enable Receive Filter", true),
     INIT_PARAM_DFLT(hardware_address, "Ethernet Hardware Address",
                     "00:99:00:00:00:01"),
-    INIT_PARAM_DFLT(header_bus, "The IO Bus to attach to for headers", NULL),
+    INIT_PARAM_DFLT(io_bus, "The IO Bus to attach to for headers", NULL),
     INIT_PARAM_DFLT(payload_bus, "The IO Bus to attach to for payload", NULL),
     INIT_PARAM_DFLT(hier, "Hierarchy global variables", &defaultHierParams),
     INIT_PARAM_DFLT(pio_latency, "Programmed IO latency in bus cycles", 1),
@@ -2715,7 +2748,7 @@ CREATE_SIM_OBJECT(NSGigE)
     params->tx_delay = tx_delay;
     params->rx_delay = rx_delay;
     params->hier = hier;
-    params->header_bus = header_bus;
+    params->header_bus = io_bus;
     params->payload_bus = payload_bus;
     params->pio_latency = pio_latency;
     params->dma_desc_free = dma_desc_free;
