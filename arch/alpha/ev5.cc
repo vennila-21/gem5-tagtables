@@ -101,17 +101,17 @@ AlphaISA::initIPRs(RegFile *regs)
 }
 
 
-template <class XC>
+template <class CPU>
 void
-AlphaISA::processInterrupts(XC *xc)
+AlphaISA::processInterrupts(CPU *cpu)
 {
     //Check if there are any outstanding interrupts
     //Handle the interrupts
     int ipl = 0;
     int summary = 0;
-    IntReg *ipr = xc->getIprPtr();
+    IntReg *ipr = cpu->getIprPtr();
 
-    check_interrupts = 0;
+    cpu->checkInterrupts = false;
 
     if (ipr[IPR_ASTRR])
         panic("asynchronous traps not implemented\n");
@@ -127,7 +127,7 @@ AlphaISA::processInterrupts(XC *xc)
         }
     }
 
-    uint64_t interrupts = xc->intr_status();
+    uint64_t interrupts = cpu->intr_status();
 
     if (interrupts) {
         for (int i = INTLEVEL_EXTERNAL_MIN;
@@ -143,22 +143,22 @@ AlphaISA::processInterrupts(XC *xc)
     if (ipl && ipl > ipr[IPR_IPLR]) {
         ipr[IPR_ISR] = summary;
         ipr[IPR_INTID] = ipl;
-        xc->trap(Interrupt_Fault);
+        cpu->trap(Interrupt_Fault);
         DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
                 ipr[IPR_IPLR], ipl, summary);
     }
 
 }
 
-template <class XC>
+template <class CPU>
 void
-AlphaISA::zeroRegisters(XC *xc)
+AlphaISA::zeroRegisters(CPU *cpu)
 {
     // Insure ISA semantics
     // (no longer very clean due to the change in setIntReg() in the
     // cpu model.  Consider changing later.)
-    xc->xc->setIntReg(ZeroReg, 0);
-    xc->xc->setFloatRegDouble(ZeroReg, 0.0);
+    cpu->xc->setIntReg(ZeroReg, 0);
+    cpu->xc->setFloatRegDouble(ZeroReg, 0.0);
 }
 
 void
@@ -176,16 +176,16 @@ ExecContext::ev5_trap(Fault fault)
     AlphaISA::InternalProcReg *ipr = regs.ipr;
 
     // exception restart address
-    if (fault != Interrupt_Fault || !PC_PAL(regs.pc))
+    if (fault != Interrupt_Fault || !inPalMode())
         ipr[AlphaISA::IPR_EXC_ADDR] = regs.pc;
 
     if (fault == Pal_Fault || fault == Arithmetic_Fault /* ||
-        fault == Interrupt_Fault && !PC_PAL(regs.pc) */) {
+        fault == Interrupt_Fault && !inPalMode() */) {
         // traps...  skip faulting instruction
         ipr[AlphaISA::IPR_EXC_ADDR] += 4;
     }
 
-    if (!PC_PAL(regs.pc))
+    if (!inPalMode())
         AlphaISA::swap_palshadow(&regs, true);
 
     regs.pc = ipr[AlphaISA::IPR_PAL_BASE] + AlphaISA::fault_addr[fault];
@@ -220,14 +220,12 @@ AlphaISA::intr_post(RegFile *regs, Fault fault, Addr pc)
     // that's it! (orders of magnitude less painful than x86)
 }
 
-bool AlphaISA::check_interrupts = false;
-
 Fault
 ExecContext::hwrei()
 {
     uint64_t *ipr = regs.ipr;
 
-    if (!PC_PAL(regs.pc))
+    if (!inPalMode())
         return Unimplemented_Opcode_Fault;
 
     setNextPC(ipr[AlphaISA::IPR_EXC_ADDR]);
@@ -238,7 +236,7 @@ ExecContext::hwrei()
         if ((ipr[AlphaISA::IPR_EXC_ADDR] & 1) == 0)
             AlphaISA::swap_palshadow(&regs, false);
 
-        AlphaISA::check_interrupts = true;
+        cpu->checkInterrupts = true;
     }
 
     // FIXME: XXX check for interrupts? XXX
