@@ -123,11 +123,12 @@ SimpleCPU::SimpleCPU(const string &_name,
                      FunctionalMemory *mem,
                      MemInterface *icache_interface,
                      MemInterface *dcache_interface,
-                     bool _def_reg, Tick freq)
-    : BaseCPU(_name, /* number_of_threads */ 1,
+                     bool _def_reg, Tick freq,
+                     bool _function_trace, Tick _function_trace_start)
+    : BaseCPU(_name, /* number_of_threads */ 1, _def_reg,
               max_insts_any_thread, max_insts_all_threads,
               max_loads_any_thread, max_loads_all_threads,
-              _system, freq),
+              _system, freq, _function_trace, _function_trace_start),
 #else
 SimpleCPU::SimpleCPU(const string &_name, Process *_process,
                      Counter max_insts_any_thread,
@@ -136,13 +137,14 @@ SimpleCPU::SimpleCPU(const string &_name, Process *_process,
                      Counter max_loads_all_threads,
                      MemInterface *icache_interface,
                      MemInterface *dcache_interface,
-                     bool _def_reg)
-    : BaseCPU(_name, /* number_of_threads */ 1,
+                     bool _def_reg,
+                     bool _function_trace, Tick _function_trace_start)
+    : BaseCPU(_name, /* number_of_threads */ 1, _def_reg,
               max_insts_any_thread, max_insts_all_threads,
-              max_loads_any_thread, max_loads_all_threads),
+              max_loads_any_thread, max_loads_all_threads,
+              _function_trace, _function_trace_start),
 #endif
-      tickEvent(this), xc(NULL), defer_registration(_def_reg),
-      cacheCompletionEvent(this)
+      tickEvent(this), xc(NULL), cacheCompletionEvent(this)
 {
     _status = Idle;
 #ifdef FULL_SYSTEM
@@ -174,13 +176,6 @@ SimpleCPU::SimpleCPU(const string &_name, Process *_process,
 
 SimpleCPU::~SimpleCPU()
 {
-}
-
-void SimpleCPU::init()
-{
-    if (!defer_registration) {
-        this->registerExecContexts();
-    }
 }
 
 void
@@ -338,16 +333,30 @@ change_thread_state(int thread_number, int activate, int priority)
 Fault
 SimpleCPU::copySrcTranslate(Addr src)
 {
-    memReq->reset(src, (dcacheInterface) ?
-                  dcacheInterface->getBlockSize()
-                  : 64);
+    static bool no_warn = true;
+    int blk_size = (dcacheInterface) ? dcacheInterface->getBlockSize() : 64;
+    // Only support block sizes of 64 atm.
+    assert(blk_size == 64);
+    int offset = src & (blk_size - 1);
+
+    // Make sure block doesn't span page
+    if (no_warn &&
+        (src & TheISA::PageMask) != ((src + blk_size) & TheISA::PageMask) &&
+        (src >> 40) != 0xfffffc) {
+        warn("Copied block source spans pages %x.", src);
+        no_warn = false;
+    }
+
+    memReq->reset(src & ~(blk_size - 1), blk_size);
 
     // translate to physical address
     Fault fault = xc->translateDataReadReq(memReq);
 
+    assert(fault != Alignment_Fault);
+
     if (fault == No_Fault) {
         xc->copySrcAddr = src;
-        xc->copySrcPhysAddr = memReq->paddr;
+        xc->copySrcPhysAddr = memReq->paddr + offset;
     } else {
         xc->copySrcAddr = 0;
         xc->copySrcPhysAddr = 0;
@@ -358,19 +367,44 @@ SimpleCPU::copySrcTranslate(Addr src)
 Fault
 SimpleCPU::copy(Addr dest)
 {
+    static bool no_warn = true;
     int blk_size = (dcacheInterface) ? dcacheInterface->getBlockSize() : 64;
+    // Only support block sizes of 64 atm.
+    assert(blk_size == 64);
     uint8_t data[blk_size];
-    assert(xc->copySrcAddr);
-    memReq->reset(dest, blk_size);
+    //assert(xc->copySrcAddr);
+    int offset = dest & (blk_size - 1);
+
+    // Make sure block doesn't span page
+    if (no_warn &&
+        (dest & TheISA::PageMask) != ((dest + blk_size) & TheISA::PageMask) &&
+        (dest >> 40) != 0xfffffc) {
+        no_warn = false;
+        warn("Copied block destination spans pages %x. ", dest);
+    }
+
+    memReq->reset(dest & ~(blk_size -1), blk_size);
     // translate to physical address
     Fault fault = xc->translateDataWriteReq(memReq);
+
+    assert(fault != Alignment_Fault);
+
     if (fault == No_Fault) {
-        Addr dest_addr = memReq->paddr;
+        Addr dest_addr = memReq->paddr + offset;
         // Need to read straight from memory since we have more than 8 bytes.
         memReq->paddr = xc->copySrcPhysAddr;
         xc->mem->read(memReq, data);
         memReq->paddr = dest_addr;
         xc->mem->write(memReq, data);
+        if (dcacheInterface) {
+            memReq->cmd = Copy;
+            memReq->completionEvent = NULL;
+            memReq->paddr = xc->copySrcPhysAddr;
+            memReq->dest = dest_addr;
+            memReq->size = 64;
+            memReq->time = curTick;
+            dcacheInterface->access(memReq);
+        }
     }
     return fault;
 }
@@ -610,13 +644,11 @@ SimpleCPU::tick()
     Fault fault = No_Fault;
 
 #ifdef FULL_SYSTEM
-    if (AlphaISA::check_interrupts &&
-        xc->cpu->check_interrupts() &&
-        !PC_PAL(xc->regs.pc) &&
+    if (checkInterrupts && check_interrupts() && !xc->inPalMode() &&
         status() != IcacheMissComplete) {
         int ipl = 0;
         int summary = 0;
-        AlphaISA::check_interrupts = 0;
+        checkInterrupts = false;
         IntReg *ipr = xc->regs.ipr;
 
         if (xc->regs.ipr[TheISA::IPR_SIRR]) {
@@ -733,9 +765,8 @@ SimpleCPU::tick()
         fault = si->execute(this, traceData);
 
 #ifdef FULL_SYSTEM
-        SWContext *ctx = xc->swCtx;
-        if (ctx)
-            ctx->process(xc, si.get());
+        if (xc->fnbin)
+            xc->execute(si.get());
 #endif
 
         if (si->isMemRef()) {
@@ -749,6 +780,8 @@ SimpleCPU::tick()
 
         if (traceData)
             traceData->finalize();
+
+        traceFunctions(xc->regs.pc);
 
     }	// if (fault == No_Fault)
 
@@ -808,6 +841,8 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(SimpleCPU)
 
     Param<bool> defer_registration;
     Param<int> multiplier;
+    Param<bool> function_trace;
+    Param<Tick> function_trace_start;
 
 END_DECLARE_SIM_OBJECT_PARAMS(SimpleCPU)
 
@@ -841,7 +876,9 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(SimpleCPU)
     INIT_PARAM_DFLT(defer_registration, "defer registration with system "
                     "(for sampling)", false),
 
-    INIT_PARAM_DFLT(multiplier, "clock multiplier", 1)
+    INIT_PARAM_DFLT(multiplier, "clock multiplier", 1),
+    INIT_PARAM_DFLT(function_trace, "Enable function trace", false),
+    INIT_PARAM_DFLT(function_trace_start, "Cycle to start function trace", 0)
 
 END_INIT_SIM_OBJECT_PARAMS(SimpleCPU)
 
@@ -860,7 +897,8 @@ CREATE_SIM_OBJECT(SimpleCPU)
                         (icache) ? icache->getInterface() : NULL,
                         (dcache) ? dcache->getInterface() : NULL,
                         defer_registration,
-                        ticksPerSecond * mult);
+                        ticksPerSecond * mult,
+                        function_trace, function_trace_start);
 #else
 
     cpu = new SimpleCPU(getInstanceName(), workload,
@@ -868,7 +906,8 @@ CREATE_SIM_OBJECT(SimpleCPU)
                         max_loads_any_thread, max_loads_all_threads,
                         (icache) ? icache->getInterface() : NULL,
                         (dcache) ? dcache->getInterface() : NULL,
-                        defer_registration);
+                        defer_registration,
+                        function_trace, function_trace_start);
 
 #endif // FULL_SYSTEM
 

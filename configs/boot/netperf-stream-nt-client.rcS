@@ -22,9 +22,9 @@ echo -n "waiting for server..."
 /usr/bin/netcat -c -l -p 8000
 
 BINARY=/benchmarks/netperf/netperf
-TEST="TCP_RR"
-SHORT_ARGS="-l -1k"
-LONG_ARGS="-k10000,0 -K10000,0"
+TEST="TCP_STREAM"
+SHORT_ARGS="-l -100k"
+LONG_ARGS="-- -m 65536 -M 65536 -s 262144 -S 262144"
 
 
 SHORT="$BINARY -H $SERVER -t $TEST $SHORT_ARGS"
@@ -39,7 +39,7 @@ echo "netperf benchmark"
 echo $LONG
 /sbin/m5 ivlb 1
 /sbin/m5 resetstats
-/sbin/m5 dumpresetstats 2000000000 2000000000
-/sbin/m5 checkpoint 2000000000 2000000000
+/sbin/m5 dumpresetstats 200000000 2000000000
+/sbin/m5 checkpoint 200000000 2000000000
 eval $LONG
 /sbin/m5 exit

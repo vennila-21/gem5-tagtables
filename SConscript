@@ -47,6 +47,7 @@ base_sources = Split('''
         arch/alpha/alpha_full_cpu_exec.cc
 	arch/alpha/fast_cpu_exec.cc
 	arch/alpha/simple_cpu_exec.cc
+	arch/alpha/inorder_cpu_exec.cc
 	arch/alpha/full_cpu_exec.cc
 	arch/alpha/faults.cc
 	arch/alpha/isa_traits.cc
@@ -65,6 +66,7 @@ base_sources = Split('''
 	base/pollevent.cc
 	base/python.cc
 	base/range.cc
+	base/random.cc
 	base/sat_counter.cc
 	base/socket.cc
 	base/statistics.cc
@@ -131,6 +133,7 @@ base_sources = Split('''
 	cpu/full_cpu/issue.cc
 	cpu/full_cpu/ls_queue.cc
 	cpu/full_cpu/machine_queue.cc
+        cpu/full_cpu/pc_sample_profile.cc
 	cpu/full_cpu/pipetrace.cc
 	cpu/full_cpu/readyq.cc
 	cpu/full_cpu/reg_info.cc
@@ -150,6 +153,7 @@ base_sources = Split('''
 	cpu/full_cpu/iq/standard/iq_standard.cc
 	cpu/sampling_cpu/sampling_cpu.cc
 	cpu/simple_cpu/simple_cpu.cc
+	cpu/inorder_cpu/inorder_cpu.cc
 	cpu/trace/reader/mem_trace_reader.cc
 	cpu/trace/reader/ibm_reader.cc
 	cpu/trace/reader/itx_reader.cc
@@ -196,6 +200,7 @@ base_sources = Split('''
 	mem/timing_mem/base_memory.cc
 	mem/timing_mem/memory_builder.cc
 	mem/timing_mem/simple_mem_bank.cc
+        mem/trace/itx_writer.cc
 	mem/trace/mem_trace_writer.cc
 	mem/trace/m5_writer.cc
 
@@ -209,11 +214,10 @@ base_sources = Split('''
 	sim/serialize.cc
 	sim/sim_events.cc
 	sim/sim_exit.cc
-	sim/sim_init.cc
 	sim/sim_object.cc
+	sim/startup.cc
 	sim/stat_context.cc
 	sim/stat_control.cc
-	sim/sw_context.cc
 	sim/trace_context.cc
 	sim/universe.cc
         sim/pyconfig/pyconfig.cc
@@ -233,6 +237,7 @@ base_obj_desc_files = Split('''
         cpu/full_cpu/PipeTrace.od
         cpu/sampling_cpu/SamplingCPU.od
         cpu/simple_cpu/SimpleCPU.od
+        cpu/inorder_cpu/InorderCPU.od
         cpu/BaseCPU.od
         cpu/IntrControl.od
         mem/bus/Bus.od
@@ -267,6 +272,7 @@ full_system_sources = Split('''
 	arch/alpha/pseudo_inst.cc
 	arch/alpha/vtophys.cc
 
+	base/crc.cc
 	base/inet.cc
 	base/remote_gdb.cc
 
@@ -290,10 +296,12 @@ full_system_sources = Split('''
 	dev/etherdev.cc
 	dev/pciconfigall.cc
 	dev/pcidev.cc
+	dev/pktfifo.cc
 	dev/scsi.cc
 	dev/scsi_ctrl.cc
 	dev/scsi_disk.cc
 	dev/scsi_none.cc
+	dev/sinic.cc
 	dev/simple_disk.cc
 	dev/tlaser_clock.cc
 	dev/tlaser_ipi.cc
@@ -311,6 +319,7 @@ full_system_sources = Split('''
 	dev/tsunami_pchip.cc
 	dev/uart.cc
 
+	kern/kernel_binning.cc
 	kern/kernel_stats.cc
 	kern/system_events.cc
 	kern/linux/linux_events.cc
@@ -374,6 +383,7 @@ syscall_emulation_sources = Split('''
 	arch/alpha/alpha_linux_process.cc
 	arch/alpha/alpha_tru64_process.cc
 	cpu/memtest/memtest.cc
+        cpu/trace/opt_cpu.cc
 	cpu/trace/trace_cpu.cc
 	eio/eio.cc
 	eio/exolex.cc
@@ -389,6 +399,32 @@ syscall_emulation_obj_desc_files = Split('''
         sim/Process.od
 	''')
 
+targetarch_files = Split('''
+        alpha_common_syscall_emul.hh
+        alpha_linux_process.hh
+        alpha_memory.hh
+        alpha_tru64_process.hh
+        aout_machdep.h
+        arguments.hh
+        byte_swap.hh
+        ecoff_machdep.h
+        elf_machdep.h
+        ev5.hh
+        faults.hh
+        isa_fullsys_traits.hh
+        isa_traits.hh
+        machine_exo.h
+        osfpal.hh
+        pseudo_inst.hh
+        vptr.hh
+        vtophys.hh
+        ''')
+
+for f in targetarch_files:
+    env.Command('targetarch/' + f, 'arch/alpha/' + f,
+                '''echo '#include "arch/alpha/%s"' > $TARGET''' % f)
+
+
 # Set up complete list of sources based on configuration.
 sources = base_sources
 obj_desc_files = base_obj_desc_files
@@ -400,8 +436,19 @@ else:
     sources += syscall_emulation_sources
     obj_desc_files += syscall_emulation_obj_desc_files
 
+extra_libraries = []
+env.Append(LIBS=['z'])
 if env['USE_MYSQL']:
     sources += mysql_sources
+    env.Append(CPPDEFINES = 'USE_MYSQL')
+    env.Append(CPPDEFINES = 'STATS_BINNING')
+    env.Append(CPPPATH=['/usr/local/include/mysql', '/usr/include/mysql'])
+    if os.path.isdir('/usr/lib64'):
+        env.Append(LIBPATH=['/usr/lib64/mysql'])
+    else:
+        env.Append(LIBPATH=['/usr/lib/mysql/'])
+    env.Append(LIBS=['mysqlclient'])
+
 
 ###################################################
 #
@@ -421,26 +468,11 @@ env.Command(Split('''arch/alpha/decoder.cc
                      arch/alpha/alpha_full_cpu_exec.cc
 		     arch/alpha/fast_cpu_exec.cc
                      arch/alpha/simple_cpu_exec.cc
+                     arch/alpha/inorder_cpu_exec.cc
                      arch/alpha/full_cpu_exec.cc'''),
             Split('''arch/alpha/isa_desc
 		     arch/isa_parser.py'''),
             '$SRCDIR/arch/isa_parser.py $SOURCE $TARGET.dir arch/alpha')
-
-
-# 'targetarch' is a symlink to arch/$TARGET_ISA.
-def link_targetarch(target, source, env):
-    link_target = str(target[0])
-    link_source = env.subst('$SRCDIR/arch/$TARGET_ISA')
-    if not os.path.isdir(link_target):
-        print "symlinking", link_source, "to", link_target
-        try:
-            os.symlink(link_source, link_target)
-        except OSError, desc:
-            print "Error creating symlink %s: %s" % (link_target, desc)
-            sys.exit(-1)
-
-# Tell SCons to use the link_targetarch function to make 'targetarch'
-env.Command('targetarch', None, link_targetarch)
 
 
 # libelf build is described in its own SConscript file.
@@ -456,16 +488,15 @@ SConscript('sim/pyconfig/SConscript', exports = ['env', 'obj_desc_files'],
 # environment, and returns a list of all the corresponding SCons
 # Object nodes (including an extra one for date.cc).  We explicitly
 # add the Object nodes so we can set up special dependencies for
-# targetarch and date.cc.
+# date.cc.
 def make_objs(sources, env):
     objs = [env.Object(s) for s in sources]
-    # make all objects depend on the targetarch link so it gets made first.
-    env.Depends(objs, 'targetarch')
     # make date.cc depend on all other objects so it always gets
     # recompiled whenever anything else does
     date_obj = env.Object('base/date.cc')
     env.Depends(date_obj, objs)
     objs.append(date_obj)
+    objs.extend(extra_libraries)
     return objs
 
 ###################################################

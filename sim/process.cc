@@ -34,6 +34,7 @@
 
 #include "base/intmath.hh"
 #include "base/loader/object_file.hh"
+#include "base/loader/symtab.hh"
 #include "base/statistics.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/full_cpu/smt.hh"
@@ -161,7 +162,7 @@ Process::registerExecContext(ExecContext *xc)
 
 
 void
-Process::replaceExecContext(int xcIndex, ExecContext *xc)
+Process::replaceExecContext(ExecContext *xc, int xcIndex)
 {
     if (xcIndex >= execContexts.size()) {
         panic("replaceExecContext: bad xcIndex, %d >= %d\n",
@@ -262,6 +263,18 @@ LiveProcess::LiveProcess(const string &name, ObjectFile *objFile,
 
     // load object file into target memory
     objFile->loadSections(memory);
+
+    // load up symbols, if any... these may be used for debugging or
+    // profiling.
+    if (!debugSymbolTable) {
+        debugSymbolTable = new SymbolTable();
+        if (!objFile->loadGlobalSymbols(debugSymbolTable) ||
+            !objFile->loadLocalSymbols(debugSymbolTable)) {
+            // didn't load any symbols
+            delete debugSymbolTable;
+            debugSymbolTable = NULL;
+        }
+    }
 
     // Set up stack.  On Alpha, stack goes below text section.  This
     // code should get moved to some architecture-specific spot.
@@ -392,14 +405,10 @@ CREATE_SIM_OBJECT(LiveProcess)
     // dummy for default env
     vector<string> null_vec;
 
-    //  We do this with "temp" because of the bogus compiler warning
-    //  you get with g++ 2.95 -O if you just "return new LiveProcess(..."
-    LiveProcess *temp = LiveProcess::create(getInstanceName(),
-                                            stdin_fd, stdout_fd, stderr_fd,
-                                            cmd,
-                                            env.isValid() ? env : null_vec);
-
-    return temp;
+    return LiveProcess::create(getInstanceName(),
+                               stdin_fd, stdout_fd, stderr_fd,
+                               cmd,
+                               env.isValid() ? env : null_vec);
 }
 
 

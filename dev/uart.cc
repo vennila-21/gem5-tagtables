@@ -44,7 +44,6 @@
 #include "mem/bus/pio_interface_impl.hh"
 #include "mem/functional_mem/memory_control.hh"
 #include "sim/builder.hh"
-#include "targetarch/ev5.hh"
 
 using namespace std;
 
@@ -92,13 +91,13 @@ Uart::Uart(const string &name, SimConsole *c, MemoryController *mmu, Addr a,
     : PioDevice(name), addr(a), size(s), cons(c), txIntrEvent(this, TX_INT),
       rxIntrEvent(this, RX_INT), platform(p)
 {
-    mmu->add_child(this, Range<Addr>(addr, addr + size));
+    mmu->add_child(this, RangeSize(addr, size));
 
 
     if (bus) {
         pioInterface = newPioInterface(name, hier, bus, this,
                                       &Uart::cacheAccess);
-        pioInterface->addAddrRange(addr, addr + size - 1);
+        pioInterface->addAddrRange(RangeSize(addr, size));
         pioLatency = pio_latency * bus->clockRatio;
     }
 
@@ -118,7 +117,7 @@ Uart::Uart(const string &name, SimConsole *c, MemoryController *mmu, Addr a,
 Fault
 Uart::read(MemReqPtr &req, uint8_t *data)
 {
-    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
+    Addr daddr = req->paddr - (addr & EV5::PAddrImplMask);
     DPRINTF(Uart, " read register %#x\n", daddr);
 
 
@@ -246,7 +245,7 @@ Uart::read(MemReqPtr &req, uint8_t *data)
 Fault
 Uart::write(MemReqPtr &req, const uint8_t *data)
 {
-    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
+    Addr daddr = req->paddr - (addr & EV5::PAddrImplMask);
 
     DPRINTF(Uart, " write register %#x value %#x\n", daddr, *(uint8_t*)data);
 
@@ -287,7 +286,7 @@ Uart::write(MemReqPtr &req, const uint8_t *data)
     switch (daddr) {
         case 0x0:
             if (!(LCR & 0x80)) { // write byte
-                cons->out(*(uint64_t *)data);
+                cons->out(*(uint8_t *)data);
                 platform->clearConsoleInt();
                 status &= ~TX_INT;
                 if (UART_IER_THRI & IER)

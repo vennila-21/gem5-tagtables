@@ -326,14 +326,13 @@ bool
 RemoteGDB::acc(Addr va, size_t len)
 {
     Addr last_va;
-    Addr pte;
 
-    va = alpha_trunc_page(va);
-    last_va = alpha_round_page(va + len);
+    va = TheISA::TruncPage(va);
+    last_va = TheISA::RoundPage(va + len);
 
     do  {
-        if (va >= ALPHA_K0SEG_BASE && va < ALPHA_K1SEG_BASE) {
-            if (va < (ALPHA_K0SEG_BASE + pmem->size())) {
+        if (TheISA::IsK0Seg(va)) {
+            if (va < (TheISA::K0SegBase + pmem->size())) {
                 DPRINTF(GDBAcc, "acc:   Mapping is valid  K0SEG <= "
                         "%#x < K0SEG + size\n", va);
                 return true;
@@ -351,16 +350,16 @@ RemoteGDB::acc(Addr va, size_t len)
      * but there is no easy way to do it.
      */
 
-        if (PC_PAL(va) || va < 0x10000)
+        if (AlphaISA::PcPAL(va) || va < 0x10000)
             return true;
 
         Addr ptbr = context->regs.ipr[AlphaISA::IPR_PALtemp20];
-        pte = kernel_pte_lookup(pmem, ptbr, va);
-        if (!pte || !entry_valid(pmem->phys_read_qword(pte))) {
+        TheISA::PageTableEntry pte = kernel_pte_lookup(pmem, ptbr, va);
+        if (!pte.valid()) {
             DPRINTF(GDBAcc, "acc:   %#x pte is invalid\n", va);
             return false;
         }
-        va += ALPHA_PGBYTES;
+        va += TheISA::PageBytes;
     } while (va < last_va);
 
     DPRINTF(GDBAcc, "acc:   %#x mapping is valid\n", va);

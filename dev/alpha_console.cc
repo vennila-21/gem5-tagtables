@@ -61,12 +61,12 @@ AlphaConsole::AlphaConsole(const string &name, SimConsole *cons, SimpleDisk *d,
                            HierParams *hier, Bus *bus)
     : PioDevice(name), disk(d), console(cons), addr(a)
 {
-    mmu->add_child(this, Range<Addr>(addr, addr + size));
+    mmu->add_child(this, RangeSize(addr, size));
 
     if (bus) {
         pioInterface = newPioInterface(name, hier, bus, this,
                                        &AlphaConsole::cacheAccess);
-        pioInterface->addAddrRange(addr, addr + size);
+        pioInterface->addAddrRange(RangeSize(addr, size));
     }
 
     alphaAccess = new AlphaAccess;
@@ -98,7 +98,7 @@ AlphaConsole::read(MemReqPtr &req, uint8_t *data)
 {
     memset(data, 0, req->size);
 
-    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
+    Addr daddr = req->paddr - (addr & EV5::PAddrImplMask);
 
     switch (req->size)
     {
@@ -198,7 +198,7 @@ AlphaConsole::write(MemReqPtr &req, const uint8_t *data)
         return Machine_Check_Fault;
     }
 
-    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
+    Addr daddr = req->paddr - (addr & EV5::PAddrImplMask);
     ExecContext *other_xc;
 
     switch (daddr) {
