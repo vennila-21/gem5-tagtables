@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__APPLE__)
 #include <libgen.h>
 #endif
 #include <stdio.h>
@@ -142,11 +142,11 @@ IniFile::loadCPP(const string &file, vector<char *> &cppArgs)
 
         close(STDOUT_FILENO);
         if (dup2(fd[1], STDOUT_FILENO) == -1)
-            return 1;
+            exit(1);
 
         execvp("g++", args);
 
-        exit(1);
+        exit(0);
     }
 
     int retval;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -96,6 +96,8 @@ vtophys(ExecContext *xc, Addr vaddr)
 {
     Addr ptbr = xc->regs.ipr[AlphaISA::IPR_PALtemp20];
     Addr paddr = 0;
+    //@todo Andrew couldn't remember why he commented some of this code
+    //so I put it back in. Perhaps something to do with gdb debugging?
     if (PC_PAL(vaddr)) {
         paddr = vaddr & ~ULL(1);
     } else if (!ptbr) {
@@ -110,6 +112,7 @@ vtophys(ExecContext *xc, Addr vaddr)
                 paddr = PMAP_PTE_PA(entry) | (vaddr & PGOFSET);
         }
     }
+
 
     DPRINTF(VtoPhys, "vtophys(%#x) -> %#x\n", vaddr, paddr);
 
