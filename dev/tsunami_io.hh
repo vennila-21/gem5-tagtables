@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -192,8 +192,11 @@ class TsunamiIO : public FunctionalMemory
 
 
   public:
-    /** Return the freqency of the RTC */
-    uint32_t  frequency() const { return RTC_RATE; }
+    /**
+     * Return the freqency of the RTC
+     * @return interrupt rate of the RTC
+     */
+    Tick  frequency() const { return RTC_RATE; }
 
 
     /**
