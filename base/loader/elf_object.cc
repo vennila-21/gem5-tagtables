@@ -190,7 +190,7 @@ bool
 ElfObject::loadSomeSymbols(SymbolTable *symtab, int binding)
 {
     Elf *elf;
-    int secidx = 1; // there is a 0 but it is nothing, go figure
+    int sec_idx = 1; // there is a 0 but it is nothing, go figure
     Elf_Scn *section;
     GElf_Shdr shdr;
     Elf_Data *data;
@@ -210,7 +210,7 @@ ElfObject::loadSomeSymbols(SymbolTable *symtab, int binding)
     assert(elf != NULL);
 
     // Get the first section
-    section = elf_getscn(elf, secidx);
+    section = elf_getscn(elf, sec_idx);
 
     // While there are no more sections
     while (section != NULL) {
@@ -231,8 +231,8 @@ ElfObject::loadSomeSymbols(SymbolTable *symtab, int binding)
                 }
             }
         }
-        ++secidx;
-        section = elf_getscn(elf, secidx);
+        ++sec_idx;
+        section = elf_getscn(elf, sec_idx);
     }
 
     elf_end(elf);
