@@ -162,6 +162,9 @@ base_sources = Split('''
 	mem/cache/tags/fa_lru.cc
 	mem/cache/tags/iic.cc
 	mem/cache/tags/lru.cc
+	mem/cache/tags/split.cc
+	mem/cache/tags/split_lifo.cc
+	mem/cache/tags/split_lru.cc
 	mem/cache/tags/repl/gen.cc
 	mem/cache/tags/repl/repl.cc
 	mem/functional_mem/functional_memory.cc
@@ -216,6 +219,7 @@ full_system_sources = Split('''
         dev/simconsole.cc
 	dev/disk_image.cc
 	dev/dma.cc
+	dev/etherbus.cc
 	dev/etherdump.cc
 	dev/etherint.cc
 	dev/etherlink.cc
