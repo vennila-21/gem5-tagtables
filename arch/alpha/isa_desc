@@ -28,7 +28,9 @@ let {{
 #include "cpu/simple_cpu/simple_cpu.hh"
 #include "cpu/static_inst.hh"
 #include "sim/annotation.hh"
+#include "sim/serialize.hh"
 #include "sim/sim_events.hh"
+#include "sim/sim_stats.hh"
 
 #ifdef FULL_SYSTEM
 #include "targetarch/ev5.hh"
@@ -2364,7 +2366,7 @@ decode OPCODE default Unknown::unknown() {
 	format EmulatedCallPal {
 	    0x00: halt ({{
 		if (!xc->misspeculating()) 
-		    SimExit("halt instruction encountered");
+		    SimExit(curTick, "halt instruction encountered");
 	    }});
 	    0x83: callsys({{ 
 		if (!xc->misspeculating()) 
@@ -2425,14 +2427,64 @@ decode OPCODE default Unknown::unknown() {
 		if (!xc->misspeculating())
 		    Annotate::EndInterval(xc);
 	    }}, No_OpClass);
-	    0x20: m5exit({{
+	    0x20: m5exit_old({{
 		if (!xc->misspeculating())
-		    SimExit("m5_exit instruction encountered");
+		    SimExit(curTick, "m5_exit_old instruction encountered");
+	    }}, No_OpClass);
+	    0x21: m5exit({{
+		if (!xc->misspeculating()) {
+		    Tick delay = xc->regs.intRegFile[16];
+		    Tick when = curTick + NS2Ticks(delay);
+		    SimExit(when, "m5_exit instruction encountered");
+		}
 	    }}, No_OpClass);
             0x30: initparam({{ Ra = xc->cpu->system->init_param; }});
             0x40: resetstats({{
-		if (!xc->misspeculating())
-		    Statistics::reset();
+		if (!xc->misspeculating()) {
+		    using namespace Statistics;
+		    Tick delay = xc->regs.intRegFile[16];
+		    Tick period = xc->regs.intRegFile[17];
+
+		    Tick when = curTick + NS2Ticks(delay);
+		    Tick repeat = NS2Ticks(period);
+
+		    SetupEvent(Reset, when, repeat);
+		}
+	    }});
+            0x41: dumpstats({{
+		if (!xc->misspeculating()) {
+		    using namespace Statistics;
+		    Tick delay = xc->regs.intRegFile[16];
+		    Tick period = xc->regs.intRegFile[17];
+
+		    Tick when = curTick + NS2Ticks(delay);
+		    Tick repeat = NS2Ticks(period);
+
+		    SetupEvent(Dump, when, repeat);
+		}
+	    }});
+            0x42: dumpresetstats({{
+		if (!xc->misspeculating()) {
+		    using namespace Statistics;
+		    Tick delay = xc->regs.intRegFile[16];
+		    Tick period = xc->regs.intRegFile[17];
+
+		    Tick when = curTick + NS2Ticks(delay);
+		    Tick repeat = NS2Ticks(period);
+
+		    SetupEvent(Dump|Reset, when, repeat);
+		}
+	    }});
+            0x43: m5checkpoint({{
+		if (!xc->misspeculating()) {
+		    Tick delay = xc->regs.intRegFile[16];
+		    Tick period = xc->regs.intRegFile[17];
+
+		    Tick when = curTick + NS2Ticks(delay);
+		    Tick repeat = NS2Ticks(period);
+
+		    SetupCheckpoint(when, repeat);
+		}
 	    }});
 	}
     }
