@@ -37,6 +37,7 @@
 #include "dev/alpha_access.h"
 #include "dev/io_device.hh"
 #include "sim/host.hh"
+#include "dev/tsunami_io.hh"
 
 class BaseCPU;
 class SimConsole;
@@ -89,7 +90,7 @@ class AlphaConsole : public PioDevice
   public:
     /** Standard Constructor */
     AlphaConsole(const std::string &name, SimConsole *cons, SimpleDisk *d,
-                 System *system, BaseCPU *cpu, TlaserClock *clock,
+                 System *system, BaseCPU *cpu, TsunamiIO *clock,
                  int num_cpus, MemoryController *mmu, Addr addr,
                  HierParams *hier, Bus *bus);
 

@@ -98,11 +98,11 @@ vtophys(ExecContext *xc, Addr vaddr)
     Addr paddr = 0;
     if (PC_PAL(vaddr)) {
         paddr = vaddr & ~ULL(1);
-    } else if (!ptbr) {
-        paddr = vaddr;
     } else {
         if (vaddr >= ALPHA_K0SEG_BASE && vaddr <= ALPHA_K0SEG_END) {
             paddr = ALPHA_K0SEG_TO_PHYS(vaddr);
+        } else if (!ptbr) {
+            paddr = vaddr;
         } else {
             Addr pte = kernel_pte_lookup(xc->physmem, ptbr, vaddr);
             uint64_t entry = xc->physmem->phys_read_qword(pte);

@@ -49,14 +49,16 @@
 #include "mem/functional_mem/memory_control.hh"
 #include "sim/builder.hh"
 #include "sim/system.hh"
+#include "dev/tsunami_io.hh"
 
 using namespace std;
 
 AlphaConsole::AlphaConsole(const string &name, SimConsole *cons, SimpleDisk *d,
-                           System *system, BaseCPU *cpu, TlaserClock *clock,
+                           System *system, BaseCPU *cpu, TsunamiIO *clock,
                            int num_cpus, MemoryController *mmu, Addr a,
                            HierParams *hier, Bus *bus)
     : PioDevice(name), disk(d), console(cons), addr(a)
+>>>>>>>
 {
     mmu->add_child(this, Range<Addr>(addr, addr + size));
 
@@ -89,7 +91,7 @@ AlphaConsole::read(MemReqPtr &req, uint8_t *data)
     memset(data, 0, req->size);
     uint64_t val;
 
-    Addr daddr = req->paddr - addr;
+    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
 
     switch (daddr) {
       case offsetof(AlphaAccess, inputChar):
@@ -137,7 +139,7 @@ AlphaConsole::write(MemReqPtr &req, const uint8_t *data)
         return Machine_Check_Fault;
     }
 
-    Addr daddr = req->paddr - addr;
+    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
     ExecContext *other_xc;
 
     switch (daddr) {
@@ -266,7 +268,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(AlphaConsole)
     Param<Addr> addr;
     SimObjectParam<System *> system;
     SimObjectParam<BaseCPU *> cpu;
-    SimObjectParam<TlaserClock *> clock;
+    SimObjectParam<TsunamiIO *> clock;
     SimObjectParam<Bus*> io_bus;
     SimObjectParam<HierParams *> hier;
 
