@@ -27,7 +27,9 @@
 from __future__ import generators
 import os, re, sys, types, inspect
 
-from importer import AddToPath, LoadMpyFile
+from mpy_importer import AddToPath, LoadMpyFile
+from smartdict import SmartDict
+from convert import *
 
 noDot = False
 try:
@@ -35,7 +37,7 @@ try:
 except:
     noDot = True
 
-env = {}
+env = SmartDict()
 env.update(os.environ)
 
 def panic(string):
@@ -449,7 +451,7 @@ class MetaConfigNode(type):
 
     # Print instance info to .ini file.
     def instantiate(cls, name, parent = None):
-        instance = Node(name, cls, cls.type, parent, isParamContext(cls))
+        instance = Node(name, cls, parent, isParamContext(cls))
 
         if hasattr(cls, 'check'):
             cls.check()
@@ -584,10 +586,13 @@ class NodeParam(object):
 
 class Node(object):
     all = {}
-    def __init__(self, name, realtype, type, parent, paramcontext):
+    def __init__(self, name, realtype, parent, paramcontext):
         self.name = name
         self.realtype = realtype
-        self.type = type
+        if isSimObject(realtype):
+            self.type = realtype.type
+        else:
+            self.type = None
         self.parent = parent
         self.children = []
         self.child_names = {}
@@ -973,18 +978,17 @@ VectorParam = _VectorParamProxy(None)
 # Integer parameter type.
 class _CheckedInt(object):
     def _convert(cls, value):
-        t = type(value)
-        if t == bool:
+        if isinstance(value, bool):
             return int(value)
 
-        if t != int and t != long and t != float and t != str:
-            raise TypeError, 'Integer parameter of invalid type %s' % t
+        if not isinstance(value, (int, long, float, str)):
+            raise TypeError, 'Integer param of invalid type %s' % type(value)
 
-        if t == str or t == float:
-            value = long(value)
+        if isinstance(value, (str, float)):
+            value = long(float(value))
 
         if not cls._min <= value <= cls._max:
-            raise TypeError, 'Integer parameter out of bounds %d < %d < %d' % \
+            raise TypeError, 'Integer param out of bounds %d < %d < %d' % \
                   (cls._min, value, cls._max)
 
         return value
@@ -1298,6 +1302,3 @@ class SimObject(ConfigNode):
     type = 'SimObject'
 
 from objects import *
-
-cpp_classes = MetaSimObject.cpp_classes
-cpp_classes.sort()
