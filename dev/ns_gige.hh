@@ -34,20 +34,15 @@
 #ifndef __NS_GIGE_HH__
 #define __NS_GIGE_HH__
 
-//#include "base/range.hh"
+#include "base/statistics.hh"
 #include "dev/etherint.hh"
 #include "dev/etherpkt.hh"
-#include "sim/eventq.hh"
+#include "dev/io_device.hh"
 #include "dev/ns_gige_reg.h"
-#include "base/statistics.hh"
 #include "dev/pcidev.hh"
 #include "dev/tsunami.hh"
-#include "dev/io_device.hh"
 #include "mem/bus/bus.hh"
-
-/** defined by the NS83820 data sheet */
-#define MAX_TX_FIFO_SIZE 8192
-#define MAX_RX_FIFO_SIZE 32768
+#include "sim/eventq.hh"
 
 /** length of ethernet address in bytes */
 #define EADDR_LEN 6
@@ -91,7 +86,10 @@ struct dp_regs {
 };
 
 struct dp_rom {
-    /** for perfect match memory.  the linux driver doesn't use any other ROM */
+    /**
+     * for perfect match memory.
+     * the linux driver doesn't use any other ROM
+     */
     uint8_t perfectMatch[EADDR_LEN];
 };
 
@@ -168,7 +166,9 @@ class NSGigE : public PciDev
     /*** BASIC STRUCTURES FOR TX/RX ***/
     /* Data FIFOs */
     pktbuf_t txFifo;
+    uint32_t maxTxFifoSize;
     pktbuf_t rxFifo;
+    uint32_t maxRxFifoSize;
 
     /** various helper vars */
     PacketPtr txPacket;
@@ -186,6 +186,8 @@ class NSGigE : public PciDev
 
     /* tx State Machine */
     TxState txState;
+    bool txEnable;
+
     /** Current Transmit Descriptor Done */
     bool CTDD;
     /** current amt of free space in txDataFifo in bytes */
@@ -200,6 +202,8 @@ class NSGigE : public PciDev
 
     /** rx State Machine */
     RxState rxState;
+    bool rxEnable;
+
     /** Current Receive Descriptor Done */
     bool CRDD;
     /** num of bytes in the current packet being drained from rxDataFifo */
@@ -281,7 +285,13 @@ class NSGigE : public PciDev
      * Retransmit event
      */
     void transmit();
-    typedef EventWrapper<NSGigE, &NSGigE::transmit> TxEvent;
+    void txEventTransmit()
+    {
+        transmit();
+        if (txState == txFifoBlock)
+            txKick();
+    }
+    typedef EventWrapper<NSGigE, &NSGigE::txEventTransmit> TxEvent;
     friend class TxEvent;
     TxEvent txEvent;
 
@@ -332,13 +342,14 @@ class NSGigE : public PciDev
 
   public:
     NSGigE(const std::string &name, IntrControl *i, Tick intr_delay,
-             PhysicalMemory *pmem, Tick tx_delay, Tick rx_delay,
-             MemoryController *mmu, HierParams *hier, Bus *header_bus,
-             Bus *payload_bus, Tick pio_latency, bool dma_desc_free,
-             bool dma_data_free, Tick dma_read_delay, Tick dma_write_delay,
-             Tick dma_read_factor, Tick dma_write_factor, PciConfigAll *cf,
-             PciConfigData *cd, Tsunami *t, uint32_t bus, uint32_t dev,
-             uint32_t func, bool rx_filter, const int eaddr[6]);
+           PhysicalMemory *pmem, Tick tx_delay, Tick rx_delay,
+           MemoryController *mmu, HierParams *hier, Bus *header_bus,
+           Bus *payload_bus, Tick pio_latency, bool dma_desc_free,
+           bool dma_data_free, Tick dma_read_delay, Tick dma_write_delay,
+           Tick dma_read_factor, Tick dma_write_factor, PciConfigAll *cf,
+           PciConfigData *cd, Tsunami *t, uint32_t bus, uint32_t dev,
+           uint32_t func, bool rx_filter, const int eaddr[6],
+           uint32_t tx_fifo_size, uint32_t rx_fifo_size);
     ~NSGigE();
 
     virtual void WriteConfig(int offset, int size, uint32_t data);
@@ -378,9 +389,6 @@ class NSGigE : public PciDev
     Stats::Formula rxBandwidth;
     Stats::Formula txPacketRate;
     Stats::Formula rxPacketRate;
-
-  private:
-    Tick pioLatency;
 
   public:
     Tick cacheAccess(MemReqPtr &req);

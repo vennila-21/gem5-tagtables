@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,57 +26,32 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/**
- * @file
- * Definition of a Intel ITX memory trace format reader.
+/* @file
+ * User Console Definitions
  */
 
-#ifndef __ITX_READER_HH__
-#define __ITX_READER_HH__
+#ifndef __BASE_MATCH_HH__
+#define __BASE_MATCH_HH__
 
-#include <stdio.h>
+#include <string>
+#include <vector>
 
-#include "cpu/trace/reader/mem_trace_reader.hh"
-#include "mem/mem_req.hh"
-
-
-/**
- * A memory trace reader for the Intel ITX memory trace format.
- */
-class ITXReader : public MemTraceReader
+class ObjectMatch
 {
-    /** Trace file. */
-    FILE *trace;
-
-    bool codeVirtValid;
-    Addr codeVirtAddr;
-    bool codePhysValid;
-    Addr codePhysAddr;
-
-    int traceFormat;
-
-    enum ITXType {
-        ITXRead,
-        ITXWrite,
-        ITXWriteback,
-        ITXCode,
-        ITXCodeComp
-    };
+  protected:
+    std::vector<std::vector<std::string> > tokens;
+    bool domatch(const std::string &name) const;
 
   public:
-    /**
-     * Construct an ITXReader.
-     */
-    ITXReader(const std::string &name, const std::string &filename);
-
-    /**
-     * Read the next request from the trace. Returns the request in the
-     * provided MemReqPtr and the cycle of the request in the return value.
-     * @param req Return the next request from the trace.
-     * @return ITX traces don't store timing information, return 0
-     */
-    virtual Tick getNextReq(MemReqPtr &req);
+    ObjectMatch();
+    ObjectMatch(const std::string &expression);
+    void setExpression(const std::string &expression);
+    void setExpression(const std::vector<std::string> &expression);
+    bool match(const std::string &name) const
+    {
+        return tokens.empty() ? false : domatch(name);
+    }
 };
 
-#endif //__ITX_READER_HH__
+#endif // __BASE_MATCH_HH__
 

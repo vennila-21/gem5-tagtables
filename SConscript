@@ -59,6 +59,7 @@ base_sources = Split('''
 	base/hybrid_pred.cc
 	base/inifile.cc
 	base/intmath.cc
+	base/match.cc
 	base/misc.cc
 	base/pollevent.cc
 	base/python.cc
@@ -162,6 +163,9 @@ base_sources = Split('''
 	mem/cache/tags/fa_lru.cc
 	mem/cache/tags/iic.cc
 	mem/cache/tags/lru.cc
+	mem/cache/tags/split.cc
+	mem/cache/tags/split_lifo.cc
+	mem/cache/tags/split_lru.cc
 	mem/cache/tags/repl/gen.cc
 	mem/cache/tags/repl/repl.cc
 	mem/functional_mem/functional_memory.cc
@@ -216,6 +220,7 @@ full_system_sources = Split('''
         dev/simconsole.cc
 	dev/disk_image.cc
 	dev/dma.cc
+	dev/etherbus.cc
 	dev/etherdump.cc
 	dev/etherint.cc
 	dev/etherlink.cc
@@ -254,6 +259,7 @@ full_system_sources = Split('''
 	kern/linux/linux_events.cc
 	kern/linux/linux_syscalls.cc
 	kern/linux/linux_system.cc
+	kern/linux/printk.cc
 	kern/tru64/dump_mbuf.cc
 	kern/tru64/printf.cc
 	kern/tru64/tru64_events.cc
@@ -310,7 +316,8 @@ env.Command(Split('''arch/alpha/decoder.cc
 		     arch/alpha/fast_cpu_exec.cc
                      arch/alpha/simple_cpu_exec.cc
                      arch/alpha/full_cpu_exec.cc'''),
-            'arch/alpha/isa_desc',
+            Split('''arch/alpha/isa_desc
+		     arch/isa_parser.py'''),
             '$SRCDIR/arch/isa_parser.py $SOURCE $TARGET.dir arch/alpha')
 
 

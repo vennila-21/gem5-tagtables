@@ -51,39 +51,7 @@ FlagVec flags(NumFlags, false);
 //
 ostream *dprintf_stream = &cerr;
 
-int dprintf_ignore_size;
-vector<string> dprintf_ignore;
-vector<vector<string> > ignore_tokens;
-vector<int> ignore_size;
-
-bool
-dprintf_ignore_name(const string &name)
-{
-    vector<string> name_tokens;
-    tokenize(name_tokens, name, '.');
-    int ntsize = name_tokens.size();
-
-    for (int i = 0; i < dprintf_ignore_size; ++i) {
-        bool match = true;
-        int jstop = ignore_size[i];
-        for (int j = 0; j < jstop; ++j) {
-            if (j >= ntsize)
-                break;
-
-            const string &ignore = ignore_tokens[i][j];
-            if (ignore != "*" && ignore != name_tokens[j]) {
-                match = false;
-                break;
-            }
-        }
-
-        if (match == true)
-            return true;
-    }
-
-    return false;
-}
-
+ObjectMatch ignore;
 
 Log theLog;
 
@@ -184,7 +152,6 @@ PrintfRecord::~PrintfRecord()
     delete &args;
 }
 
-
 void
 PrintfRecord::dump(ostream &os)
 {
@@ -206,29 +173,26 @@ PrintfRecord::dump(ostream &os)
     os.flush();
 }
 
-
-
-RawDataRecord::RawDataRecord(Tick _cycle, const void *_data, int _len)
-    : Record(_cycle), len(_len)
+DataRecord::DataRecord(Tick _cycle, const string &_name,
+                       const void *_data, int _len)
+    : Record(_cycle), name(_name), len(_len)
 {
     data = new uint8_t[len];
     memcpy(data, _data, len);
 }
 
-
-RawDataRecord::~RawDataRecord()
+DataRecord::~DataRecord()
 {
     delete [] data;
 }
 
-
 void
-RawDataRecord::dump(ostream &os)
+DataRecord::dump(ostream &os)
 {
     int c, i, j;
 
     for (i = 0; i < len; i += 16) {
-        ccprintf(os, "%08x  ", i);
+        ccprintf(os, "%d: %s: %08x  ", cycle, name, i);
         c = len - i;
         if (c > 16) c = 16;
 
