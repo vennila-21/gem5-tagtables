@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -299,6 +299,7 @@ SimpleCPU::resetStats()
 void
 SimpleCPU::serialize(ostream &os)
 {
+    BaseCPU::serialize(os);
     SERIALIZE_ENUM(_status);
     SERIALIZE_SCALAR(inst);
     nameOut(os, csprintf("%s.xc", name()));
@@ -312,6 +313,7 @@ SimpleCPU::serialize(ostream &os)
 void
 SimpleCPU::unserialize(Checkpoint *cp, const string &section)
 {
+    BaseCPU::unserialize(cp, section);
     UNSERIALIZE_ENUM(_status);
     UNSERIALIZE_SCALAR(inst);
     xc->unserialize(cp, csprintf("%s.xc", section));
@@ -708,6 +710,7 @@ SimpleCPU::tick()
         comInstEventQueue[0]->serviceEvents(numInst);
 
         // decode the instruction
+    inst = htoa(inst);
         StaticInstPtr<TheISA> si(inst);
 
         traceData = Trace::getInstRecord(curTick, xc, this, si,

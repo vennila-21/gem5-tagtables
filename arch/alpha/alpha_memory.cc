@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,11 @@ using namespace std;
 //
 //  Alpha TLB
 //
+#ifdef DEBUG
+bool uncacheBit39 = false;
+bool uncacheBit40 = false;
+#endif
+
 AlphaTLB::AlphaTLB(const string &name, int s)
     : SimObject(name), size(s), nlu(0)
 {
@@ -87,9 +92,23 @@ AlphaTLB::checkCacheability(MemReqPtr &req)
 {
     // in Alpha, cacheability is controlled by upper-level bits of the
     // physical address
-    if (req->paddr & PA_UNCACHED_BIT) {
+
+    /*
+     * We support having the uncacheable bit in either bit 39 or bit 40.
+     * The Turbolaser platform (and EV5) support having the bit in 39, but
+     * Tsunami (which Linux assumes uses an EV6) generates accesses with
+     * the bit in 40.  So we must check for both, but we have debug flags
+     * to catch a weird case where both are used, which shouldn't happen.
+     */
+
+
+#ifdef ALPHA_TLASER
+    if (req->paddr & PA_UNCACHED_BIT_39) {
+#else
+    if (req->paddr & PA_UNCACHED_BIT_43) {
+#endif
+        // IPR memory space not implemented
         if (PA_IPR_SPACE(req->paddr)) {
-            // IPR memory space not implemented
             if (!req->xc->misspeculating()) {
                 switch (req->paddr) {
                   case ULL(0xFFFFF00188):
@@ -104,6 +123,11 @@ AlphaTLB::checkCacheability(MemReqPtr &req)
         } else {
             // mark request as uncacheable
             req->flags |= UNCACHEABLE;
+
+#ifndef ALPHA_TLASER
+            // Clear bits 42:35 of the physical address (10-2 in Tsunami manual)
+            req->paddr &= PA_UNCACHED_MASK;
+#endif
         }
     }
 }
@@ -290,10 +314,16 @@ AlphaITB::translate(MemReqPtr &req) const
             return ITB_Acv_Fault;
         }
 
-        // Check for "superpage" mapping: when SP<1> is set, and
-        // VA<42:41> == 2, VA<39:13> maps directly to PA<39:13>.
+
+        // VA<42:41> == 2, VA<39:13> maps directly to PA<39:13> for EV5
+        // VA<47:41> == 0x7e, VA<40:13> maps directly to PA<40:13> for EV6
+#ifdef ALPHA_TLASER
         if ((MCSR_SP(ipr[AlphaISA::IPR_MCSR]) & 2) &&
-               VA_SPACE(req->vaddr) == 2) {
+               VA_SPACE_EV5(req->vaddr) == 2) {
+#else
+        if (VA_SPACE_EV6(req->vaddr) == 0x7e) {
+#endif
+
 
             // only valid in kernel mode
             if (ICM_CM(ipr[AlphaISA::IPR_ICM]) != AlphaISA::mode_kernel) {
@@ -303,6 +333,15 @@ AlphaITB::translate(MemReqPtr &req) const
             }
 
             req->paddr = req->vaddr & PA_IMPL_MASK;
+
+#ifndef ALPHA_TLASER
+            // sign extend the physical address properly
+            if (req->paddr & PA_UNCACHED_BIT_40)
+                req->paddr |= ULL(0xf0000000000);
+            else
+                req->paddr &= ULL(0xffffffffff);
+#endif
+
         } else {
             // not a physical address: need to look up pte
             AlphaISA::PTE *pte = lookup(VA_VPN(req->vaddr),
@@ -470,10 +509,13 @@ AlphaDTB::translate(MemReqPtr &req, bool write) const
             return DTB_Fault_Fault;
         }
 
-        // Check for "superpage" mapping: when SP<1> is set, and
-        // VA<42:41> == 2, VA<39:13> maps directly to PA<39:13>.
+        // Check for "superpage" mapping
+#ifdef ALPHA_TLASER
         if ((MCSR_SP(ipr[AlphaISA::IPR_MCSR]) & 2) &&
-            VA_SPACE(req->vaddr) == 2) {
+               VA_SPACE_EV5(req->vaddr) == 2) {
+#else
+        if (VA_SPACE_EV6(req->vaddr) == 0x7e) {
+#endif
 
             // only valid in kernel mode
             if (DTB_CM_CM(ipr[AlphaISA::IPR_DTB_CM]) !=
@@ -484,6 +526,15 @@ AlphaDTB::translate(MemReqPtr &req, bool write) const
             }
 
             req->paddr = req->vaddr & PA_IMPL_MASK;
+
+#ifndef ALPHA_TLASER
+            // sign extend the physical address properly
+            if (req->paddr & PA_UNCACHED_BIT_40)
+                req->paddr |= ULL(0xf0000000000);
+            else
+                req->paddr &= ULL(0xffffffffff);
+#endif
+
         } else {
             if (write)
                 write_accesses++;

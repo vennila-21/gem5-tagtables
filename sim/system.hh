@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@
 
 class MemoryController;
 class PhysicalMemory;
+class Platform;
 class RemoteGDB;
 class GDBListener;
 
@@ -87,6 +88,7 @@ class System : public SimObject
     const uint64_t init_param;
     MemoryController *memCtrl;
     PhysicalMemory *physmem;
+    Platform *platform;
     bool bin;
     std::vector<string> binned_fns;
 

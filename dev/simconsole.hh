@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,8 +42,13 @@
 #include "sim/sim_object.hh"
 
 class ConsoleListener;
+class Uart;
+
 class SimConsole : public SimObject
 {
+  public:
+    Uart *uart;
+
   protected:
     class Event : public PollEvent
     {
@@ -62,8 +67,6 @@ class SimConsole : public SimObject
     int number;
     int in_fd;
     int out_fd;
-
-  protected:
     ConsoleListener *listener;
 
   public:
@@ -94,16 +97,6 @@ class SimConsole : public SimObject
     void write(uint8_t c) { write(&c, 1); }
     size_t write(const uint8_t *buf, size_t len);
 
-    void configTerm();
-
-  protected:
-    // interrupt status/enable
-    int _status;
-    int _enable;
-
-    // interrupt handle
-    IntrControl *intr;
-
   public:
     /////////////////
     // OS interface
@@ -126,22 +119,10 @@ class SimConsole : public SimObject
     uint64_t console_in();
 
     // Send a character to the console
-    void out(char c, bool raise_int = true);
+    void out(char c);
 
-    enum {
-        TransmitInterrupt = 1,
-        ReceiveInterrupt = 2
-    };
-
-    // Read the current interrupt status of this console.
-    int intStatus() { return _status; }
-
-    // Set the interrupt enable bits.
-    int clearInt(int i);
-    void raiseInt(int i);
-
-    void initInt(IntrControl *i);
-    void setInt(int bits);
+    //Ask the console if data is available
+    bool dataAvailable() { return !rxbuf.empty(); }
 
     virtual void serialize(std::ostream &os);
     virtual void unserialize(Checkpoint *cp, const std::string &section);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,7 @@
 #include "cpu/base_cpu.hh"
 #include "cpu/exec_context.hh"
 #include "dev/alpha_console.hh"
-#include "dev/console.hh"
+#include "dev/simconsole.hh"
 #include "dev/simple_disk.hh"
 #include "dev/tlaser_clock.hh"
 #include "mem/bus/bus.hh"
@@ -49,11 +49,14 @@
 #include "mem/functional_mem/memory_control.hh"
 #include "sim/builder.hh"
 #include "sim/system.hh"
+#include "dev/tsunami_io.hh"
+#include "sim/sim_object.hh"
+#include "targetarch/byte_swap.hh"
 
 using namespace std;
 
 AlphaConsole::AlphaConsole(const string &name, SimConsole *cons, SimpleDisk *d,
-                           System *system, BaseCPU *cpu, TlaserClock *clock,
+                           System *system, BaseCPU *cpu, Platform *platform,
                            int num_cpus, MemoryController *mmu, Addr a,
                            HierParams *hier, Bus *bus)
     : PioDevice(name), disk(d), console(cons), addr(a)
@@ -66,9 +69,7 @@ AlphaConsole::AlphaConsole(const string &name, SimConsole *cons, SimpleDisk *d,
         pioInterface->addAddrRange(addr, addr + size);
     }
 
-    consoleData = new uint8_t[size];
-    memset(consoleData, 0, size);
-
+    alphaAccess = new AlphaAccess;
     alphaAccess->last_offset = size - 1;
     alphaAccess->kernStart = system->getKernelStart();
     alphaAccess->kernEnd = system->getKernelEnd();
@@ -78,44 +79,104 @@ AlphaConsole::AlphaConsole(const string &name, SimConsole *cons, SimpleDisk *d,
     alphaAccess->numCPUs = num_cpus;
     alphaAccess->mem_size = system->physmem->size();
     alphaAccess->cpuClock = cpu->getFreq() / 1000000;
-    alphaAccess->intrClockFrequency = clock->frequency();
-
+        alphaAccess->intrClockFrequency = platform->intrFrequency();
     alphaAccess->diskUnit = 1;
+
+    alphaAccess->diskCount = 0;
+    alphaAccess->diskPAddr = 0;
+    alphaAccess->diskBlock = 0;
+    alphaAccess->diskOperation = 0;
+    alphaAccess->outputChar = 0;
+    alphaAccess->inputChar = 0;
+    alphaAccess->bootStrapImpure = 0;
+    alphaAccess->bootStrapCPU = 0;
+    alphaAccess->align2 = 0;
 }
 
 Fault
 AlphaConsole::read(MemReqPtr &req, uint8_t *data)
 {
     memset(data, 0, req->size);
-    uint64_t val;
 
-    Addr daddr = req->paddr - addr;
+    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
 
-    switch (daddr) {
-      case offsetof(AlphaAccess, inputChar):
-        val = console->console_in();
-        break;
+    switch (req->size)
+    {
+        case sizeof(uint32_t):
+            DPRINTF(AlphaConsole, "read: offset=%#x val=%#x\n", daddr, *(uint32_t*)data);
+            switch (daddr)
+            {
+                case offsetof(AlphaAccess, last_offset):
+                    *(uint32_t*)data = alphaAccess->last_offset;
+                    break;
+                case offsetof(AlphaAccess, version):
+                    *(uint32_t*)data = alphaAccess->version;
+                    break;
+                case offsetof(AlphaAccess, numCPUs):
+                    *(uint32_t*)data = alphaAccess->numCPUs;
+                    break;
+                case offsetof(AlphaAccess, bootStrapCPU):
+                    *(uint32_t*)data = alphaAccess->bootStrapCPU;
+                    break;
+                case offsetof(AlphaAccess, intrClockFrequency):
+                    *(uint32_t*)data = alphaAccess->intrClockFrequency;
+                    break;
+                default:
+                    // Old console code read in everyting as a 32bit int
+                    *(uint32_t*)data = *(uint32_t*)(consoleData + daddr);
 
-      default:
-        val = *(uint64_t *)(consoleData + daddr);
-        break;
+            }
+            break;
+        case sizeof(uint64_t):
+            DPRINTF(AlphaConsole, "read: offset=%#x val=%#x\n", daddr, *(uint64_t*)data);
+            switch (daddr)
+            {
+                case offsetof(AlphaAccess, inputChar):
+                    *(uint64_t*)data = console->console_in();
+                    break;
+                case offsetof(AlphaAccess, cpuClock):
+                    *(uint64_t*)data = alphaAccess->cpuClock;
+                    break;
+                case offsetof(AlphaAccess, mem_size):
+                    *(uint64_t*)data = alphaAccess->mem_size;
+                    break;
+                case offsetof(AlphaAccess, kernStart):
+                    *(uint64_t*)data = alphaAccess->kernStart;
+                    break;
+                case offsetof(AlphaAccess, kernEnd):
+                    *(uint64_t*)data = alphaAccess->kernEnd;
+                    break;
+                case offsetof(AlphaAccess, entryPoint):
+                    *(uint64_t*)data = alphaAccess->entryPoint;
+                    break;
+                case offsetof(AlphaAccess, diskUnit):
+                    *(uint64_t*)data = alphaAccess->diskUnit;
+                    break;
+                case offsetof(AlphaAccess, diskCount):
+                    *(uint64_t*)data = alphaAccess->diskCount;
+                    break;
+                case offsetof(AlphaAccess, diskPAddr):
+                    *(uint64_t*)data = alphaAccess->diskPAddr;
+                    break;
+                case offsetof(AlphaAccess, diskBlock):
+                    *(uint64_t*)data = alphaAccess->diskBlock;
+                    break;
+                case offsetof(AlphaAccess, diskOperation):
+                    *(uint64_t*)data = alphaAccess->diskOperation;
+                    break;
+                case offsetof(AlphaAccess, outputChar):
+                    *(uint64_t*)data = alphaAccess->outputChar;
+                    break;
+                case offsetof(AlphaAccess, bootStrapImpure):
+                    *(uint64_t*)data = alphaAccess->bootStrapImpure;
+                    break;
+                default:
+                    panic("Unknown 64bit access, %#x\n", daddr);
+            }
+            break;
+        default:
+            return Machine_Check_Fault;
     }
-
-    DPRINTF(AlphaConsole, "read: offset=%#x val=%#x\n", daddr, val);
-
-    switch (req->size) {
-      case sizeof(uint32_t):
-        *(uint32_t *)data = (uint32_t)val;
-        break;
-
-      case sizeof(uint64_t):
-        *(uint64_t *)data = val;
-        break;
-
-      default:
-        return Machine_Check_Fault;
-    }
-
 
     return No_Fault;
 }
@@ -137,7 +198,7 @@ AlphaConsole::write(MemReqPtr &req, const uint8_t *data)
         return Machine_Check_Fault;
     }
 
-    Addr daddr = req->paddr - addr;
+    Addr daddr = req->paddr - (addr & PA_IMPL_MASK);
     ExecContext *other_xc;
 
     switch (daddr) {
@@ -167,7 +228,7 @@ AlphaConsole::write(MemReqPtr &req, const uint8_t *data)
         break;
 
       case offsetof(AlphaAccess, outputChar):
-        console->out((char)(val & 0xff), false);
+        console->out((char)(val & 0xff));
         break;
 
       case offsetof(AlphaAccess, bootStrapImpure):
@@ -266,7 +327,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(AlphaConsole)
     Param<Addr> addr;
     SimObjectParam<System *> system;
     SimObjectParam<BaseCPU *> cpu;
-    SimObjectParam<TlaserClock *> clock;
+    SimObjectParam<Platform *> platform;
     SimObjectParam<Bus*> io_bus;
     SimObjectParam<HierParams *> hier;
 
@@ -281,7 +342,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(AlphaConsole)
     INIT_PARAM(addr, "Device Address"),
     INIT_PARAM(system, "system object"),
     INIT_PARAM(cpu, "Processor"),
-    INIT_PARAM(clock, "Turbolaser Clock"),
+    INIT_PARAM(platform, "platform"),
     INIT_PARAM_DFLT(io_bus, "The IO Bus to attach to", NULL),
     INIT_PARAM_DFLT(hier, "Hierarchy global variables", &defaultHierParams)
 
@@ -290,7 +351,7 @@ END_INIT_SIM_OBJECT_PARAMS(AlphaConsole)
 CREATE_SIM_OBJECT(AlphaConsole)
 {
     return new AlphaConsole(getInstanceName(), sim_console, disk,
-                            system, cpu, clock, num_cpus, mmu,
+                            system, cpu, platform, num_cpus, mmu,
                             addr, hier, io_bus);
 }
 

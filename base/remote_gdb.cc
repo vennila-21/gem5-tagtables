@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -332,22 +332,27 @@ RemoteGDB::acc(Addr va, size_t len)
     last_va = alpha_round_page(va + len);
 
     do  {
-        if (va < ALPHA_K0SEG_BASE) {
-            DPRINTF(GDBAcc, "acc:   Mapping is invalid %#x < K0SEG\n", va);
-            return false;
-        }
-
-        if (va < ALPHA_K1SEG_BASE) {
+        if (va >= ALPHA_K0SEG_BASE && va < ALPHA_K1SEG_BASE) {
             if (va < (ALPHA_K0SEG_BASE + pmem->size())) {
                 DPRINTF(GDBAcc, "acc:   Mapping is valid  K0SEG <= "
                         "%#x < K0SEG + size\n", va);
                 return true;
             } else {
-                DPRINTF(GDBAcc, "acc:   Mapping is invalid %#x < K0SEG\n",
+                DPRINTF(GDBAcc, "acc:   Mapping invalid %#x > K0SEG + size\n",
                         va);
                 return false;
             }
         }
+
+    /**
+     * This code says that all accesses to palcode (instruction and data)
+     * are valid since there isn't a va->pa mapping because palcode is
+     * accessed physically. At some point this should probably be cleaned up
+     * but there is no easy way to do it.
+     */
+
+        if (PC_PAL(va) || va < 0x10000)
+            return true;
 
         Addr ptbr = context->regs.ipr[AlphaISA::IPR_PALtemp20];
         pte = kernel_pte_lookup(pmem, ptbr, va);

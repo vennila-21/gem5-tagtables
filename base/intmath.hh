@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001, 2003 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -118,6 +118,22 @@ FloorLog2(int64_t x)
     assert(x > 0);
     return FloorLog2((uint64_t)x);
 }
+
+#if defined(__APPLE__)
+int
+FloorLog2(size_t x)
+{
+    assert(x > 0);
+    assert(sizeof(size_t) == 4 || sizeof(size_t) == 8);
+
+    // It's my hope that this is optimized away?
+    if (sizeof(size_t) == 4)
+        return FloorLog2((uint32_t)x);
+     else if (sizeof(size_t) == 8)
+        return FloorLog2((uint64_t)x);
+
+}
+#endif
 
 template <class T>
 inline int

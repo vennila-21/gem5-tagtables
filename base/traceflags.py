@@ -57,12 +57,12 @@ baseFlags = [
     'Mbox',
     'PCIA',
     'PCIDEV',
+    'PciConfigAll',
     'ISP',
     'BADADDR',
     'Console',
     'ConsolePoll',
     'ConsoleVerbose',
-    'TlaserUart',
     'AlphaConsole',
     'Flow',
     'Interrupt',
@@ -74,6 +74,10 @@ baseFlags = [
     'EthernetPIO',
     'EthernetDMA',
     'EthernetData',
+    'EthernetDesc',
+    'EthernetIntr',
+    'EthernetSM',
+    'EthernetCksum',
     'GDBMisc',
     'GDBAcc',
     'GDBRead',
@@ -105,7 +109,11 @@ baseFlags = [
     'Context',
     'Config',
     'Sampler',
-    'WriteBarrier'
+    'WriteBarrier',
+    'IdeCtrl',
+    'IdeDisk',
+    'Tsunami',
+    'Uart'
     ]
 
 #
@@ -120,7 +128,8 @@ compoundFlagMap = {
     'GDBAll' : [ 'GDBMisc', 'GDBAcc', 'GDBRead', 'GDBWrite', 'GDBSend', 'GDBRecv', 'GDBExtra' ],
     'ScsiAll' : [ 'ScsiDisk', 'ScsiCtrl', 'ScsiNone' ],
     'DiskImageAll' : [ 'DiskImage', 'DiskImageRead', 'DiskImageWrite' ],
-    'EthernetAll' : [ 'Ethernet', 'EthernetPIO', 'EthernetDMA', 'EthernetData' ]
+    'EthernetAll' : [ 'Ethernet', 'EthernetPIO', 'EthernetDMA', 'EthernetData' , 'EthernetDesc', 'EthernetIntr', 'EthernetSM', 'EthernetCksum' ],
+    'IdeAll' : [ 'IdeCtrl', 'IdeDisk' ]
 }
 
 #############################################################
