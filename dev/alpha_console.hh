@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,11 +37,12 @@
 #include "dev/alpha_access.h"
 #include "dev/io_device.hh"
 #include "sim/host.hh"
+#include "sim/sim_object.hh"
 
 class BaseCPU;
 class SimConsole;
 class System;
-class TlaserClock;
+class Platform;
 class SimpleDisk;
 
 /*
@@ -89,7 +90,7 @@ class AlphaConsole : public PioDevice
   public:
     /** Standard Constructor */
     AlphaConsole(const std::string &name, SimConsole *cons, SimpleDisk *d,
-                 System *system, BaseCPU *cpu, TlaserClock *clock,
+                 System *system, BaseCPU *cpu, Platform *platform,
                  int num_cpus, MemoryController *mmu, Addr addr,
                  HierParams *hier, Bus *bus);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -90,6 +90,31 @@ SymbolTable::load(const string &filename)
     }
 
     file.close();
+
+    return true;
+}
+
+bool
+SymbolTable::findNearestSymbol(Addr address, string &symbol) const
+{
+    ATable::const_iterator i = addrTable.lower_bound(address);
+
+    // check for PALCode
+    if (address & 0x1)
+        return false;
+
+    // first check for the end
+    if (i == addrTable.end())
+        i--;
+    else if (i == addrTable.begin() && (*i).first != address)
+        return false;
+    else if ((*i).first != address)
+        i--;
+
+    symbol = (*i).second;
+
+    if (address != (*i).first)
+        symbol += csprintf("+%d", address - (*i).first);
 
     return true;
 }

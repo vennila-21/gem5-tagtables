@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2001-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@
 #include "sim/host.hh"
 #include "sim/sim_object.hh"
 #include "sim/stats.hh"
+#include "sim/param.hh"
 
 using namespace std;
 
@@ -168,3 +169,5 @@ SimObject::serializeAll(ostream &os)
         obj->serialize(os);
    }
 }
+
+DEFINE_SIM_OBJECT_CLASS_NAME("SimObject", SimObject)

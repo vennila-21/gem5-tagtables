@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -96,20 +96,20 @@ vtophys(ExecContext *xc, Addr vaddr)
 {
     Addr ptbr = xc->regs.ipr[AlphaISA::IPR_PALtemp20];
     Addr paddr = 0;
-    if (PC_PAL(vaddr)) {
-        paddr = vaddr & ~ULL(1);
-    } else if (!ptbr) {
-        paddr = vaddr;
-    } else {
+//    if (PC_PAL(vaddr)) {
+//	paddr = vaddr & ~ULL(1);
+//    } else {
         if (vaddr >= ALPHA_K0SEG_BASE && vaddr <= ALPHA_K0SEG_END) {
             paddr = ALPHA_K0SEG_TO_PHYS(vaddr);
+        } else if (!ptbr) {
+            paddr = vaddr;
         } else {
             Addr pte = kernel_pte_lookup(xc->physmem, ptbr, vaddr);
             uint64_t entry = xc->physmem->phys_read_qword(pte);
             if (pte && entry_valid(entry))
                 paddr = PMAP_PTE_PA(entry) | (vaddr & PGOFSET);
         }
-    }
+//    }
 
     DPRINTF(VtoPhys, "vtophys(%#x) -> %#x\n", vaddr, paddr);
 

@@ -1,30 +1,5 @@
-/*
- * Copyright (c) 2003 The Regents of The University of Michigan
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met: redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer;
- * redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution;
- * neither the name of the copyright holders nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+/* $Id$ */
+
 
 /* @file
  * User Console Definitions
@@ -49,6 +24,7 @@
 #include "mem/functional_mem/memory_control.hh"
 #include "sim/builder.hh"
 #include "targetarch/ev5.hh"
+#include "dev/platform.hh"
 
 using namespace std;
 
@@ -76,7 +52,7 @@ SimConsole::SimConsole(const string &name, const string &file, int num)
 #if TRACING_ON == 1
       linebuf(16384),
 #endif
-      _status(0), _enable(0), intr(NULL)
+      _status(0), _enable(0), intr(NULL), platform(NULL)
 {
     if (!file.empty())
         outfile = new ofstream(file.c_str());
@@ -322,8 +298,8 @@ SimConsole::clearInt(int i)
 {
     int old = _status;
     _status &= ~i;
-    if (MaskStatus(old, _enable) != MaskStatus(_status, _enable) && intr)
-        intr->clear(TheISA::INTLEVEL_IRQ0);
+    //if (MaskStatus(old, _enable) != MaskStatus(_status, _enable) && intr)
+        platform->clearConsoleInt();
 
     return old;
 }
@@ -331,10 +307,10 @@ SimConsole::clearInt(int i)
 void
 SimConsole::raiseInt(int i)
 {
-    int old = _status;
+    //int old = _status;
     _status |= i;
-    if (MaskStatus(old, _enable) != MaskStatus(_status, _enable) && intr)
-        intr->post(TheISA::INTLEVEL_IRQ0);
+    //if (MaskStatus(old, _enable) != MaskStatus(_status, _enable) && intr)
+        platform->postConsoleInt();
 }
 
 void
@@ -357,23 +333,34 @@ SimConsole::setInt(int bits)
     old = _enable;
     _enable |= bits;
 
-    if (MaskStatus(_status, old) != MaskStatus(_status, _enable) && intr) {
+    //if (MaskStatus(_status, old) != MaskStatus(_status, _enable) && intr) {
+    if (intr) {
         if (MaskStatus(_status, _enable))
-            intr->post(TheISA::INTLEVEL_IRQ0);
+            platform->postConsoleInt();
         else
-            intr->clear(TheISA::INTLEVEL_IRQ0);
+            platform->clearConsoleInt();
     }
 }
 
+void
+SimConsole::setPlatform(Platform *p)
+{
+    platform = p;
+    platform->cons = this;
+}
 
 void
 SimConsole::serialize(ostream &os)
 {
+    SERIALIZE_SCALAR(_status);
+    SERIALIZE_SCALAR(_enable);
 }
 
 void
 SimConsole::unserialize(Checkpoint *cp, const std::string &section)
 {
+    UNSERIALIZE_SCALAR(_status);
+    UNSERIALIZE_SCALAR(_enable);
 }
 
 
@@ -381,6 +368,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(SimConsole)
 
     SimObjectParam<ConsoleListener *> listener;
     SimObjectParam<IntrControl *> intr_control;
+    SimObjectParam<Platform *> platform;
     Param<string> output;
     Param<bool> append_name;
     Param<int> number;
@@ -391,6 +379,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(SimConsole)
 
     INIT_PARAM(listener, "console listener"),
     INIT_PARAM(intr_control, "interrupt controller"),
+    INIT_PARAM(platform, "platform"),
     INIT_PARAM_DFLT(output, "file to dump output to", ""),
     INIT_PARAM_DFLT(append_name, "append name() to filename", true),
     INIT_PARAM_DFLT(number, "console number", 0)
@@ -413,8 +402,9 @@ CREATE_SIM_OBJECT(SimConsole)
     SimConsole *console = new SimConsole(getInstanceName(), filename, number);
     ((ConsoleListener *)listener)->add(console);
     ((SimConsole *)console)->initInt(intr_control);
-    ((SimConsole *)console)->setInt(SimConsole::TransmitInterrupt |
-                                    SimConsole::ReceiveInterrupt);
+    ((SimConsole *)console)->setPlatform(platform);
+    //((SimConsole *)console)->setInt(SimConsole::TransmitInterrupt |
+    //                                SimConsole::ReceiveInterrupt);
 
     return console;
 }
