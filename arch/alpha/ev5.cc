@@ -9,14 +9,13 @@
 #include "cpu/base_cpu.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/fast_cpu/fast_cpu.hh"
+#include "kern/kernel_stats.hh"
 #include "sim/debug.hh"
 #include "sim/sim_events.hh"
 
 #ifdef FULL_SYSTEM
 
-#ifndef SYSTEM_EV5
-#error This code is only valid for EV5 systems
-#endif
+using namespace EV5;
 
 ////////////////////////////////////////////////////////////////////////
 //
@@ -95,22 +94,22 @@ AlphaISA::initIPRs(RegFile *regs)
     uint64_t *ipr = regs->ipr;
 
     bzero((char *)ipr, NumInternalProcRegs * sizeof(InternalProcReg));
-    ipr[IPR_PAL_BASE] = PAL_BASE;
+    ipr[IPR_PAL_BASE] = PalBase;
     ipr[IPR_MCSR] = 0x6;
 }
 
 
-template <class XC>
+template <class CPU>
 void
-AlphaISA::processInterrupts(XC *xc)
+AlphaISA::processInterrupts(CPU *cpu)
 {
     //Check if there are any outstanding interrupts
     //Handle the interrupts
     int ipl = 0;
     int summary = 0;
-    IntReg *ipr = xc->getIprPtr();
+    IntReg *ipr = cpu->getIprPtr();
 
-    check_interrupts = 0;
+    cpu->checkInterrupts = false;
 
     if (ipr[IPR_ASTRR])
         panic("asynchronous traps not implemented\n");
@@ -126,7 +125,7 @@ AlphaISA::processInterrupts(XC *xc)
         }
     }
 
-    uint64_t interrupts = xc->intr_status();
+    uint64_t interrupts = cpu->intr_status();
 
     if (interrupts) {
         for (int i = INTLEVEL_EXTERNAL_MIN;
@@ -142,32 +141,32 @@ AlphaISA::processInterrupts(XC *xc)
     if (ipl && ipl > ipr[IPR_IPLR]) {
         ipr[IPR_ISR] = summary;
         ipr[IPR_INTID] = ipl;
-        xc->trap(Interrupt_Fault);
+        cpu->trap(Interrupt_Fault);
         DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
                 ipr[IPR_IPLR], ipl, summary);
     }
 
 }
 
-template <class XC>
+template <class CPU>
 void
-AlphaISA::zeroRegisters(XC *xc)
+AlphaISA::zeroRegisters(CPU *cpu)
 {
     // Insure ISA semantics
     // (no longer very clean due to the change in setIntReg() in the
     // cpu model.  Consider changing later.)
-    xc->xc->setIntReg(ZeroReg, 0);
-    xc->xc->setFloatRegDouble(ZeroReg, 0.0);
+    cpu->xc->setIntReg(ZeroReg, 0);
+    cpu->xc->setFloatRegDouble(ZeroReg, 0.0);
 }
 
 void
 ExecContext::ev5_trap(Fault fault)
 {
-    DPRINTF(Fault, "Fault %s\n", FaultName(fault));
+    DPRINTF(Fault, "Fault %s at PC: %#x\n", FaultName(fault), regs.pc);
     cpu->recordEvent(csprintf("Fault %s", FaultName(fault)));
 
     assert(!misspeculating());
-    kernelStats.fault(fault);
+    kernelStats->fault(fault);
 
     if (fault == Arithmetic_Fault)
         panic("Arithmetic traps are unimplemented!");
@@ -175,16 +174,16 @@ ExecContext::ev5_trap(Fault fault)
     AlphaISA::InternalProcReg *ipr = regs.ipr;
 
     // exception restart address
-    if (fault != Interrupt_Fault || !PC_PAL(regs.pc))
+    if (fault != Interrupt_Fault || !inPalMode())
         ipr[AlphaISA::IPR_EXC_ADDR] = regs.pc;
 
     if (fault == Pal_Fault || fault == Arithmetic_Fault /* ||
-        fault == Interrupt_Fault && !PC_PAL(regs.pc) */) {
+        fault == Interrupt_Fault && !inPalMode() */) {
         // traps...  skip faulting instruction
         ipr[AlphaISA::IPR_EXC_ADDR] += 4;
     }
 
-    if (!PC_PAL(regs.pc))
+    if (!inPalMode())
         AlphaISA::swap_palshadow(&regs, true);
 
     regs.pc = ipr[AlphaISA::IPR_PAL_BASE] + AlphaISA::fault_addr[fault];
@@ -219,25 +218,23 @@ AlphaISA::intr_post(RegFile *regs, Fault fault, Addr pc)
     // that's it! (orders of magnitude less painful than x86)
 }
 
-bool AlphaISA::check_interrupts = false;
-
 Fault
 ExecContext::hwrei()
 {
     uint64_t *ipr = regs.ipr;
 
-    if (!PC_PAL(regs.pc))
+    if (!inPalMode())
         return Unimplemented_Opcode_Fault;
 
     setNextPC(ipr[AlphaISA::IPR_EXC_ADDR]);
 
     if (!misspeculating()) {
-        kernelStats.hwrei();
+        kernelStats->hwrei();
 
         if ((ipr[AlphaISA::IPR_EXC_ADDR] & 1) == 0)
             AlphaISA::swap_palshadow(&regs, false);
 
-        AlphaISA::check_interrupts = true;
+        cpu->checkInterrupts = true;
     }
 
     // FIXME: XXX check for interrupts? XXX
@@ -415,7 +412,7 @@ ExecContext::setIpr(int idx, uint64_t val)
         // write entire quad w/ no side-effect
         old = ipr[idx];
         ipr[idx] = val;
-        kernelStats.context(old, val);
+        kernelStats->context(old, val);
         break;
 
       case AlphaISA::IPR_DTB_PTE:
@@ -442,11 +439,14 @@ ExecContext::setIpr(int idx, uint64_t val)
 
         // only write least significant five bits - interrupt level
         ipr[idx] = val & 0x1f;
-        kernelStats.swpipl(ipr[idx]);
+        kernelStats->swpipl(ipr[idx]);
         break;
 
       case AlphaISA::IPR_DTB_CM:
-        kernelStats.mode((val & 0x18) != 0);
+        if (val & 0x18)
+            kernelStats->mode(Kernel::user);
+        else
+            kernelStats->mode(Kernel::kernel);
 
       case AlphaISA::IPR_ICM:
         // only write two mode bits - processor mode
@@ -622,7 +622,7 @@ ExecContext::setIpr(int idx, uint64_t val)
 bool
 ExecContext::simPalCheck(int palFunc)
 {
-    kernelStats.callpal(palFunc);
+    kernelStats->callpal(palFunc);
 
     switch (palFunc) {
       case PAL::halt:

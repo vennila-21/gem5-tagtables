@@ -42,12 +42,12 @@ class BaseCPU;
 
 #ifdef FULL_SYSTEM
 
-#include "targetarch/alpha_memory.hh"
-class MemoryController;
-
-#include "kern/kernel_stats.hh"
 #include "sim/system.hh"
-#include "sim/sw_context.hh"
+#include "targetarch/alpha_memory.hh"
+
+class MemoryController;
+class StaticInstBase;
+namespace Kernel { class Binning; class Statistics; }
 
 #else // !FULL_SYSTEM
 
@@ -105,11 +105,6 @@ class ExecContext
     /// Set the status to Halted.
     void halt();
 
-#ifdef FULL_SYSTEM
-  public:
-    KernelStats kernelStats;
-#endif
-
   public:
     RegFile regs;	// correct-path register context
 
@@ -127,7 +122,6 @@ class ExecContext
     int cpu_id;
 
 #ifdef FULL_SYSTEM
-
     FunctionalMemory *mem;
     AlphaITB *itb;
     AlphaDTB *dtb;
@@ -136,10 +130,15 @@ class ExecContext
     // the following two fields are redundant, since we can always
     // look them up through the system pointer, but we'll leave them
     // here for now for convenience
-    MemoryController *memCtrl;
+    MemoryController *memctrl;
     PhysicalMemory *physmem;
 
-    SWContext *swCtx;
+    Kernel::Binning *kernelBinning;
+    Kernel::Statistics *kernelStats;
+    bool bin;
+    bool fnbin;
+    void execute(const StaticInstBase *inst);
+
 #else
     Process *process;
 
@@ -185,7 +184,7 @@ class ExecContext
     ExecContext(BaseCPU *_cpu, int _thread_num, FunctionalMemory *_mem,
                 int _asid);
 #endif
-    virtual ~ExecContext() {}
+    virtual ~ExecContext();
 
     virtual void takeOverFrom(ExecContext *oldContext);
 
@@ -197,8 +196,8 @@ class ExecContext
 #ifdef FULL_SYSTEM
     bool validInstAddr(Addr addr) { return true; }
     bool validDataAddr(Addr addr) { return true; }
-    int getInstAsid() { return ITB_ASN_ASN(regs.ipr[TheISA::IPR_ITB_ASN]); }
-    int getDataAsid() { return DTB_ASN_ASN(regs.ipr[TheISA::IPR_DTB_ASN]); }
+    int getInstAsid() { return regs.instAsid(); }
+    int getDataAsid() { return regs.dataAsid(); }
 
     Fault translateInstReq(MemReqPtr &req)
     {
@@ -411,7 +410,7 @@ class ExecContext
     int readIntrFlag() { return regs.intrflag; }
     void setIntrFlag(int val) { regs.intrflag = val; }
     Fault hwrei();
-    bool inPalMode() { return PC_PAL(regs.pc); }
+    bool inPalMode() { return AlphaISA::PcPAL(regs.pc); }
     void ev5_trap(Fault fault);
     bool simPalCheck(int palFunc);
 #endif

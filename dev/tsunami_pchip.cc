@@ -53,7 +53,7 @@ TsunamiPChip::TsunamiPChip(const string &name, Tsunami *t, Addr a,
                            Bus *bus, Tick pio_latency)
     : PioDevice(name), addr(a), tsunami(t)
 {
-    mmu->add_child(this, Range<Addr>(addr, addr + size));
+    mmu->add_child(this, RangeSize(addr, size));
 
     for (int i = 0; i < 4; i++) {
         wsba[i] = 0;
@@ -64,7 +64,7 @@ TsunamiPChip::TsunamiPChip(const string &name, Tsunami *t, Addr a,
     if (bus) {
         pioInterface = newPioInterface(name, hier, bus, this,
                                       &TsunamiPChip::cacheAccess);
-        pioInterface->addAddrRange(addr, addr + size - 1);
+        pioInterface->addAddrRange(RangeSize(addr, size));
         pioLatency = pio_latency * bus->clockRatio;
     }
 
@@ -82,7 +82,7 @@ TsunamiPChip::read(MemReqPtr &req, uint8_t *data)
     DPRINTF(Tsunami, "read  va=%#x size=%d\n",
             req->vaddr, req->size);
 
-    Addr daddr = (req->paddr - (addr & PA_IMPL_MASK)) >> 6;
+    Addr daddr = (req->paddr - (addr & EV5::PAddrImplMask)) >> 6;
 
     switch (req->size) {
 
@@ -171,7 +171,7 @@ TsunamiPChip::write(MemReqPtr &req, const uint8_t *data)
     DPRINTF(Tsunami, "write - va=%#x size=%d \n",
             req->vaddr, req->size);
 
-    Addr daddr = (req->paddr - (addr & PA_IMPL_MASK)) >> 6;
+    Addr daddr = (req->paddr - (addr & EV5::PAddrImplMask)) >> 6;
 
     switch (req->size) {
 

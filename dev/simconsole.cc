@@ -45,12 +45,11 @@
 #include "base/misc.hh"
 #include "base/socket.hh"
 #include "base/trace.hh"
+#include "dev/platform.hh"
 #include "dev/simconsole.hh"
+#include "dev/uart.hh"
 #include "mem/functional_mem/memory_control.hh"
 #include "sim/builder.hh"
-#include "targetarch/ev5.hh"
-#include "dev/uart.hh"
-#include "dev/platform.hh"
 
 using namespace std;
 
@@ -72,27 +71,22 @@ SimConsole::Event::process(int revent)
         cons->detach();
 }
 
-SimConsole::SimConsole(const string &name, const string &file, int num)
+SimConsole::SimConsole(const string &name, std::ostream *os, int num)
     : SimObject(name), event(NULL), number(num), in_fd(-1), out_fd(-1),
-      listener(NULL), txbuf(16384), rxbuf(16384), outfile(NULL)
+      listener(NULL), txbuf(16384), rxbuf(16384), outfile(os)
 #if TRACING_ON == 1
       , linebuf(16384)
 #endif
 {
-    if (!file.empty())
-        outfile = new ofstream(file.c_str());
-
     if (outfile)
         outfile->setf(ios::unitbuf);
-
 }
 
 SimConsole::~SimConsole()
 {
     close();
-
     if (outfile)
-        delete outfile;
+        closeOutputStream(outfile);
 }
 
 void
@@ -311,7 +305,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(SimConsole)
 
     INIT_PARAM(listener, "console listener"),
     INIT_PARAM(intr_control, "interrupt controller"),
-    INIT_PARAM_DFLT(output, "file to dump output to", ""),
+    INIT_PARAM(output, "file to dump output to"),
     INIT_PARAM_DFLT(append_name, "append name() to filename", true),
     INIT_PARAM_DFLT(number, "console number", 0)
 
@@ -319,18 +313,18 @@ END_INIT_SIM_OBJECT_PARAMS(SimConsole)
 
 CREATE_SIM_OBJECT(SimConsole)
 {
-    string filename = output;
-    if (filename.empty()) {
-        if (!outputDirectory.empty())
-            filename = outputDirectory + getInstanceName();
+    string filename;
+
+    if (!output.isValid()) {
+        filename = getInstanceName();
+    } else if (append_name) {
+        filename = (string)output + "." + getInstanceName();
     } else {
-        if (append_name)
-            filename += "." + getInstanceName();
-        if (!outputDirectory.empty())
-            filename = outputDirectory + filename;
+        filename = output;
     }
 
-    SimConsole *console = new SimConsole(getInstanceName(), filename, number);
+    SimConsole *console = new SimConsole(getInstanceName(),
+                                         makeOutputStream(filename), number);
     ((ConsoleListener *)listener)->add(console);
 
     return console;

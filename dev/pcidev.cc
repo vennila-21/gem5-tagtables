@@ -50,36 +50,38 @@
 
 using namespace std;
 
-PciDev::PciDev(const string &name, MemoryController *mmu, PciConfigAll *cf,
-               PciConfigData *cd, uint32_t bus, uint32_t dev, uint32_t func)
-    : DmaDevice(name), mmu(mmu), configSpace(cf), configData(cd), busNum(bus),
-      deviceNum(dev), functionNum(func)
+PciDev::PciDev(Params *p)
+    : DmaDevice(p->name), _params(p), plat(p->plat), configData(p->configData)
 {
     // copy the config data from the PciConfigData object
-    if (cd) {
-        memcpy(config.data, cd->config.data, sizeof(config.data));
-        memcpy(BARSize, cd->BARSize, sizeof(BARSize));
-        memcpy(BARAddrs, cd->BARAddrs, sizeof(BARAddrs));
+    if (configData) {
+        memcpy(config.data, configData->config.data, sizeof(config.data));
+        memcpy(BARSize, configData->BARSize, sizeof(BARSize));
+        memcpy(BARAddrs, configData->BARAddrs, sizeof(BARAddrs));
     } else
         panic("NULL pointer to configuration data");
 
     // Setup pointer in config space to point to this entry
-    if (cf->deviceExists(dev,func))
-        panic("Two PCI devices occuping same dev: %#x func: %#x", dev, func);
+    if (p->configSpace->deviceExists(p->deviceNum, p->functionNum))
+        panic("Two PCI devices occuping same dev: %#x func: %#x",
+              p->deviceNum, p->functionNum);
     else
-        cf->registerDevice(dev, func, this);
+        p->configSpace->registerDevice(p->deviceNum, p->functionNum, this);
 }
 
 void
 PciDev::ReadConfig(int offset, int size, uint8_t *data)
 {
+    if (offset >= PCI_DEVICE_SPECIFIC)
+        panic("Device specific PCI config space not implemented!\n");
+
     switch(size) {
       case sizeof(uint32_t):
         memcpy((uint8_t*)data, config.data + offset, sizeof(uint32_t));
         *(uint32_t*)data = htoa(*(uint32_t*)data);
         DPRINTF(PCIDEV,
                 "read device: %#x function: %#x register: %#x %d bytes: data: %#x\n",
-                deviceNum, functionNum, offset, size,
+                params()->deviceNum, params()->functionNum, offset, size,
                 *(uint32_t*)(config.data + offset));
         break;
 
@@ -88,7 +90,7 @@ PciDev::ReadConfig(int offset, int size, uint8_t *data)
         *(uint16_t*)data = htoa(*(uint16_t*)data);
         DPRINTF(PCIDEV,
                 "read device: %#x function: %#x register: %#x %d bytes: data: %#x\n",
-                deviceNum, functionNum, offset, size,
+                params()->deviceNum, params()->functionNum, offset, size,
                 *(uint16_t*)(config.data + offset));
         break;
 
@@ -96,7 +98,7 @@ PciDev::ReadConfig(int offset, int size, uint8_t *data)
         memcpy((uint8_t*)data, config.data + offset, sizeof(uint8_t));
         DPRINTF(PCIDEV,
                 "read device: %#x function: %#x register: %#x %d bytes: data: %#x\n",
-                deviceNum, functionNum, offset, size,
+                params()->deviceNum, params()->functionNum, offset, size,
                 (uint16_t)(*(uint8_t*)(config.data + offset)));
         break;
 
@@ -108,6 +110,9 @@ PciDev::ReadConfig(int offset, int size, uint8_t *data)
 void
 PciDev::WriteConfig(int offset, int size, uint32_t data)
 {
+    if (offset >= PCI_DEVICE_SPECIFIC)
+        panic("Device specific PCI config space not implemented!\n");
+
     uint32_t barnum;
 
     union {
@@ -119,7 +124,8 @@ PciDev::WriteConfig(int offset, int size, uint32_t data)
 
     DPRINTF(PCIDEV,
             "write device: %#x function: %#x reg: %#x size: %d data: %#x\n",
-            deviceNum, functionNum, offset, size, word_value);
+            params()->deviceNum, params()->functionNum, offset, size,
+            word_value);
 
     barnum = (offset - PCI0_BASE_ADDR0) >> 2;
 
@@ -129,7 +135,7 @@ PciDev::WriteConfig(int offset, int size, uint32_t data)
           case PCI0_INTERRUPT_LINE:
           case PCI_CACHE_LINE_SIZE:
           case PCI_LATENCY_TIMER:
-            *(uint8_t *)&config.data[offset] = byte_value;
+            *(uint8_t *)&config.data[offset] = htoa(byte_value);
             break;
 
           default:
@@ -142,7 +148,7 @@ PciDev::WriteConfig(int offset, int size, uint32_t data)
           case PCI_COMMAND:
           case PCI_STATUS:
           case PCI_CACHE_LINE_SIZE:
-            *(uint16_t *)&config.data[offset] = half_value;
+            *(uint16_t *)&config.data[offset] = htoa(half_value);
             break;
 
           default:
@@ -166,67 +172,63 @@ PciDev::WriteConfig(int offset, int size, uint32_t data)
             // to size of memory it needs
             if (word_value == 0xffffffff) {
                 // This is I/O Space, bottom two bits are read only
-                if (config.data[offset] & 0x1) {
-                    *(uint32_t *)&config.data[offset] =
+                if (htoa(config.data[offset]) & 0x1) {
+                    *(uint32_t *)&config.data[offset] = htoa(
                         ~(BARSize[barnum] - 1) |
-                        (config.data[offset] & 0x3);
+                        (htoa(config.data[offset]) & 0x3));
                 } else {
                     // This is memory space, bottom four bits are read only
-                    *(uint32_t *)&config.data[offset] =
+                    *(uint32_t *)&config.data[offset] = htoa(
                         ~(BARSize[barnum] - 1) |
-                        (config.data[offset] & 0xF);
+                        (htoa(config.data[offset]) & 0xF));
                 }
             } else {
+                MemoryController *mmu = params()->mmu;
+
                 // This is I/O Space, bottom two bits are read only
-                if(config.data[offset] & 0x1) {
-                    *(uint32_t *)&config.data[offset] = (word_value & ~0x3) |
-                        (config.data[offset] & 0x3);
+                if(htoa(config.data[offset]) & 0x1) {
+                    *(uint32_t *)&config.data[offset] =
+                        htoa((word_value & ~0x3) |
+                        (htoa(config.data[offset]) & 0x3));
 
                     if (word_value & ~0x1) {
                         Addr base_addr = (word_value & ~0x1) + TSUNAMI_PCI0_IO;
-                        Addr base_size = BARSize[barnum]-1;
+                        Addr base_size = BARSize[barnum];
 
                         // It's never been set
                         if (BARAddrs[barnum] == 0)
                             mmu->add_child((FunctionalMemory *)this,
-                                           Range<Addr>(base_addr,
-                                                       base_addr + base_size));
+                                           RangeSize(base_addr, base_size));
                         else
                             mmu->update_child((FunctionalMemory *)this,
-                                              Range<Addr>(BARAddrs[barnum],
-                                                          BARAddrs[barnum] +
-                                                          base_size),
-                                              Range<Addr>(base_addr,
-                                                          base_addr +
-                                                          base_size));
+                                              RangeSize(BARAddrs[barnum],
+                                                        base_size),
+                                              RangeSize(base_addr, base_size));
 
                         BARAddrs[barnum] = base_addr;
                     }
 
                 } else {
                     // This is memory space, bottom four bits are read only
-                    *(uint32_t *)&config.data[offset] = (word_value & ~0xF) |
-                        (config.data[offset] & 0xF);
+                    *(uint32_t *)&config.data[offset] =
+                        htoa((word_value & ~0xF) |
+                        (htoa(config.data[offset]) & 0xF));
 
                     if (word_value & ~0x3) {
                         Addr base_addr = (word_value & ~0x3) +
                             TSUNAMI_PCI0_MEMORY;
 
-                        Addr base_size = BARSize[barnum]-1;
+                        Addr base_size = BARSize[barnum];
 
                         // It's never been set
                         if (BARAddrs[barnum] == 0)
                             mmu->add_child((FunctionalMemory *)this,
-                                           Range<Addr>(base_addr,
-                                                       base_addr + base_size));
+                                           RangeSize(base_addr, base_size));
                         else
                             mmu->update_child((FunctionalMemory *)this,
-                                              Range<Addr>(BARAddrs[barnum],
-                                                          BARAddrs[barnum] +
-                                                          base_size),
-                                              Range<Addr>(base_addr,
-                                                          base_addr +
-                                                          base_size));
+                                              RangeSize(BARAddrs[barnum],
+                                                        base_size),
+                                              RangeSize(base_addr, base_size));
 
                         BARAddrs[barnum] = base_addr;
                     }
@@ -238,14 +240,14 @@ PciDev::WriteConfig(int offset, int size, uint32_t data)
             if (word_value == 0xfffffffe)
                 *(uint32_t *)&config.data[offset] = 0xffffffff;
             else
-                *(uint32_t *)&config.data[offset] = word_value;
+                *(uint32_t *)&config.data[offset] = htoa(word_value);
             break;
 
           case PCI_COMMAND:
             // This could also clear some of the error bits in the Status
             // register. However they should never get set, so lets ignore
             // it for now
-            *(uint16_t *)&config.data[offset] = half_value;
+            *(uint16_t *)&config.data[offset] = htoa(half_value);
             break;
 
           default:
@@ -273,10 +275,7 @@ PciDev::unserialize(Checkpoint *cp, const std::string &section)
     // Add the MMU mappings for the BARs
     for (int i=0; i < 6; i++) {
         if (BARAddrs[i] != 0)
-            mmu->add_child((FunctionalMemory *)this,
-                           Range<Addr>(BARAddrs[i],
-                                       BARAddrs[i] +
-                                       BARSize[i] - 1));
+            params()->mmu->add_child(this, RangeSize(BARAddrs[i], BARSize[i]));
     }
 }
 

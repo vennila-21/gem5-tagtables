@@ -38,14 +38,12 @@ output exec {{
 #include <fenv.h>
 #endif
 
+#ifdef FULL_SYSTEM
+#include "arch/alpha/pseudo_inst.hh"
+#endif
 #include "cpu/base_cpu.hh"
 #include "cpu/exetrace.hh"
 #include "sim/sim_exit.hh"
-
-#ifdef FULL_SYSTEM
-#include "arch/alpha/ev5.hh"
-#include "arch/alpha/pseudo_inst.hh"
-#endif
 }};
 
 ////////////////////////////////////////////////////////////////////
@@ -515,7 +513,7 @@ output exec {{
     inline Fault checkFpEnableFault(%(CPU_exec_context)s *xc)
     {
 	Fault fault = No_Fault;	// dummy... this ipr access should not fault
-	if (!ICSR_FPE(xc->readIpr(AlphaISA::IPR_ICSR, fault))) {
+	if (!EV5::ICSR_FPE(xc->readIpr(AlphaISA::IPR_ICSR, fault))) {
 	    fault = Fen_Fault;
 	}
 	return fault;
@@ -1842,7 +1840,7 @@ decode OPCODE default Unknown::unknown() {
 	0x2a: ldl_l({{ EA = Rb + disp; }}, {{ Ra.sl = Mem.sl; }}, LOCKED);
 	0x2b: ldq_l({{ EA = Rb + disp; }}, {{ Ra.uq = Mem.uq; }}, LOCKED);
 	0x20: copy_load({{EA = Ra;}}, 
-	                {{ fault = xc->copySrcTranslate(EA);}},
+	                {{fault = xc->copySrcTranslate(EA);}},
 			IsMemRef, IsLoad, IsCopy);
     }
 
@@ -1864,7 +1862,7 @@ decode OPCODE default Unknown::unknown() {
 	0x26: sts({{ EA = Rb + disp; }}, {{ Mem.ul = t_to_s(Fa.uq); }});
 	0x27: stt({{ EA = Rb + disp; }}, {{ Mem.df = Fa; }});
 	0x24: copy_store({{EA = Rb;}},
-	                 {{ fault = xc->copy(EA);}},
+	                 {{fault = xc->copy(EA);}},
 			 IsMemRef, IsStore, IsCopy);
     }
 

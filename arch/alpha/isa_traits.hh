@@ -26,12 +26,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ISA_TRAITS_HH__
-#define __ISA_TRAITS_HH__
+#ifndef __ARCH_ALPHA_ISA_TRAITS_HH__
+#define __ARCH_ALPHA_ISA_TRAITS_HH__
 
-#include "sim/host.hh"
-#include "targetarch/faults.hh"
+#include "arch/alpha/faults.hh"
 #include "base/misc.hh"
+#include "sim/host.hh"
 
 class FastCPU;
 class FullCPU;
@@ -41,6 +41,11 @@ class Checkpoint;
 
 template <class ISA> class StaticInst;
 template <class ISA> class StaticInstPtr;
+
+namespace EV5 {
+int DTB_ASN_ASN(uint64_t reg);
+int ITB_ASN_ASN(uint64_t reg);
+}
 
 class AlphaISA
 {
@@ -121,11 +126,16 @@ class AlphaISA
         Addr		lock_addr;	// lock address for LL/SC
     } MiscRegFile;
 
+static const Addr PageShift = 13;
+static const Addr PageBytes = ULL(1) << PageShift;
+static const Addr PageMask = ~(PageBytes - 1);
+static const Addr PageOffset = PageBytes - 1;
+
 #ifdef FULL_SYSTEM
 
     typedef uint64_t InternalProcReg;
 
-#include "targetarch/isa_fullsys_traits.hh"
+#include "arch/alpha/isa_fullsys_traits.hh"
 
 #else
     enum {
@@ -155,6 +165,8 @@ class AlphaISA
         InternalProcReg ipr[NumInternalProcRegs]; // internal processor regs
         int intrflag;			// interrupt flag
         bool pal_shadow;		// using pal_shadow registers
+        inline int instAsid() { return EV5::ITB_ASN_ASN(ipr[IPR_ITB_ASN]); }
+        inline int dataAsid() { return EV5::DTB_ASN_ASN(ipr[IPR_DTB_ASN]); }
 #endif // FULL_SYSTEM
 
         void serialize(std::ostream &os);
@@ -276,9 +288,7 @@ typedef TheISA::InternalProcReg InternalProcReg;
 const int NumInternalProcRegs  = TheISA::NumInternalProcRegs;
 const int NumInterruptLevels = TheISA::NumInterruptLevels;
 
-// more stuff that should be imported here, but I'm too tired to do it
-// right now...
-#include "targetarch/ev5.hh"
+#include "arch/alpha/ev5.hh"
 #endif
 
-#endif // __ALPHA_ISA_H__
+#endif // __ARCH_ALPHA_ISA_TRAITS_HH__

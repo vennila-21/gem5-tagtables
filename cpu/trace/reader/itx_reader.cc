@@ -102,6 +102,7 @@ ITXReader::getNextReq(MemReqPtr &req)
                     } else {
                         codePhysAddr += tmp_req->size;
                     }
+                    assert(tmp_req->paddr >> 36 == 0);
                 } else {
                     codePhysValid = false;
                 }
@@ -130,12 +131,13 @@ ITXReader::getNextReq(MemReqPtr &req)
                     // Get the page offset from the virtual address.
                     tmp_req->paddr = tmp_req->vaddr & 0xfff;
                     tmp_req->paddr |= (c & 0xf0) << 8;
+                    tmp_req->paddr |= (Addr)(c & 0x0f) << 32;
                     for (int i = 2; i < 4; ++i) {
                         c = getc(trace);
                         if (c == EOF) {
                             fatal("Unexpected end of trace file.");
                         }
-                        tmp_req->paddr |= (c & 0xff) << (8 * i);
+                        tmp_req->paddr |= (Addr)(c & 0xff) << (8 * i);
                     }
                     if (type == ITXCode) {
                         if (((tmp_req->paddr & 0xfff) + tmp_req->size)
@@ -148,6 +150,7 @@ ITXReader::getNextReq(MemReqPtr &req)
                             codePhysValid = true;
                         }
                     }
+                    assert(tmp_req->paddr >> 36 == 0);
                 } else if (type == ITXCode) {
                     codePhysValid = false;
                 }
@@ -158,8 +161,12 @@ ITXReader::getNextReq(MemReqPtr &req)
                   case ITXWrite:
                     tmp_req->cmd = Write;
                     break;
+                  case ITXWriteback:
+                    tmp_req->cmd = Writeback;
+                    break;
                   case ITXCode:
                     tmp_req->cmd = Read;
+                    tmp_req->flags |= INST_READ;
                     break;
                   default:
                     fatal("Unknown ITX type");
@@ -173,6 +180,7 @@ ITXReader::getNextReq(MemReqPtr &req)
         }
     } while (!phys_val);
     req = tmp_req;
+    assert(!req || (req->paddr >> 36) == 0);
     return 0;
 }
 

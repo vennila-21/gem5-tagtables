@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <cstdio>
 #include <sstream>
 #include <string>
 
@@ -33,129 +34,175 @@
 #include "sim/host.hh"
 #include "base/inet.hh"
 
-using namespace::std;
+using namespace std;
+namespace Net {
+
+EthAddr::EthAddr()
+{
+    memset(data, 0, ETH_ADDR_LEN);
+}
+
+EthAddr::EthAddr(const uint8_t ea[ETH_ADDR_LEN])
+{
+    *data = *ea;
+}
+
+EthAddr::EthAddr(const eth_addr &ea)
+{
+    *data = *ea.data;
+}
+
+EthAddr::EthAddr(const std::string &addr)
+{
+    parse(addr);
+}
+
+const EthAddr &
+EthAddr::operator=(const eth_addr &ea)
+{
+    *data = *ea.data;
+    return *this;
+}
+
+const EthAddr &
+EthAddr::operator=(const std::string &addr)
+{
+    parse(addr);
+    return *this;
+}
+
+void
+EthAddr::parse(const std::string &addr)
+{
+    // the hack below is to make sure that ETH_ADDR_LEN is 6 otherwise
+    // the sscanf function won't work.
+    int bytes[ETH_ADDR_LEN == 6 ? ETH_ADDR_LEN : -1];
+    if (sscanf(addr.c_str(), "%x:%x:%x:%x:%x:%x", &bytes[0], &bytes[1],
+               &bytes[2], &bytes[3], &bytes[4], &bytes[5]) != ETH_ADDR_LEN) {
+        memset(data, 0xff, ETH_ADDR_LEN);
+        return;
+    }
+
+    for (int i = 0; i < ETH_ADDR_LEN; ++i) {
+        if (bytes[i] & ~0xff) {
+            memset(data, 0xff, ETH_ADDR_LEN);
+            return;
+        }
+
+        data[i] = bytes[i];
+    }
+}
+
 string
-eaddr_string(const uint8_t a[6])
+EthAddr::string() const
 {
     stringstream stream;
-    ccprintf(stream, "%x:%x:%x:%x:%x:%x", a[0], a[1], a[2], a[3], a[4], a[5]);
-
+    stream << *this;
     return stream.str();
 }
 
-/*
- * Copyright (c) 1988, 1992, 1993
- *	The Regents of the University of California.  All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *	This product includes software developed by the University of
- *	California, Berkeley and its contributors.
- * 4. Neither the name of the University nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- */
-/***********************************************************************
-                 This section of code taken from NetBSD
-***********************************************************************/
-
-#define ETHER_CRC_POLY_LE 0xedb88320
-#define ETHER_CRC_POLY_BE 0x04c11db6
-
-#if 0
-/*
- * This is for reference.  We have a table-driven version
- * of the little-endian crc32 generator, which is faster
- * than the double-loop.
- */
-uint32_t
-crc32le(const uint8_t *buf, size_t len)
+bool
+operator==(const EthAddr &left, const EthAddr &right)
 {
-    uint32_t c, crc, carry;
-    size_t i, j;
+    return memcmp(left.bytes(), right.bytes(), ETH_ADDR_LEN);
+}
 
-    crc = 0xffffffffU;      /* initial value */
+ostream &
+operator<<(ostream &stream, const EthAddr &ea)
+{
+    const uint8_t *a = ea.addr();
+    ccprintf(stream, "%x:%x:%x:%x:%x:%x", a[0], a[1], a[2], a[3], a[4], a[5]);
+    return stream;
+}
 
-    for (i = 0; i < len; i++) {
-        c = buf[i];
-        for (j = 0; j < 8; j++) {
-            carry = ((crc & 0x01) ? 1 : 0) ^ (c & 0x01);
-            crc >>= 1;
-            c >>= 1;
-            if (carry)
-                crc = (crc ^ ETHER_CRC_POLY_LE);
+uint16_t
+cksum(const IpPtr &ptr)
+{
+    int sum = ip_cksum_add(ptr->bytes(), ptr->hlen(), 0);
+    return ip_cksum_carry(sum);
+}
+
+uint16_t
+__tu_cksum(const IpPtr &ip)
+{
+    int tcplen = ip->len() - ip->hlen();
+    int sum = ip_cksum_add(ip->payload(), tcplen, 0);
+    sum = ip_cksum_add(&ip->ip_src, 8, sum); // source and destination
+    sum += htons(ip->ip_p + tcplen);
+    return ip_cksum_carry(sum);
+}
+
+uint16_t
+cksum(const TcpPtr &tcp)
+{ return __tu_cksum(IpPtr(tcp.packet())); }
+
+uint16_t
+cksum(const UdpPtr &udp)
+{ return __tu_cksum(IpPtr(udp.packet())); }
+
+bool
+IpHdr::options(vector<const IpOpt *> &vec) const
+{
+    vec.clear();
+
+    const uint8_t *data = bytes() + sizeof(struct ip_hdr);
+    int all = hlen() - sizeof(struct ip_hdr);
+    while (all > 0) {
+        const IpOpt *opt = (const IpOpt *)data;
+        int len = opt->len();
+        if (all < len)
+            return false;
+
+        vec.push_back(opt);
+        all -= len;
+        data += len;
+    }
+
+    return true;
+}
+
+bool
+TcpHdr::options(vector<const TcpOpt *> &vec) const
+{
+    vec.clear();
+
+    const uint8_t *data = bytes() + sizeof(struct tcp_hdr);
+    int all = off() - sizeof(struct tcp_hdr);
+    while (all > 0) {
+        const TcpOpt *opt = (const TcpOpt *)data;
+        int len = opt->len();
+        if (all < len)
+            return false;
+
+        vec.push_back(opt);
+        all -= len;
+        data += len;
+    }
+
+    return true;
+}
+
+bool
+TcpOpt::sack(vector<SackRange> &vec) const
+{
+    vec.clear();
+
+    const uint8_t *data = bytes() + sizeof(struct tcp_hdr);
+    int all = len() - offsetof(tcp_opt, opt_data.sack);
+    while (all > 0) {
+        const uint16_t *sack = (const uint16_t *)data;
+        int len = sizeof(uint16_t) * 2;
+        if (all < len) {
+            vec.clear();
+            return false;
         }
+
+        vec.push_back(RangeIn(ntohs(sack[0]), ntohs(sack[1])));
+        all -= len;
+        data += len;
     }
 
-    return (crc);
-}
-#else
-uint32_t
-crc32le(const uint8_t *buf, size_t len)
-{
-    static const uint32_t crctab[] = {
-        0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
-        0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
-        0xedb88320, 0xf00f9344, 0xd6d6a3e8, 0xcb61b38c,
-        0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c
-    };
-    uint32_t crc;
-    int i;
-
-    crc = 0xffffffffU;      /* initial value */
-
-    for (i = 0; i < len; i++) {
-        crc ^= buf[i];
-        crc = (crc >> 4) ^ crctab[crc & 0xf];
-        crc = (crc >> 4) ^ crctab[crc & 0xf];
-    }
-
-    return (crc);
-}
-#endif
-
-uint32_t
-crc32be(const uint8_t *buf, size_t len)
-{
-    uint32_t c, crc, carry;
-    size_t i, j;
-
-    crc = 0xffffffffU;      /* initial value */
-
-    for (i = 0; i < len; i++) {
-        c = buf[i];
-        for (j = 0; j < 8; j++) {
-            carry = ((crc & 0x80000000U) ? 1 : 0) ^ (c & 0x01);
-            crc <<= 1;
-            c >>= 1;
-            if (carry)
-                crc = (crc ^ ETHER_CRC_POLY_BE) | carry;
-        }
-    }
-
-    return (crc);
+    return false;
 }
 
-/***********************************************************************
-                 This is the end of the NetBSD code
-***********************************************************************/
+/* namespace Net */ }

@@ -93,7 +93,7 @@ def AlphaConfig(env):
 def KernelConfig(env):
     env.Replace(TARGET_ISA = 'alpha')
     env.Replace(FULL_SYSTEM = True)
-    env.Append(CPPDEFINES = ['FULL_SYSTEM', 'SYSTEM_EV5'])
+    env.Append(CPPDEFINES = ['FULL_SYSTEM'])
 
 # Base configurations map.
 configs_map = {
@@ -244,12 +244,24 @@ default_env = Environment(ENV = os.environ,  # inherit user's enviroment vars
                           FULL_SYSTEM = False,
                           USE_MYSQL = False)
 
+default_env.SConsignFile("sconsign")
+
+# For some reason, the CC and CXX variables don't get passed into the
+# environment correctly.  This is probably some sort of scons bug that
+# will eventually be fixed.
+if os.environ.has_key('CC'):
+    default_env.Replace(CC=os.environ['CC'])
+
+if os.environ.has_key('CXX'):
+    default_env.Replace(CXX=os.environ['CXX'])
+
 # M5_EXT is used by isa_parser.py to find the PLY package.
 default_env.Append(ENV = { 'M5_EXT' : EXT_SRCDIR })
 
 default_env.Append(CCFLAGS='-pipe')
 default_env.Append(CCFLAGS='-fno-strict-aliasing')
 default_env.Append(CCFLAGS=Split('-Wall -Wno-sign-compare -Werror -Wundef'))
+default_env.Append(CPPPATH=[os.path.join(EXT_SRCDIR + '/dnet')])
 
 # libelf build is described in its own SConscript file.  Using a
 # dictionary for exports lets us export "default_env" so the

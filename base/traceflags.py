@@ -123,6 +123,7 @@ baseFlags = [
     'Uart',
     'Split',
     'SQL',
+    'Thread',
     'Fetch',
     'Decode',
     'Rename',

@@ -58,16 +58,13 @@ class Tsunami : public Platform
   public:
 
     /** Max number of CPUs in a Tsunami */
-    static const int Max_CPUs = 4;
+    static const int Max_CPUs = 64;
 
     /** Pointer to the system */
     System *system;
+
     /** Pointer to the TsunamiIO device which has the RTC */
     TsunamiIO *io;
-    /** Pointer to the disk controller device */
-    IdeController *disk_controller;
-    /** Pointer to the ethernet controller device */
-    NSGigE *ethernet;
 
     /** Pointer to the Tsunami CChip.
       * The chip contains some configuration information and
@@ -112,6 +109,18 @@ class Tsunami : public Platform
     virtual void clearConsoleInt();
 
     /**
+     * Cause the chipset to post a cpi interrupt to the CPU.
+     */
+    virtual void postPciInt(int line);
+
+    /**
+     * Clear a posted PCI->CPU interrupt
+     */
+    virtual void clearPciInt(int line);
+
+    virtual Addr pciToDma(Addr pciAddr) const;
+
+  /**
      * Serialize this object to the given output stream.
      * @param os The stream to serialize to.
      */

@@ -31,21 +31,19 @@
  * DP83820 ethernet controller
  */
 
-#ifndef __NS_GIGE_HH__
-#define __NS_GIGE_HH__
+#ifndef __DEV_NS_GIGE_HH__
+#define __DEV_NS_GIGE_HH__
 
+#include "base/inet.hh"
 #include "base/statistics.hh"
 #include "dev/etherint.hh"
 #include "dev/etherpkt.hh"
 #include "dev/io_device.hh"
 #include "dev/ns_gige_reg.h"
 #include "dev/pcidev.hh"
-#include "dev/tsunami.hh"
+#include "dev/pktfifo.hh"
 #include "mem/bus/bus.hh"
 #include "sim/eventq.hh"
-
-/** length of ethernet address in bytes */
-#define EADDR_LEN 6
 
 /**
  * Ethernet device registers
@@ -90,7 +88,7 @@ struct dp_rom {
      * for perfect match memory.
      * the linux driver doesn't use any other ROM
      */
-    uint8_t perfectMatch[EADDR_LEN];
+    uint8_t perfectMatch[ETH_ADDR_LEN];
 };
 
 class IntrControl;
@@ -141,10 +139,6 @@ class NSGigE : public PciDev
     };
 
   private:
-    /** pointer to the chipset */
-    Tsunami *tsunami;
-
-  private:
     Addr addr;
     static const Addr size = sizeof(dp_regs);
 
@@ -165,10 +159,8 @@ class NSGigE : public PciDev
 
     /*** BASIC STRUCTURES FOR TX/RX ***/
     /* Data FIFOs */
-    pktbuf_t txFifo;
-    uint32_t maxTxFifoSize;
-    pktbuf_t rxFifo;
-    uint32_t maxRxFifoSize;
+    PacketFifo txFifo;
+    PacketFifo rxFifo;
 
     /** various helper vars */
     PacketPtr txPacket;
@@ -190,8 +182,6 @@ class NSGigE : public PciDev
 
     /** Current Transmit Descriptor Done */
     bool CTDD;
-    /** current amt of free space in txDataFifo in bytes */
-    uint32_t txFifoAvail;
     /** halt the tx state machine after next packet */
     bool txHalt;
     /** ptr to the next byte in the current fragment */
@@ -208,8 +198,6 @@ class NSGigE : public PciDev
     bool CRDD;
     /** num of bytes in the current packet being drained from rxDataFifo */
     uint32_t rxPktBytes;
-    /** number of bytes in the rxFifo */
-    uint32_t rxFifoCnt;
     /** halt the rx state machine after current packet */
     bool rxHalt;
     /** ptr to the next byte in current fragment */
@@ -302,7 +290,7 @@ class NSGigE : public PciDev
      * receive address filter
      */
     bool rxFilterEnable;
-    bool rxFilter(PacketPtr packet);
+    bool rxFilter(const PacketPtr &packet);
     bool acceptBroadcast;
     bool acceptMulticast;
     bool acceptUnicast;
@@ -329,28 +317,34 @@ class NSGigE : public PciDev
     typedef EventWrapper<NSGigE, &NSGigE::cpuInterrupt> IntrEvent;
     friend class IntrEvent;
     IntrEvent *intrEvent;
-
-    /**
-     * Hardware checksum support
-     */
-    bool udpChecksum(PacketPtr packet, bool gen);
-    bool tcpChecksum(PacketPtr packet, bool gen);
-    bool ipChecksum(PacketPtr packet, bool gen);
-    uint16_t checksumCalc(uint16_t *pseudo, uint16_t *buf, uint32_t len);
-
     NSGigEInt *interface;
 
   public:
-    NSGigE(const std::string &name, IntrControl *i, Tick intr_delay,
-           PhysicalMemory *pmem, Tick tx_delay, Tick rx_delay,
-           MemoryController *mmu, HierParams *hier, Bus *header_bus,
-           Bus *payload_bus, Tick pio_latency, bool dma_desc_free,
-           bool dma_data_free, Tick dma_read_delay, Tick dma_write_delay,
-           Tick dma_read_factor, Tick dma_write_factor, PciConfigAll *cf,
-           PciConfigData *cd, Tsunami *t, uint32_t bus, uint32_t dev,
-           uint32_t func, bool rx_filter, const int eaddr[6],
-           uint32_t tx_fifo_size, uint32_t rx_fifo_size);
+    struct Params : public PciDev::Params
+    {
+        PhysicalMemory *pmem;
+        HierParams *hier;
+        Bus *header_bus;
+        Bus *payload_bus;
+        Tick intr_delay;
+        Tick tx_delay;
+        Tick rx_delay;
+        Tick pio_latency;
+        bool dma_desc_free;
+        bool dma_data_free;
+        Tick dma_read_delay;
+        Tick dma_write_delay;
+        Tick dma_read_factor;
+        Tick dma_write_factor;
+        bool rx_filter;
+        Net::EthAddr eaddr;
+        uint32_t tx_fifo_size;
+        uint32_t rx_fifo_size;
+    };
+
+    NSGigE(Params *params);
     ~NSGigE();
+    const Params *params() const { return (const Params *)_params; }
 
     virtual void WriteConfig(int offset, int size, uint32_t data);
     virtual void ReadConfig(int offset, int size, uint8_t *data);
@@ -377,10 +371,12 @@ class NSGigE : public PciDev
     Stats::Scalar<> rxBytes;
     Stats::Scalar<> txPackets;
     Stats::Scalar<> rxPackets;
-    Stats::Scalar<> txIPChecksums;
-    Stats::Scalar<> rxIPChecksums;
-    Stats::Scalar<> txTCPChecksums;
-    Stats::Scalar<> rxTCPChecksums;
+    Stats::Scalar<> txIpChecksums;
+    Stats::Scalar<> rxIpChecksums;
+    Stats::Scalar<> txTcpChecksums;
+    Stats::Scalar<> rxTcpChecksums;
+    Stats::Scalar<> txUdpChecksums;
+    Stats::Scalar<> rxUdpChecksums;
     Stats::Scalar<> descDmaReads;
     Stats::Scalar<> descDmaWrites;
     Stats::Scalar<> descDmaRdBytes;
@@ -389,6 +385,33 @@ class NSGigE : public PciDev
     Stats::Formula rxBandwidth;
     Stats::Formula txPacketRate;
     Stats::Formula rxPacketRate;
+    Stats::Scalar<> postedSwi;
+    Stats::Formula coalescedSwi;
+    Stats::Scalar<> totalSwi;
+    Stats::Scalar<> postedRxIdle;
+    Stats::Formula coalescedRxIdle;
+    Stats::Scalar<> totalRxIdle;
+    Stats::Scalar<> postedRxOk;
+    Stats::Formula coalescedRxOk;
+    Stats::Scalar<> totalRxOk;
+    Stats::Scalar<> postedRxDesc;
+    Stats::Formula coalescedRxDesc;
+    Stats::Scalar<> totalRxDesc;
+    Stats::Scalar<> postedTxOk;
+    Stats::Formula coalescedTxOk;
+    Stats::Scalar<> totalTxOk;
+    Stats::Scalar<> postedTxIdle;
+    Stats::Formula coalescedTxIdle;
+    Stats::Scalar<> totalTxIdle;
+    Stats::Scalar<> postedTxDesc;
+    Stats::Formula coalescedTxDesc;
+    Stats::Scalar<> totalTxDesc;
+    Stats::Scalar<> postedRxOrn;
+    Stats::Formula coalescedRxOrn;
+    Stats::Scalar<> totalRxOrn;
+    Stats::Formula coalescedTotal;
+    Stats::Scalar<> postedInterrupts;
+    Stats::Scalar<> droppedPackets;
 
   public:
     Tick cacheAccess(MemReqPtr &req);
@@ -406,8 +429,8 @@ class NSGigEInt : public EtherInt
     NSGigEInt(const std::string &name, NSGigE *d)
         : EtherInt(name), dev(d) { dev->setInterface(this); }
 
-    virtual bool recvPacket(PacketPtr &pkt) { return dev->recvPacket(pkt); }
+    virtual bool recvPacket(PacketPtr pkt) { return dev->recvPacket(pkt); }
     virtual void sendDone() { dev->transferDone(); }
 };
 
-#endif // __NS_GIGE_HH__
+#endif // __DEV_NS_GIGE_HH__

@@ -48,6 +48,7 @@ class AlphaDynInst;
 
 class FastCPU;
 class SimpleCPU;
+class InorderCPU;
 class SymbolTable;
 
 namespace Trace {
