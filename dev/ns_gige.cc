@@ -2002,8 +2002,7 @@ NSGigE::txKick()
       case txFifoBlock:
         if (!txPacket) {
             DPRINTF(EthernetSM, "****starting the tx of a new packet****\n");
-            txPacket = new PacketData;
-            txPacket->data = new uint8_t[16384];
+            txPacket = new PacketData(16384);
             txPacketBufPtr = txPacket->data;
         }
 
@@ -2493,7 +2492,7 @@ NSGigE::unserialize(Checkpoint *cp, const std::string &section)
     bool txPacketExists;
     UNSERIALIZE_SCALAR(txPacketExists);
     if (txPacketExists) {
-        txPacket = new PacketData;
+        txPacket = new PacketData(16384);
         txPacket->unserialize("txPacket", cp, section);
         uint32_t txPktBufPtr;
         UNSERIALIZE_SCALAR(txPktBufPtr);
@@ -2505,7 +2504,7 @@ NSGigE::unserialize(Checkpoint *cp, const std::string &section)
     UNSERIALIZE_SCALAR(rxPacketExists);
     rxPacket = 0;
     if (rxPacketExists) {
-        rxPacket = new PacketData;
+        rxPacket = new PacketData(16384);
         rxPacket->unserialize("rxPacket", cp, section);
         uint32_t rxPktBufPtr;
         UNSERIALIZE_SCALAR(rxPktBufPtr);
