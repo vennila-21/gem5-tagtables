@@ -83,15 +83,23 @@ AlphaTlb::lookup(Addr vpn, uint8_t asn) const
 
 
 void
-AlphaTlb::checkCacheability(MemReqPtr req)
+AlphaTlb::checkCacheability(MemReqPtr &req)
 {
     // in Alpha, cacheability is controlled by upper-level bits of the
     // physical address
     if (req->paddr & PA_UNCACHED_BIT) {
         if (PA_IPR_SPACE(req->paddr)) {
             // IPR memory space not implemented
-            if (!req->xc->misspeculating())
-                panic("IPR memory space not implemented! PA=%x\n", req->paddr);
+            if (!req->xc->misspeculating()) {
+                switch (req->paddr) {
+                  case 0xFFFFF00188:
+                    req->data = 0;
+                    break;
+
+                  default:
+                    panic("IPR memory space not implemented! PA=%x\n", req->paddr);
+                }
+            }
         } else {
             // mark request as uncacheable
             req->flags |= UNCACHEABLE;
@@ -260,7 +268,7 @@ AlphaItb::fault(Addr pc, ExecContext *xc) const
 
 
 Fault
-AlphaItb::translate(MemReqPtr req) const
+AlphaItb::translate(MemReqPtr &req) const
 {
     InternalProcReg *ipr = req->xc->regs.ipr;
 
@@ -425,7 +433,7 @@ AlphaDtb::fault(Addr vaddr, uint64_t flags, ExecContext *xc) const
 }
 
 Fault
-AlphaDtb::translate(MemReqPtr req, bool write) const
+AlphaDtb::translate(MemReqPtr &req, bool write) const
 {
     RegFile *regs = &req->xc->regs;
     Addr pc = regs->pc;

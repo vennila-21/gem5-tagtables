@@ -27,78 +27,44 @@
  */
 
 /* @file
- * Interface to connect a simulated ethernet device to the real world
+ * Turbolaser system bus node (processor, memory, or IO)
  */
 
-#ifndef __ETHERTAP_HH__
-#define __ETHERTAP_HH__
+#ifndef __TSUNAMI_CCHIP_HH__
+#define __TSUNAMI_CCHIP_HH__
 
-#include <queue>
-#include <string>
-
-#include "dev/etherint.hh"
-#include "dev/etherpkt.hh"
-#include "sim/eventq.hh"
-#include "base/pollevent.hh"
-#include "sim/sim_object.hh"
+#include "mem/functional_mem/mmap_device.hh"
+#include "dev/tsunami.hh"
 
 /*
- * Interface to connect a simulated ethernet device to the real world
+ * Tsunami CChip
  */
-class EtherTap : public EtherInt
+class TsunamiCChip : public MmapDevice
 {
-  protected:
-    friend class TapEvent;
-    TapEvent *event;
+  public:
 
   protected:
-    friend class TapListener;
-    TapListener *listener;
-    int socket;
-    char *buffer;
-    int buflen;
-    int32_t buffer_offset;
-    int32_t data_len;
-
-    EtherDump *dump;
-
-    void attach(int fd);
-    void detach();
-
-  protected:
-    std::string device;
-    std::queue<PacketPtr> packetBuffer;
-
-    void process(int revent);
-    void enqueue(EtherPacket *packet);
-    void retransmit();
-
-    /*
-     */
-    class TxEvent : public Event
-    {
-      protected:
-        EtherTap *tap;
-
-      public:
-        TxEvent(EtherTap *_tap)
-            : Event(&mainEventQueue), tap(_tap) {}
-        void process() { tap->retransmit(); }
-        virtual const char *description() { return "retransmit event"; }
-    };
-
-    friend class TxEvent;
-    TxEvent txEvent;
+    Tsunami *tsunami;
+    uint64_t dim[Tsunami::Max_CPUs];
+    uint64_t dir[Tsunami::Max_CPUs];
+    bool dirInterrupting[Tsunami::Max_CPUs];
+    uint64_t drir;
 
   public:
-    EtherTap(const std::string &name, EtherDump *dump, int port, int bufsz);
-    virtual ~EtherTap();
+    TsunamiCChip(const std::string &name, Tsunami *t,
+               Addr addr, Addr mask, MemoryController *mmu);
 
-    virtual bool recvPacket(PacketPtr &packet);
-    virtual void sendDone();
+    virtual Fault read(MemReqPtr req, uint8_t *data);
+    virtual Fault write(MemReqPtr req, const uint8_t *data);
+
+    void postDRIR(uint64_t bitvector);
+    void clearDRIR(uint64_t bitvector);
 
     virtual void serialize(std::ostream &os);
     virtual void unserialize(Checkpoint *cp, const std::string &section);
+
+    uint64_t misc;
+    bool RTCInterrupting;
 };
 
-#endif // __ETHERTAP_HH__
+#endif // __TSUNAMI_CCHIP_HH__

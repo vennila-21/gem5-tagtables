@@ -27,78 +27,37 @@
  */
 
 /* @file
- * Interface to connect a simulated ethernet device to the real world
+ * Tsunami UART
  */
 
-#ifndef __ETHERTAP_HH__
-#define __ETHERTAP_HH__
+#ifndef __TSUNAMI_UART_HH__
+#define __TSUNAMI_UART_HH__
 
-#include <queue>
-#include <string>
+#include "mem/functional_mem/mmap_device.hh"
 
-#include "dev/etherint.hh"
-#include "dev/etherpkt.hh"
-#include "sim/eventq.hh"
-#include "base/pollevent.hh"
-#include "sim/sim_object.hh"
+class SimConsole;
 
 /*
- * Interface to connect a simulated ethernet device to the real world
+ * Tsunami UART
  */
-class EtherTap : public EtherInt
+class TsunamiUart : public MmapDevice
 {
   protected:
-    friend class TapEvent;
-    TapEvent *event;
-
-  protected:
-    friend class TapListener;
-    TapListener *listener;
-    int socket;
-    char *buffer;
-    int buflen;
-    int32_t buffer_offset;
-    int32_t data_len;
-
-    EtherDump *dump;
-
-    void attach(int fd);
-    void detach();
-
-  protected:
-    std::string device;
-    std::queue<PacketPtr> packetBuffer;
-
-    void process(int revent);
-    void enqueue(EtherPacket *packet);
-    void retransmit();
-
-    /*
-     */
-    class TxEvent : public Event
-    {
-      protected:
-        EtherTap *tap;
-
-      public:
-        TxEvent(EtherTap *_tap)
-            : Event(&mainEventQueue), tap(_tap) {}
-        void process() { tap->retransmit(); }
-        virtual const char *description() { return "retransmit event"; }
-    };
-
-    friend class TxEvent;
-    TxEvent txEvent;
+    SimConsole *cons;
+    int status_store;
+    uint8_t next_char;
+    bool valid_char;
 
   public:
-    EtherTap(const std::string &name, EtherDump *dump, int port, int bufsz);
-    virtual ~EtherTap();
+    TsunamiUart(const std::string &name, SimConsole *c,
+               Addr addr, Addr mask, MemoryController *mmu);
 
-    virtual bool recvPacket(PacketPtr &packet);
-    virtual void sendDone();
+    Fault read(MemReqPtr req, uint8_t *data);
+    Fault write(MemReqPtr req, const uint8_t *data);
+
 
     virtual void serialize(std::ostream &os);
     virtual void unserialize(Checkpoint *cp, const std::string &section);
 };
 
-#endif // __ETHERTAP_HH__
+#endif // __TSUNAMI_UART_HH__
