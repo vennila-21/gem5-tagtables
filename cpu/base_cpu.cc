@@ -36,6 +36,7 @@
 #include "base/output.hh"
 #include "cpu/base_cpu.hh"
 #include "cpu/exec_context.hh"
+#include "cpu/sampling_cpu/sampling_cpu.hh"
 #include "sim/param.hh"
 #include "sim/sim_events.hh"
 
@@ -207,9 +208,10 @@ BaseCPU::registerExecContexts()
 
 
 void
-BaseCPU::switchOut()
+BaseCPU::switchOut(SamplingCPU *sampler)
 {
-    // default: do nothing
+    // default: do nothing, signal done
+    sampler->signalSwitched();
 }
 
 void
