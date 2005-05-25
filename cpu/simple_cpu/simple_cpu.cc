@@ -573,9 +573,6 @@ SimpleCPU::dbg_vtophys(Addr addr)
 }
 #endif // FULL_SYSTEM
 
-Tick save_cycle = 0;
-
-
 void
 SimpleCPU::processCacheCompletion()
 {
