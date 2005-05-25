@@ -40,6 +40,8 @@
 #include "sim/param.hh"
 #include "sim/sim_events.hh"
 
+#include "base/trace.hh"
+
 using namespace std;
 
 vector<BaseCPU *> BaseCPU::cpuList;
@@ -59,8 +61,13 @@ BaseCPU::BaseCPU(Params *p)
       number_of_threads(p->numberOfThreads)
 #endif
 {
+    DPRINTF(FullCPU, "BaseCPU: Creating object, mem address %#x.\n", this);
+
     // add self to global list of CPUs
     cpuList.push_back(this);
+
+    DPRINTF(FullCPU, "BaseCPU: CPU added to cpuList, mem address %#x.\n",
+            this);
 
     if (number_of_threads > maxThreadsPerCPU)
         maxThreadsPerCPU = number_of_threads;
