@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* @file
+/** @file
  * Tsunami PChip (pci)
  */
 
@@ -41,8 +41,8 @@
 #include "mem/bus/bus.hh"
 #include "mem/bus/pio_interface.hh"
 #include "mem/bus/pio_interface_impl.hh"
-#include "mem/functional_mem/memory_control.hh"
-#include "mem/functional_mem/physical_memory.hh"
+#include "mem/functional/memory_control.hh"
+#include "mem/functional/physical.hh"
 #include "sim/builder.hh"
 #include "sim/system.hh"
 

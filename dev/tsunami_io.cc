@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* @file
+/** @file
  * Tsunami I/O including PIC, PIT, RTC, DMA
  */
 
@@ -46,7 +46,7 @@
 #include "dev/tsunami_cchip.hh"
 #include "dev/tsunamireg.h"
 #include "dev/rtcreg.h"
-#include "mem/functional_mem/memory_control.hh"
+#include "mem/functional/memory_control.hh"
 
 using namespace std;
 
