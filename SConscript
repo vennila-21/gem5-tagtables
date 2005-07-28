@@ -265,9 +265,9 @@ full_system_sources = Split('''
 	dev/ns_gige.cc
 	dev/pciconfigall.cc
 	dev/pcidev.cc
-        dev/pcifake.cc
+	dev/pcifake.cc
 	dev/pktfifo.cc
-        dev/platform.cc
+	dev/platform.cc
 	dev/sinic.cc
 	dev/simple_disk.cc
 	dev/tsunami.cc
@@ -282,7 +282,7 @@ full_system_sources = Split('''
 	kern/kernel_stats.cc
 	kern/system_events.cc
 	kern/freebsd/freebsd_system.cc
-        kern/freebsd/freebsd_events.cc
+	kern/freebsd/freebsd_events.cc
 	kern/linux/linux_events.cc
 	kern/linux/linux_syscalls.cc
 	kern/linux/linux_system.cc
