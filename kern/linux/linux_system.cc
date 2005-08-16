@@ -36,19 +36,15 @@
  */
 
 #include "base/loader/symtab.hh"
-#include "base/trace.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/base.hh"
 #include "kern/linux/linux_events.hh"
 #include "kern/linux/linux_system.hh"
-#include "kern/system_events.hh"
 #include "mem/functional/memory_control.hh"
 #include "mem/functional/physical.hh"
 #include "sim/builder.hh"
 #include "dev/platform.hh"
-#include "targetarch/isa_traits.hh"
 #include "targetarch/vtophys.hh"
-#include "sim/debug.hh"
 
 using namespace std;
 
@@ -96,7 +92,7 @@ LinuxSystem::LinuxSystem(Params *p)
         char *dp264_mv = (char *)physmem->dma_addr(paddr, sizeof(uint64_t));
 
         if (dp264_mv) {
-            *(uint32_t*)(dp264_mv+0x18) = htoa((uint32_t)127);
+            *(uint32_t*)(dp264_mv+0x18) = htog((uint32_t)127);
         } else
             panic("could not translate dp264_mv addr\n");
 
