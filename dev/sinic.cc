@@ -296,12 +296,12 @@ Device::regStats()
  * This is to write to the PCI general configuration registers
  */
 void
-Device::WriteConfig(int offset, int size, uint32_t data)
+Device::writeConfig(int offset, int size, const uint8_t *data)
 {
     switch (offset) {
       case PCI0_BASE_ADDR0:
         // Need to catch writes to BARs to update the PIO interface
-        PciDev::WriteConfig(offset, size, data);
+        PciDev::writeConfig(offset, size, data);
         if (BARAddrs[0] != 0) {
             if (pioInterface)
                 pioInterface->addAddrRange(RangeSize(BARAddrs[0], BARSize[0]));
@@ -311,7 +311,7 @@ Device::WriteConfig(int offset, int size, uint32_t data)
         break;
 
       default:
-        PciDev::WriteConfig(offset, size, data);
+        PciDev::writeConfig(offset, size, data);
     }
 }
 
@@ -322,7 +322,7 @@ Device::WriteConfig(int offset, int size, uint32_t data)
 Fault
 Device::read(MemReqPtr &req, uint8_t *data)
 {
-    assert(config.hdr.command & PCI_CMD_MSE);
+    assert(config.command & PCI_CMD_MSE);
 
     //The mask is to give you only the offset into the device register file
     Addr daddr = req->paddr & 0xfff;
@@ -409,7 +409,7 @@ Device::read(MemReqPtr &req, uint8_t *data)
 Fault
 Device::write(MemReqPtr &req, const uint8_t *data)
 {
-    assert(config.hdr.command & PCI_CMD_MSE);
+    assert(config.command & PCI_CMD_MSE);
     Addr daddr = req->paddr & 0xfff;
 
     if (Regs::regSize(daddr) == 0)
@@ -1403,8 +1403,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(Device)
     INIT_PARAM(mmu, "Memory Controller"),
     INIT_PARAM(physmem, "Physical Memory"),
     INIT_PARAM_DFLT(rx_filter, "Enable Receive Filter", true),
-    INIT_PARAM_DFLT(hardware_address, "Ethernet Hardware Address",
-                    "00:99:00:00:00:01"),
+    INIT_PARAM(hardware_address, "Ethernet Hardware Address"),
     INIT_PARAM_DFLT(io_bus, "The IO Bus to attach to for headers", NULL),
     INIT_PARAM_DFLT(payload_bus, "The IO Bus to attach to for payload", NULL),
     INIT_PARAM_DFLT(hier, "Hierarchy global variables", &defaultHierParams),

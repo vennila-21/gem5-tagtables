@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004 The Regents of The University of Michigan
+ * Copyright (c) 2001-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,22 +26,48 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __KERN_LINUX_ALIGNED_HH__
-#define __KERN_LINUX_ALIGNED_HH__
-
-
-/* GCC 3.3.X has a bug in which attributes+typedefs don't work. 3.2.X is fine
- * as in 3.4.X, but the bug is marked will not fix in 3.3.X so here is
- * the work around.
+/* @file
+ * Device register definitions for a device's PCI config space
  */
-#if __GNUC__ == 3 && __GNUC_MINOR__  != 3
-typedef uint64_t uint64_ta __attribute__ ((aligned (8))) ;
-typedef int64_t int64_ta __attribute__ ((aligned (8))) ;
-typedef Addr Addr_a __attribute__ ((aligned (8))) ;
-#else
-#define uint64_ta uint64_t __attribute__ ((aligned (8)))
-#define int64_ta int64_t __attribute__ ((aligned (8)))
-#define Addr_a Addr __attribute__ ((aligned (8)))
-#endif /* __GNUC__ __GNUC_MINOR__ */
 
-#endif /* __KERN_LINUX_ALIGNED_HH__ */
+#ifndef __PITREG_H__
+#define __PITREG_H__
+
+#include <sys/types.h>
+
+// Control Word Format
+
+#define PIT_SEL_SHFT  0x6
+#define PIT_RW_SHFT   0x4
+#define PIT_MODE_SHFT 0x1
+#define PIT_BCD_SHFT  0x0
+
+#define PIT_SEL_MASK  0x3
+#define PIT_RW_MASK   0x3
+#define PIT_MODE_MASK 0x7
+#define PIT_BCD_MASK  0x1
+
+#define GET_CTRL_FIELD(x, s, m) (((x) >> s) & m)
+#define GET_CTRL_SEL(x) GET_CTRL_FIELD(x, PIT_SEL_SHFT, PIT_SEL_MASK)
+#define GET_CTRL_RW(x) GET_CTRL_FIELD(x, PIT_RW_SHFT, PIT_RW_MASK)
+#define GET_CTRL_MODE(x) GET_CTRL_FIELD(x, PIT_MODE_SHFT, PIT_MODE_MASK)
+#define GET_CTRL_BCD(x) GET_CTRL_FIELD(x, PIT_BCD_SHFT, PIT_BCD_MASK)
+
+#define PIT_READ_BACK 0x3
+
+#define PIT_RW_LATCH_COMMAND 0x0
+#define PIT_RW_LSB_ONLY      0x1
+#define PIT_RW_MSB_ONLY      0x2
+#define PIT_RW_16BIT         0x3
+
+#define PIT_MODE_INTTC    0x0
+#define PIT_MODE_ONESHOT  0x1
+#define PIT_MODE_RATEGEN  0x2
+#define PIT_MODE_SQWAVE   0x3
+#define PIT_MODE_SWSTROBE 0x4
+#define PIT_MODE_HWSTROBE 0x5
+
+#define PIT_BCD_FALSE 0x0
+#define PIT_BCD_TRUE  0x1
+
+#endif // __PITREG_H__

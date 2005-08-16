@@ -26,60 +26,60 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYSTEM_EVENTS_HH__
-#define __SYSTEM_EVENTS_HH__
+/** @file
+ * Declaration of a fake device.
+ */
 
-class System;
+#ifndef __ISA_FAKE_HH__
+#define __ISA_FAKE_HH__
 
-class SkipFuncEvent : public PCEvent
-{
-  public:
-    SkipFuncEvent(PCEventQueue *q, const std::string &desc)
-        : PCEvent(q, desc) {}
-    virtual void process(ExecContext *xc);
-};
+#include "dev/tsunami.hh"
+#include "base/range.hh"
+#include "dev/io_device.hh"
 
-class FnEvent : public PCEvent
-{
-  public:
-    FnEvent(PCEventQueue *q, const std::string &desc, Stats::MainBin *bin);
-    virtual void process(ExecContext *xc);
-    std::string myname() const { return _name; }
-
-  private:
-    std::string _name;
-    Stats::MainBin *mybin;
-};
-
-class IdleStartEvent : public PCEvent
+/**
+ * IsaFake is a device that returns -1 on all reads and
+ * accepts all writes. It is meant to be placed at an address range
+ * so that an mcheck doesn't occur when an os probes a piece of hw
+ * that doesn't exist (e.g. UARTs1-3).
+ */
+class IsaFake : public PioDevice
 {
   private:
-    System *system;
+    /** The address in memory that we respond to */
+    Addr addr;
 
   public:
-    IdleStartEvent(PCEventQueue *q, const std::string &desc, System *sys)
-        : PCEvent(q, desc), system(sys)
-    {}
-    virtual void process(ExecContext *xc);
+    /**
+      * The constructor for Tsunmami Fake just registers itself with the MMU.
+      * @param name name of this device.
+      * @param a address to respond to.
+      * @param mmu the mmu we register with.
+      * @param size number of addresses to respond to
+      */
+    IsaFake(const std::string &name, Addr a, MemoryController *mmu,
+                HierParams *hier, Bus *bus, Addr size = 0x8);
+
+    /**
+     * This read always returns -1.
+     * @param req The memory request.
+     * @param data Where to put the data.
+     */
+    virtual Fault read(MemReqPtr &req, uint8_t *data);
+
+    /**
+     * All writes are simply ignored.
+     * @param req The memory request.
+     * @param data the data to not write.
+     */
+    virtual Fault write(MemReqPtr &req, const uint8_t *data);
+
+    /**
+     * Return how long this access will take.
+     * @param req the memory request to calcuate
+     * @return Tick when the request is done
+     */
+    Tick cacheAccess(MemReqPtr &req);
 };
 
-class InterruptStartEvent : public PCEvent
-{
-  public:
-    InterruptStartEvent(PCEventQueue *q, const std::string &desc)
-        : PCEvent(q, desc)
-    {}
-    virtual void process(ExecContext *xc);
-};
-
-class InterruptEndEvent : public PCEvent
-{
-  public:
-    InterruptEndEvent(PCEventQueue *q, const std::string &desc)
-        : PCEvent(q, desc)
-    {}
-    virtual void process(ExecContext *xc);
-};
-
-
-#endif // __SYSTEM_EVENTS_HH__
+#endif // __ISA_FAKE_HH__
