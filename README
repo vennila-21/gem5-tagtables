@@ -1,0 +1,75 @@
+This is release m5_1.1 of the M5 simulator.
+
+This file contains brief "getting started" information and release
+notes.  For more information, see http://m5.eecs.umich.edu.  If you
+have questions, please send mail to m5sim-users@lists.sourceforge.net.
+
+WHAT'S INCLUDED (AND NOT)
+-------------------------
+
+Since you're reading this file, presumably you've managed to untar the
+distribution.  The archive you've unpacked has three subdirectories:
+ - m5: the simulator itself
+ - m5-test: regression tests and scripts to run them
+ - ext: less-common external packages needed to build m5
+ - alpha-system: source for Alpha console and PALcode
+
+M5 is a capable, full-system simulator that current supports both Linux
+2.4/2.6 and the proprietary Compaq/HP Tru64 version of Unix. We are able 
+to distribute Linux bootdisks, but we are unable to distribute bootable
+disk images of Tru64 Unix. If you have a Tru64 license and are interested 
+in obtaining disk images, contact us at m5-dev@eecs.umich.edu.
+
+WHAT'S NEEDED
+-------------
+- GCC (version 3.3 or 3.4 recommended)
+- Python 2.3 or newer
+- SCons 0.96.1 (see http://www.scons.org)
+
+WHAT'S RECOMMENDED
+------------------
+- MySQL (for statistics complex statistics storage/retrieval)
+- Python-MysqlDB (for statistics analysis) 
+
+GETTING STARTED
+---------------
+
+There are two different build targets and three optimizations levels:
+
+Target:
+-------
+ALPHA_SE - Syscall emulation simulation
+ALPHA_FS - Full system simulation
+
+Optimization:
+-------------
+m5.debug - debug version of the code with tracing and without optimization
+m5.opt   - optimized version of code with tracing
+m5.fast  - optimized version of the code without tracing and asserts
+
+Different targets are built in different subdirectories of m5/build.
+Binaries with the same target but different optimization levels share
+the same directory.  Note that you can build m5 in any directory you
+choose by copying the SConstruct file there and creating symbolic links
+to the 'm5' and 'ext' directories.
+
+The following steps will build and test the simulator.  The variable
+"$top" refers to the top directory where you've unpacked the files,
+i.e., the one containing the m5, m5-test, and ext directories.  If you
+have a multiprocessor system, you should give scons a "-j N" argument (like
+make) to run N jobs in parallel.
+
+To build and test the syscall-emulation simulator:
+
+	cd $top/m5/build
+	scons ALPHA_SE/test/opt/quick
+
+To build and test the full-system simualator:
+
+1. Download the full-system binary package from
+   http://m5.eecs.umich.edu/dist/m5_system_1.1.tar.bz2.  This package includes
+   disk images and kernel, palcode, and console binaries for Linux and FreeBSD.
+2. Edit SYSTEMDIR in $top/m5-test/SysPaths.py to point to your local copy
+   of the binaries.
+3. In $top/m5/build, run "scons ALPHA_FS/opt/test/quick".
+
