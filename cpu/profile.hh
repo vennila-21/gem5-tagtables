@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * Copyright (c) 2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,72 +26,49 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
+#ifndef __CPU_PROFILE_HH__
+#define __CPU_PROFILE_HH__
 
+#include <map>
+
+#include "cpu/static_inst.hh"
 #include "sim/host.hh"
-#include "base/misc.hh"
-#include "base/str.hh"
-#include "base/loader/symtab.hh"
+#include "targetarch/stacktrace.hh"
 
-using namespace std;
-
-SymbolTable *debugSymbolTable = NULL;
-
-bool
-SymbolTable::insert(Addr address, string symbol)
+class ProfileNode
 {
-    if (!addrTable.insert(make_pair(address, symbol)).second)
-        return false;
+  private:
+    friend class FunctionProfile;
 
-    if (!symbolTable.insert(make_pair(symbol, address)).second)
-        return false;
+    typedef std::map<Addr, ProfileNode> ChildList;
+    ChildList children;
 
-    return true;
-}
+  public:
+    int count;
 
+  public:
+    ProfileNode();
 
-bool
-SymbolTable::load(const string &filename)
+    void dump(const std::string &symbol, uint64_t id,
+              const SymbolTable *symtab, std::ostream &os) const;
+    void clear();
+};
+
+class FunctionProfile
 {
-    string buffer;
-    ifstream file(filename.c_str());
+  private:
+    const SymbolTable *symtab;
+    ProfileNode top;
+    std::map<Addr, Counter> pc_count;
 
-    if (!file) {
-        cerr << "Can't open symbol table file " << filename << endl;
-        fatal("file error");
-    }
+  public:
+    FunctionProfile(const SymbolTable *symtab);
+    ~FunctionProfile();
 
-    while (!file.eof()) {
-        getline(file, buffer);
-        if (buffer.empty())
-            continue;
+    ProfileNode *consume(const StackTrace *trace);
+    void clear();
+    void dump(ExecContext *xc, std::ostream &out) const;
+    void sample(ProfileNode *node, Addr pc);
+};
 
-        int idx = buffer.find(',');
-        if (idx == string::npos)
-            return false;
-
-        string address = buffer.substr(0, idx);
-        eat_white(address);
-        if (address.empty())
-            return false;
-
-        string symbol = buffer.substr(idx + 1);
-        eat_white(symbol);
-        if (symbol.empty())
-            return false;
-
-        Addr addr;
-        if (!to_number(address, addr))
-            return false;
-
-        if (!insert(addr, symbol))
-            return false;
-    }
-
-    file.close();
-
-    return true;
-}
+#endif // __CPU_PROFILE_HH__
