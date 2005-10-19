@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * Copyright (c) 2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,72 +26,74 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
+#ifndef __ARCH_ALPHA_STACKTRACE_HH__
+#define __ARCH_ALPHA_STACKTRACE_HH__
 
-#include "sim/host.hh"
-#include "base/misc.hh"
-#include "base/str.hh"
-#include "base/loader/symtab.hh"
+#include "base/trace.hh"
+#include "cpu/static_inst.hh"
 
-using namespace std;
+class ExecContext;
+class StackTrace;
+class SymbolTable;
 
-SymbolTable *debugSymbolTable = NULL;
-
-bool
-SymbolTable::insert(Addr address, string symbol)
+class ProcessInfo
 {
-    if (!addrTable.insert(make_pair(address, symbol)).second)
-        return false;
+  private:
+    ExecContext *xc;
 
-    if (!symbolTable.insert(make_pair(symbol, address)).second)
-        return false;
+    int thread_info_size;
+    int task_struct_size;
+    int task_off;
+    int pid_off;
+    int name_off;
 
-    return true;
+  public:
+    ProcessInfo(ExecContext *_xc);
+
+    Addr task(Addr ksp) const;
+    int pid(Addr ksp) const;
+    std::string name(Addr ksp) const;
+};
+
+class StackTrace
+{
+  private:
+    ExecContext *xc;
+    std::vector<Addr> stack;
+
+  private:
+    bool isEntry(Addr addr);
+    bool decodePrologue(Addr sp, Addr callpc, Addr func, int &size, Addr &ra);
+    bool decodeSave(MachInst inst, int &reg, int &disp);
+    bool decodeStack(MachInst inst, int &disp);
+
+  public:
+    StackTrace(ExecContext *xc, bool is_call);
+    ~StackTrace();
+
+  public:
+    const std::vector<Addr> &getstack() const { return stack; }
+    static StackTrace *create(ExecContext *xc, StaticInstPtr<TheISA> inst);
+
+#if TRACING_ON
+  private:
+    void dump();
+
+  public:
+    void dprintf() { if (DTRACE(Stack)) dump(); }
+#else
+  public:
+    void dprintf() {}
+#endif
+};
+
+inline StackTrace *
+StackTrace::create(ExecContext *xc, StaticInstPtr<TheISA> inst)
+{
+    if (!inst->isCall() && !inst->isReturn())
+        return NULL;
+
+    return new StackTrace(xc, !inst->isReturn());
 }
 
-
-bool
-SymbolTable::load(const string &filename)
-{
-    string buffer;
-    ifstream file(filename.c_str());
-
-    if (!file) {
-        cerr << "Can't open symbol table file " << filename << endl;
-        fatal("file error");
-    }
-
-    while (!file.eof()) {
-        getline(file, buffer);
-        if (buffer.empty())
-            continue;
-
-        int idx = buffer.find(',');
-        if (idx == string::npos)
-            return false;
-
-        string address = buffer.substr(0, idx);
-        eat_white(address);
-        if (address.empty())
-            return false;
-
-        string symbol = buffer.substr(idx + 1);
-        eat_white(symbol);
-        if (symbol.empty())
-            return false;
-
-        Addr addr;
-        if (!to_number(address, addr))
-            return false;
-
-        if (!insert(addr, symbol))
-            return false;
-    }
-
-    file.close();
-
-    return true;
-}
+#endif // __ARCH_ALPHA_STACKTRACE_HH__
