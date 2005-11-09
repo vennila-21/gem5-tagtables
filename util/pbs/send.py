@@ -79,6 +79,8 @@ usage = """\
 Usage:
     %(progname)s [-c] [-e] [-f] [-j <jobfile>] [-q queue] [-v] <regexp>
     -c           clean directory if job can be run
+    -C           submit the checkpointing runs
+    -d           Make jobs be dependent on the completion of the checkpoint runs
     -e           only echo pbs command info, don't actually send the job
     -f           force the job to run regardless of state
     -q <queue>   submit job to the named queue
@@ -96,7 +98,7 @@ Usage:
 
 try:
     import getopt
-    opts, args = getopt.getopt(sys.argv[1:], '-Ccdefhj:lq:Rt:v')
+    opts, args = getopt.getopt(sys.argv[1:], '-Ccdefhj:lnq:Rt:v')
 except getopt.GetoptError:
     sys.exit(usage)
 
@@ -113,6 +115,7 @@ docpts = False
 doruns = True
 runflag = False
 node_type = 'FAST'
+update = True
 
 for opt,arg in opts:
     if opt == '-C':
@@ -132,6 +135,8 @@ for opt,arg in opts:
         jfile = arg
     if opt == '-l':
         listonly = True
+    if opt == '-n':
+        update = False
     if opt == '-q':
         queue = arg
     if opt == '-R':
@@ -152,7 +157,7 @@ from job import JobDir, date
 
 conf = jobfile.JobFile(jfile)
 
-if not listonly and not onlyecho and isdir(conf.linkdir):
+if update and not listonly and not onlyecho and isdir(conf.linkdir):
     if verbose:
         print 'Checking for outdated files in Link directory'
     if not isdir(conf.basedir):

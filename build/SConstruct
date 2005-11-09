@@ -202,10 +202,8 @@ if have_mysql:
     mysql_minor = int(mysql_version[1])
     # This version check is probably overly conservative, but it deals
     # with the versions we have installed.
-    if mysql_major < 3 or \
-           mysql_major == 3 and mysql_minor < 23 or \
-           mysql_major == 4 and mysql_minor < 1:
-        print "Warning: MySQL v3.23 or v4.1 or newer required."
+    if mysql_major < 4 or (mysql_major == 4 and mysql_minor < 1):
+        print "Warning: MySQL v4.1 or newer required."
         have_mysql = False
 
 # Set up mysql_config commands.
@@ -234,6 +232,9 @@ sticky_opts.AddOptions(
                False),
     BoolOption('SS_COMPATIBLE_FP',
                'Make floating-point results compatible with SimpleScalar',
+               False),
+    BoolOption('USE_SSE2',
+               'Compile for SSE2 (-msse2) to get IEEE FP on x86 hosts',
                False),
     BoolOption('STATS_BINNING', 'Bin statistics by CPU mode', have_mysql),
     BoolOption('USE_MYSQL', 'Use MySQL for stats output', have_mysql),
@@ -377,6 +378,9 @@ for build_dir in build_dirs:
     if env['BATCH']:
         env['CC']  = env['BATCH_CMD'] + ' ' + env['CC']
         env['CXX'] = env['BATCH_CMD'] + ' ' + env['CXX']
+
+    if env['USE_SSE2']:
+        env.Append(CCFLAGS='-msse2')
 
     # The m5/SConscript file sets up the build rules in 'env' according
     # to the configured options.  It returns a list of environments,
