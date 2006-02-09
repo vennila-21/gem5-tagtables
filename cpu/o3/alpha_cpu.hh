@@ -33,6 +33,8 @@
 #define __CPU_O3_CPU_ALPHA_FULL_CPU_HH__
 
 #include "cpu/o3/cpu.hh"
+#include "arch/isa_traits.hh"
+#include "sim/byteswap.hh"
 
 template <class Impl>
 class AlphaFullCPU : public FullO3CPU<Impl>
@@ -277,7 +279,7 @@ class AlphaFullCPU : public FullO3CPU<Impl>
 
 #endif
 
-        return this->mem->write(req, (T)htog(data));
+        return this->mem->write(req, (T)::htog(data));
     }
 
     template <class T>

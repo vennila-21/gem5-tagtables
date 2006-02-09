@@ -35,6 +35,8 @@
 #include "mem/functional/physical.hh"
 #include "targetarch/vtophys.hh"
 #include "sim/builder.hh"
+#include "arch/isa_traits.hh"
+#include "sim/byteswap.hh"
 #include "sim/system.hh"
 #include "base/trace.hh"
 

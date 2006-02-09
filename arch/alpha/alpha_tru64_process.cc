@@ -41,6 +41,7 @@
 #include <string.h>	// for memset()
 #include <unistd.h>
 
+#include "arch/alpha/isa_traits.hh"
 #include "arch/alpha/alpha_common_syscall_emul.hh"
 #include "arch/alpha/alpha_tru64_process.hh"
 #include "base/trace.hh"

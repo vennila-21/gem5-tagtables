@@ -29,8 +29,8 @@
 // Remove this later; used only for debugging.
 #define OPCODE(X)                       (X >> 26) & 0x3f
 
-
-#include "arch/alpha/byte_swap.hh"
+#include "arch/isa_traits.hh"
+#include "sim/byteswap.hh"
 #include "cpu/exetrace.hh"
 #include "mem/base_mem.hh"
 #include "mem/mem_interface.hh"
