@@ -292,6 +292,7 @@ full_system_sources = Split('''
 	mem/functional/physical.cc
 
 	sim/system.cc
+	sim/pseudo_inst.cc
         ''')
 
 # These are now included by the architecture specific SConscript
@@ -347,16 +348,16 @@ targetarch_files = Split('''
         ecoff_machdep.h
         ev5.hh
         faults.hh
-        isa_fullsys_traits.hh
-        isa_traits.hh
-        pseudo_inst.hh
         stacktrace.hh
-        vptr.hh
         vtophys.hh
         ''')
+#        pseudo_inst.hh
+#        isa_traits.hh
 #        osfpal.hh
 #        byte_swap.hh
 #        alpha_common_syscall_emul.hh
+#        vptr.hh
+#        isa_fullsys_traits.hh
 
 # Set up bridging headers to the architecture specific versions
 for f in targetarch_files:
