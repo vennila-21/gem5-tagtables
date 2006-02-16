@@ -173,12 +173,12 @@ def template LoadStoreDeclare {{
 
 
 def template InitiateAccDeclare {{
-    Fault initiateAcc(%(CPU_exec_context)s *, Trace::InstRecord *) const;
+    Fault * initiateAcc(%(CPU_exec_context)s *, Trace::InstRecord *) const;
 }};
 
 
 def template CompleteAccDeclare {{
-    Fault completeAcc(uint8_t *, %(CPU_exec_context)s *, Trace::InstRecord *) const;
+    Fault * completeAcc(uint8_t *, %(CPU_exec_context)s *, Trace::InstRecord *) const;
 }};
 
 
@@ -208,19 +208,19 @@ def template LoadStoreConstructor {{
 
 
 def template EACompExecute {{
-    Fault
+    Fault *
     %(class_name)s::EAComp::execute(%(CPU_exec_context)s *xc,
                                    Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
 
         %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         %(code)s;
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(op_wb)s;
             xc->setEA(EA);
         }
@@ -230,24 +230,24 @@ def template EACompExecute {{
 }};
 
 def template LoadMemAccExecute {{
-    Fault
+    Fault *
     %(class_name)s::MemAcc::execute(%(CPU_exec_context)s *xc,
                                    Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
 
         %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         EA = xc->getEA();
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             fault = xc->read(EA, (uint%(mem_acc_size)d_t&)Mem, memAccessFlags);
             %(code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(op_wb)s;
         }
 
@@ -257,23 +257,23 @@ def template LoadMemAccExecute {{
 
 
 def template LoadExecute {{
-    Fault %(class_name)s::execute(%(CPU_exec_context)s *xc,
+    Fault * %(class_name)s::execute(%(CPU_exec_context)s *xc,
                                   Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
 
         %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         %(ea_code)s;
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             fault = xc->read(EA, (uint%(mem_acc_size)d_t&)Mem, memAccessFlags);
             %(memacc_code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(op_wb)s;
         }
 
@@ -283,18 +283,18 @@ def template LoadExecute {{
 
 
 def template LoadInitiateAcc {{
-    Fault %(class_name)s::initiateAcc(%(CPU_exec_context)s *xc,
+    Fault * %(class_name)s::initiateAcc(%(CPU_exec_context)s *xc,
                                       Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
 
         %(fp_enable_check)s;
         %(op_src_decl)s;
         %(op_rd)s;
         %(ea_code)s;
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             fault = xc->read(EA, (uint%(mem_acc_size)d_t &)Mem, memAccessFlags);
         }
 
@@ -304,11 +304,11 @@ def template LoadInitiateAcc {{
 
 
 def template LoadCompleteAcc {{
-    Fault %(class_name)s::completeAcc(uint8_t *data,
+    Fault * %(class_name)s::completeAcc(uint8_t *data,
                                       %(CPU_exec_context)s *xc,
                                       Trace::InstRecord *traceData) const
     {
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
 
         %(fp_enable_check)s;
         %(op_src_decl)s;
@@ -316,11 +316,11 @@ def template LoadCompleteAcc {{
 
         memcpy(&Mem, data, sizeof(Mem));
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(memacc_code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(op_wb)s;
         }
 
@@ -330,12 +330,12 @@ def template LoadCompleteAcc {{
 
 
 def template StoreMemAccExecute {{
-    Fault
+    Fault *
     %(class_name)s::MemAcc::execute(%(CPU_exec_context)s *xc,
                                    Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
         uint64_t write_result = 0;
 
         %(fp_enable_check)s;
@@ -343,21 +343,21 @@ def template StoreMemAccExecute {{
         %(op_rd)s;
         EA = xc->getEA();
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             fault = xc->write((uint%(mem_acc_size)d_t&)Mem, EA,
                               memAccessFlags, &write_result);
             if (traceData) { traceData->setData(Mem); }
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(postacc_code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(op_wb)s;
         }
 
@@ -367,11 +367,11 @@ def template StoreMemAccExecute {{
 
 
 def template StoreExecute {{
-    Fault %(class_name)s::execute(%(CPU_exec_context)s *xc,
+    Fault * %(class_name)s::execute(%(CPU_exec_context)s *xc,
                                   Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
         uint64_t write_result = 0;
 
         %(fp_enable_check)s;
@@ -379,21 +379,21 @@ def template StoreExecute {{
         %(op_rd)s;
         %(ea_code)s;
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(memacc_code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             fault = xc->write((uint%(mem_acc_size)d_t&)Mem, EA,
                               memAccessFlags, &write_result);
             if (traceData) { traceData->setData(Mem); }
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(postacc_code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(op_wb)s;
         }
 
@@ -402,11 +402,11 @@ def template StoreExecute {{
 }};
 
 def template StoreInitiateAcc {{
-    Fault %(class_name)s::initiateAcc(%(CPU_exec_context)s *xc,
+    Fault * %(class_name)s::initiateAcc(%(CPU_exec_context)s *xc,
                                       Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
         uint64_t write_result = 0;
 
         %(fp_enable_check)s;
@@ -415,11 +415,11 @@ def template StoreInitiateAcc {{
         %(op_rd)s;
         %(ea_code)s;
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(memacc_code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             fault = xc->write((uint%(mem_acc_size)d_t&)Mem, EA,
                               memAccessFlags, &write_result);
             if (traceData) { traceData->setData(Mem); }
@@ -431,11 +431,11 @@ def template StoreInitiateAcc {{
 
 
 def template StoreCompleteAcc {{
-    Fault %(class_name)s::completeAcc(uint8_t *data,
+    Fault * %(class_name)s::completeAcc(uint8_t *data,
                                       %(CPU_exec_context)s *xc,
                                       Trace::InstRecord *traceData) const
     {
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
         uint64_t write_result = 0;
 
         %(fp_enable_check)s;
@@ -443,11 +443,11 @@ def template StoreCompleteAcc {{
 
         memcpy(&write_result, data, sizeof(write_result));
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(postacc_code)s;
         }
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(op_wb)s;
         }
 
@@ -457,64 +457,63 @@ def template StoreCompleteAcc {{
 
 
 def template MiscMemAccExecute {{
-    Fault %(class_name)s::MemAcc::execute(%(CPU_exec_context)s *xc,
+    Fault * %(class_name)s::MemAcc::execute(%(CPU_exec_context)s *xc,
                                           Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
 
         %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         EA = xc->getEA();
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(code)s;
         }
 
-        return No_Fault;
+        return NoFault;
     }
 }};
 
 def template MiscExecute {{
-    Fault %(class_name)s::execute(%(CPU_exec_context)s *xc,
+    Fault * %(class_name)s::execute(%(CPU_exec_context)s *xc,
                                   Trace::InstRecord *traceData) const
     {
         Addr EA;
-        Fault fault = No_Fault;
+        Fault * fault = NoFault;
 
         %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         %(ea_code)s;
 
-        if (fault == No_Fault) {
+        if (fault == NoFault) {
             %(memacc_code)s;
         }
 
-        return No_Fault;
+        return NoFault;
     }
 }};
 
 def template MiscInitiateAcc {{
-    Fault %(class_name)s::initiateAcc(%(CPU_exec_context)s *xc,
+    Fault * %(class_name)s::initiateAcc(%(CPU_exec_context)s *xc,
                                       Trace::InstRecord *traceData) const
     {
         panic("Misc instruction does not support split access method!");
-
-        return No_Fault;
+        return NoFault;
     }
 }};
 
 
 def template MiscCompleteAcc {{
-    Fault %(class_name)s::completeAcc(uint8_t *data,
+    Fault * %(class_name)s::completeAcc(uint8_t *data,
                                       %(CPU_exec_context)s *xc,
                                       Trace::InstRecord *traceData) const
     {
         panic("Misc instruction does not support split access method!");
 
-        return No_Fault;
+        return NoFault;
     }
 }};
 
