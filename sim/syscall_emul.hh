@@ -29,6 +29,9 @@
 #ifndef __SIM_SYSCALL_EMUL_HH__
 #define __SIM_SYSCALL_EMUL_HH__
 
+#define BSD_HOST (defined(__APPLE__) || defined(__OpenBSD__) || \
+                  defined(__FreeBSD__))
+
 ///
 /// @file syscall_emul.hh
 ///
@@ -44,7 +47,7 @@
 
 #include "base/intmath.hh"	// for RoundUp
 #include "mem/functional/functional.hh"
-#include "targetarch/isa_traits.hh"	// for Addr
+#include "arch/isa_traits.hh"	// for Addr
 
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
@@ -314,7 +317,7 @@ openFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->mem->readString(path, xc->getSyscallArg(0)) != No_Fault)
+    if (xc->mem->readString(path, xc->getSyscallArg(0)) != NoFault)
         return -EFAULT;
 
     if (path == "/dev/sysdev0") {
@@ -361,7 +364,7 @@ chmodFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->mem->readString(path, xc->getSyscallArg(0)) != No_Fault)
+    if (xc->mem->readString(path, xc->getSyscallArg(0)) != NoFault)
         return -EFAULT;
 
     uint32_t mode = xc->getSyscallArg(1);
@@ -414,7 +417,7 @@ statFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->mem->readString(path, xc->getSyscallArg(0)) != No_Fault)
+    if (xc->mem->readString(path, xc->getSyscallArg(0)) != NoFault)
         return -EFAULT;
 
     struct stat hostBuf;
@@ -441,13 +444,18 @@ fstat64Func(SyscallDesc *desc, int callnum, Process *process,
         return -EBADF;
     }
 
-    struct stat64 hostBuf;
+#if BSD_HOST
+    struct stat  hostBuf;
+    int result = fstat(process->sim_fd(fd), &hostBuf);
+#else
+    struct stat64  hostBuf;
     int result = fstat64(process->sim_fd(fd), &hostBuf);
+#endif
 
     if (result < 0)
         return errno;
 
-    OS::copyOutStat64Buf(xc->mem, xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStat64Buf(xc->mem, fd, xc->getSyscallArg(1), &hostBuf);
 
     return 0;
 }
@@ -461,7 +469,7 @@ lstatFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->mem->readString(path, xc->getSyscallArg(0)) != No_Fault)
+    if (xc->mem->readString(path, xc->getSyscallArg(0)) != NoFault)
         return -EFAULT;
 
     struct stat hostBuf;
@@ -483,16 +491,21 @@ lstat64Func(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->mem->readString(path, xc->getSyscallArg(0)) != No_Fault)
+    if (xc->mem->readString(path, xc->getSyscallArg(0)) != NoFault)
         return -EFAULT;
 
+#if BSD_HOST
+    struct stat hostBuf;
+    int result = lstat(path.c_str(), &hostBuf);
+#else
     struct stat64 hostBuf;
     int result = lstat64(path.c_str(), &hostBuf);
+#endif
 
     if (result < 0)
         return -errno;
 
-    OS::copyOutStat64Buf(xc->mem, xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStat64Buf(xc->mem, -1, xc->getSyscallArg(1), &hostBuf);
 
     return 0;
 }
@@ -517,7 +530,6 @@ fstatFunc(SyscallDesc *desc, int callnum, Process *process,
         return -errno;
 
     OS::copyOutStatBuf(xc->mem, xc->getSyscallArg(1), &hostBuf);
-
     return 0;
 }
 
@@ -530,7 +542,7 @@ statfsFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->mem->readString(path, xc->getSyscallArg(0)) != No_Fault)
+    if (xc->mem->readString(path, xc->getSyscallArg(0)) != NoFault)
         return -EFAULT;
 
     struct statfs hostBuf;
@@ -588,9 +600,9 @@ writevFunc(SyscallDesc *desc, int callnum, Process *process,
         typename OS::tgt_iovec tiov;
         xc->mem->access(Read, tiov_base + i*sizeof(typename OS::tgt_iovec),
                         &tiov, sizeof(typename OS::tgt_iovec));
-        hiov[i].iov_len = tiov.iov_len;
+        hiov[i].iov_len = gtoh(tiov.iov_len);
         hiov[i].iov_base = new char [hiov[i].iov_len];
-        xc->mem->access(Read, tiov.iov_base,
+        xc->mem->access(Read, gtoh(tiov.iov_base),
                         hiov[i].iov_base, hiov[i].iov_len);
     }
 
@@ -653,22 +665,24 @@ mmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 template <class OS>
 SyscallReturn
 getrlimitFunc(SyscallDesc *desc, int callnum, Process *process,
-              ExecContext *xc)
+        ExecContext *xc)
 {
     unsigned resource = xc->getSyscallArg(0);
     TypedBufferArg<typename OS::rlimit> rlp(xc->getSyscallArg(1));
 
     switch (resource) {
-      case OS::RLIMIT_STACK:
-        // max stack size in bytes: make up a number (2MB for now)
-        rlp->rlim_cur = rlp->rlim_max = 8 * 1024 * 1024;
-        break;
+        case OS::TGT_RLIMIT_STACK:
+            // max stack size in bytes: make up a number (2MB for now)
+            rlp->rlim_cur = rlp->rlim_max = 8 * 1024 * 1024;
+            rlp->rlim_cur = htog(rlp->rlim_cur);
+            rlp->rlim_max = htog(rlp->rlim_max);
+            break;
 
-      default:
-        std::cerr << "getrlimitFunc: unimplemented resource " << resource
-                  << std::endl;
-        abort();
-        break;
+        default:
+            std::cerr << "getrlimitFunc: unimplemented resource " << resource
+                << std::endl;
+            abort();
+            break;
     }
 
     rlp.copyOut(xc->mem);
@@ -679,12 +693,14 @@ getrlimitFunc(SyscallDesc *desc, int callnum, Process *process,
 template <class OS>
 SyscallReturn
 gettimeofdayFunc(SyscallDesc *desc, int callnum, Process *process,
-                 ExecContext *xc)
+        ExecContext *xc)
 {
     TypedBufferArg<typename OS::timeval> tp(xc->getSyscallArg(0));
 
     getElapsedTime(tp->tv_sec, tp->tv_usec);
     tp->tv_sec += seconds_since_epoch;
+    tp->tv_sec = htog(tp->tv_sec);
+    tp->tv_usec = htog(tp->tv_usec);
 
     tp.copyOut(xc->mem);
 
@@ -700,7 +716,7 @@ utimesFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->mem->readString(path, xc->getSyscallArg(0)) != No_Fault)
+    if (xc->mem->readString(path, xc->getSyscallArg(0)) != NoFault)
         return -EFAULT;
 
     TypedBufferArg<typename OS::timeval [2]> tp(xc->getSyscallArg(1));
@@ -709,8 +725,8 @@ utimesFunc(SyscallDesc *desc, int callnum, Process *process,
     struct timeval hostTimeval[2];
     for (int i = 0; i < 2; ++i)
     {
-        hostTimeval[i].tv_sec = (*tp)[i].tv_sec;
-        hostTimeval[i].tv_usec = (*tp)[i].tv_usec;
+        hostTimeval[i].tv_sec = gtoh((*tp)[i].tv_sec);
+        hostTimeval[i].tv_usec = gtoh((*tp)[i].tv_usec);
     }
     int result = utimes(path.c_str(), hostTimeval);
 
@@ -719,7 +735,6 @@ utimesFunc(SyscallDesc *desc, int callnum, Process *process,
 
     return 0;
 }
-
 /// Target getrusage() function.
 template <class OS>
 SyscallReturn
@@ -729,7 +744,7 @@ getrusageFunc(SyscallDesc *desc, int callnum, Process *process,
     int who = xc->getSyscallArg(0);	// THREAD, SELF, or CHILDREN
     TypedBufferArg<typename OS::rusage> rup(xc->getSyscallArg(1));
 
-    if (who != OS::RUSAGE_SELF) {
+    if (who != OS::TGT_RUSAGE_SELF) {
         // don't really handle THREAD or CHILDREN, but just warn and
         // plow ahead
         warn("getrusage() only supports RUSAGE_SELF.  Parameter %d ignored.",
@@ -737,6 +752,9 @@ getrusageFunc(SyscallDesc *desc, int callnum, Process *process,
     }
 
     getElapsedTime(rup->ru_utime.tv_sec, rup->ru_utime.tv_usec);
+    rup->ru_utime.tv_sec = htog(rup->ru_utime.tv_sec);
+    rup->ru_utime.tv_usec = htog(rup->ru_utime.tv_usec);
+
     rup->ru_stime.tv_sec = 0;
     rup->ru_stime.tv_usec = 0;
     rup->ru_maxrss = 0;

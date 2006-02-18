@@ -39,6 +39,8 @@
 #include "mem/functional/memory_control.hh"
 #include "mem/functional/physical.hh"
 #include "sim/builder.hh"
+#include "arch/isa_traits.hh"
+#include "sim/byteswap.hh"
 #include "targetarch/vtophys.hh"
 
 #define TIMER_FREQUENCY 1193180
