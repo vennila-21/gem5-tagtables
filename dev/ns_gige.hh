@@ -170,9 +170,6 @@ class NSGigE : public PciDev
     static const Addr size = sizeof(dp_regs);
 
   protected:
-    typedef std::deque<PacketPtr> pktbuf_t;
-    typedef pktbuf_t::iterator pktiter_t;
-
     /** device register file */
     dp_regs regs;
     dp_rom rom;
@@ -408,8 +405,8 @@ class NSGigE : public PciDev
     virtual void writeConfig(int offset, int size, const uint8_t *data);
     virtual void readConfig(int offset, int size, uint8_t *data);
 
-    virtual Fault read(MemReqPtr &req, uint8_t *data);
-    virtual Fault write(MemReqPtr &req, const uint8_t *data);
+    virtual Fault * read(MemReqPtr &req, uint8_t *data);
+    virtual Fault * write(MemReqPtr &req, const uint8_t *data);
 
     bool cpuIntrPending() const;
     void cpuIntrAck() { cpuIntrClear(); }
