@@ -224,7 +224,7 @@ def p_specification(t):
     namespace = isa_name + "Inst"
     # wrap the decode block as a function definition
     t[4].wrap_decode_block('''
-StaticInstPtr<%(isa_name)s>
+StaticInstPtr
 %(isa_name)s::decodeInst(%(isa_name)s::MachInst machInst)
 {
     using namespace %(namespace)s;
@@ -1351,6 +1351,7 @@ class MemOperand(Operand):
     def makeAccSize(self):
         return self.size
 
+
 class NPCOperand(Operand):
     def makeConstructor(self):
         return ''
@@ -1361,6 +1362,15 @@ class NPCOperand(Operand):
     def makeWrite(self):
         return 'xc->setNextPC(%s);\n' % self.base_name
 
+class NNPCOperand(Operand):
+    def makeConstructor(self):
+        return ''
+
+    def makeRead(self):
+        return '%s = xc->readPC() + 8;\n' % self.base_name
+
+    def makeWrite(self):
+        return 'xc->setNextNPC(%s);\n' % self.base_name
 
 def buildOperandNameMap(userDict, lineno):
     global operandNameMap
@@ -1686,6 +1696,8 @@ namespace %(namespace)s {
 %(namespace_output)s
 
 } // namespace %(namespace)s
+
+%(decode_function)s
 '''
 
 
@@ -1765,13 +1777,15 @@ def parse_isa_desc(isa_desc_file, output_dir, include_path):
     includes = '#include "base/bitfield.hh" // for bitfield support'
     global_output = global_code.header_output
     namespace_output = namespace_code.header_output
+    decode_function = ''
     update_if_needed(output_dir + '/decoder.hh', file_template % vars())
 
     # generate decoder.cc
     includes = '#include "%s/decoder.hh"' % include_path
     global_output = global_code.decoder_output
     namespace_output = namespace_code.decoder_output
-    namespace_output += namespace_code.decode_block
+    # namespace_output += namespace_code.decode_block
+    decode_function = namespace_code.decode_block
     update_if_needed(output_dir + '/decoder.cc', file_template % vars())
 
     # generate per-cpu exec files
@@ -1780,6 +1794,7 @@ def parse_isa_desc(isa_desc_file, output_dir, include_path):
         includes += cpu.includes
         global_output = global_code.exec_output[cpu.name]
         namespace_output = namespace_code.exec_output[cpu.name]
+        decode_function = ''
         update_if_needed(output_dir + '/' + cpu.filename,
                           file_template % vars())
 

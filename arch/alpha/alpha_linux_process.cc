@@ -39,6 +39,7 @@
 #include "sim/syscall_emul.hh"
 
 using namespace std;
+using namespace AlphaISA;
 
 /// Target uname() handler.
 static SyscallReturn
