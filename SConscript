@@ -209,6 +209,7 @@ base_sources = Split('''
 	sim/configfile.cc
 	sim/debug.cc
 	sim/eventq.cc
+	sim/faults.cc
 	sim/main.cc
 	sim/param.cc
 	sim/profile.cc
@@ -222,14 +223,6 @@ base_sources = Split('''
 	sim/stat_control.cc
 	sim/trace_context.cc
         ''')
-# These are now included by the architecture specific SConscript
-#	arch/alpha/decoder.cc
-#	arch/alpha/alpha_o3_exec.cc
-#	arch/alpha/fast_cpu_exec.cc
-#	arch/alpha/simple_cpu_exec.cc
-#	arch/alpha/full_cpu_exec.cc
-#	arch/alpha/faults.cc
-#	arch/alpha/isa_traits.cc
 
 # MySql sources
 mysql_sources = Split('''
@@ -295,15 +288,6 @@ full_system_sources = Split('''
 	sim/pseudo_inst.cc
         ''')
 
-# These are now included by the architecture specific SConscript
-#	arch/alpha/alpha_memory.cc
-#	arch/alpha/arguments.cc
-#	arch/alpha/ev5.cc
-#	arch/alpha/osfpal.cc
-#	arch/alpha/pseudo_inst.cc
-#	arch/alpha/stacktrace.cc
-#	arch/alpha/vtophys.cc
-
 # turbolaser encumbered sources
 turbolaser_sources = Split('''
 	encumbered/dev/dma.cc
@@ -330,14 +314,16 @@ syscall_emulation_sources = Split('''
 	encumbered/eio/eio.cc
 	encumbered/eio/exolex.cc
 	encumbered/eio/libexo.cc
+        kern/linux/linux.cc
+        kern/tru64/tru64.cc
 	sim/process.cc
 	sim/syscall_emul.cc
         ''')
 
-# These are now included by the architecture specific SConscript
-#	arch/alpha/alpha_common_syscall_emul.cc
-#	arch/alpha/alpha_linux_process.cc
-#	arch/alpha/alpha_tru64_process.cc
+# The following stuff (targetarch code and global define of THE_ISA)
+# are legacy things that assume we're only compiling one ISA at a
+# time.  These will have to go away if we want to build a binary that
+# supports multiple ISAs.
 
 targetarch_files = Split('''
         alpha_linux_process.hh
@@ -351,29 +337,20 @@ targetarch_files = Split('''
         stacktrace.hh
         vtophys.hh
         ''')
-#        pseudo_inst.hh
-#        isa_traits.hh
-#        osfpal.hh
-#        byte_swap.hh
-#        alpha_common_syscall_emul.hh
-#        vptr.hh
-#        isa_fullsys_traits.hh
 
 # Set up bridging headers to the architecture specific versions
 for f in targetarch_files:
     env.Command('targetarch/' + f, 'arch/%s/%s' % (env['TARGET_ISA'], f),
                 '''echo '#include "arch/%s/%s"' > $TARGET''' % (env['TARGET_ISA'], f))
 
-# Let the target architecture define what sources it needs
-arch_source = SConscript('arch/%s/SConscript' % env['TARGET_ISA'],
-	build_dir = 'build/%s/' % env['BUILD_DIR'],
-	exports = 'env', duplicate = False)
-
 # Add a flag defining what THE_ISA should be for all compilation
 env.Append(CPPDEFINES=[('THE_ISA','%s_ISA' % env['TARGET_ISA'].upper())])
 
+arch_sources = SConscript('arch/SConscript',
+                          exports = 'env', duplicate = False)
+
 # Set up complete list of sources based on configuration.
-sources = base_sources + arch_source
+sources = base_sources + arch_sources
 
 if env['FULL_SYSTEM']:
     sources += full_system_sources
@@ -390,27 +367,6 @@ for opt in env.ExportOptions:
 
 ###################################################
 #
-# Add an SCons scanner for ISA files
-#
-###################################################
-import SCons.Scanner
-
-def ISAScan():
-   return SCons.Scanner.Classic("ISAScan",
-                                "$ISASUFFIXES",
-                                "SRCDIR",
-                                '^[ \t]*##[ \t]*include[ \t]*"([^>"]+)"')
-
-def ISAPath(env, dir, target=None, source=None, a=None):
-   return (Dir(env['SRCDIR']), Dir('.'))   
-
-iscan = Scanner(function = ISAScan().scan, skeys = [".isa", ".ISA"],
-                path_function = ISAPath)
-env.Append(SCANNERS = iscan)
-
- 
-###################################################
-#
 # Special build rules.
 #
 ###################################################
@@ -420,27 +376,6 @@ env.Append(SCANNERS = iscan)
 env.Command(Split('base/traceflags.hh base/traceflags.cc'),
             'base/traceflags.py',
             'python $SOURCE $TARGET.base')
-
-# several files are generated from arch/$TARGET_ISA/isa_desc.
-env.Command(Split('''
-	arch/%s/decoder.cc
-	arch/%s/decoder.hh
-        arch/%s/alpha_o3_exec.cc
-	arch/%s/fast_cpu_exec.cc
-        arch/%s/simple_cpu_exec.cc
-        arch/%s/full_cpu_exec.cc''' %
-	(env['TARGET_ISA'],
-	env['TARGET_ISA'],
-	env['TARGET_ISA'],
-	env['TARGET_ISA'],
-	env['TARGET_ISA'],
-	env['TARGET_ISA'])),
-	Split('''
-	arch/%s/isa/main.isa
-	arch/isa_parser.py''' %
-	env['TARGET_ISA']),
-	'$SRCDIR/arch/isa_parser.py $SOURCE $TARGET.dir arch/%s' % env['TARGET_ISA'])
-
 
 # libelf build is described in its own SConscript file.
 # SConscript-local is the per-config build, which just copies some

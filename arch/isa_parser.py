@@ -224,7 +224,7 @@ def p_specification(t):
     namespace = isa_name + "Inst"
     # wrap the decode block as a function definition
     t[4].wrap_decode_block('''
-StaticInstPtr<%(isa_name)s>
+StaticInstPtr
 %(isa_name)s::decodeInst(%(isa_name)s::MachInst machInst)
 {
     using namespace %(namespace)s;
@@ -1138,6 +1138,7 @@ class Operand(object):
         # template must be careful not to use it if it doesn't apply.
         if self.isMem():
             self.mem_acc_size = self.makeAccSize()
+            self.mem_acc_type = self.ctype
 
     # Finalize additional fields (primarily code fields).  This step
     # is done separately since some of these fields may depend on the
@@ -1150,13 +1151,17 @@ class Operand(object):
 
         if self.is_src:
             self.op_rd = self.makeRead()
+            self.op_src_decl = self.makeDecl()
         else:
             self.op_rd = ''
+            self.op_src_decl = ''
 
         if self.is_dest:
             self.op_wb = self.makeWrite()
+            self.op_dest_decl = self.makeDecl()
         else:
             self.op_wb = ''
+            self.op_dest_decl = ''
 
     def isMem(self):
         return 0
@@ -1346,6 +1351,7 @@ class MemOperand(Operand):
     def makeAccSize(self):
         return self.size
 
+
 class NPCOperand(Operand):
     def makeConstructor(self):
         return ''
@@ -1356,6 +1362,15 @@ class NPCOperand(Operand):
     def makeWrite(self):
         return 'xc->setNextPC(%s);\n' % self.base_name
 
+class NNPCOperand(Operand):
+    def makeConstructor(self):
+        return ''
+
+    def makeRead(self):
+        return '%s = xc->readPC() + 8;\n' % self.base_name
+
+    def makeWrite(self):
+        return 'xc->setNextNPC(%s);\n' % self.base_name
 
 def buildOperandNameMap(userDict, lineno):
     global operandNameMap
@@ -1589,6 +1604,14 @@ class CodeBlock:
 
         self.op_decl = self.operands.concatAttrStrings('op_decl')
 
+        is_src = lambda op: op.is_src
+        is_dest = lambda op: op.is_dest
+
+        self.op_src_decl = \
+                  self.operands.concatSomeAttrStrings(is_src, 'op_src_decl')
+        self.op_dest_decl = \
+                  self.operands.concatSomeAttrStrings(is_dest, 'op_dest_decl')
+
         self.op_rd = self.operands.concatAttrStrings('op_rd')
         self.op_wb = self.operands.concatAttrStrings('op_wb')
 
@@ -1596,6 +1619,7 @@ class CodeBlock:
 
         if self.operands.memOperand:
             self.mem_acc_size = self.operands.memOperand.mem_acc_size
+            self.mem_acc_type = self.operands.memOperand.mem_acc_type
 
         # Make a basic guess on the operand class (function unit type).
         # These are good enough for most cases, and will be overridden
@@ -1672,6 +1696,8 @@ namespace %(namespace)s {
 %(namespace_output)s
 
 } // namespace %(namespace)s
+
+%(decode_function)s
 '''
 
 
@@ -1725,7 +1751,7 @@ def preprocess_isa_desc(isa_desc):
 #
 # Read in and parse the ISA description.
 #
-def parse_isa_desc(isa_desc_file, output_dir, include_path):
+def parse_isa_desc(isa_desc_file, output_dir):
     # set a global var for the input filename... used in error messages
     global input_filename
     input_filename = isa_desc_file
@@ -1751,24 +1777,27 @@ def parse_isa_desc(isa_desc_file, output_dir, include_path):
     includes = '#include "base/bitfield.hh" // for bitfield support'
     global_output = global_code.header_output
     namespace_output = namespace_code.header_output
+    decode_function = ''
     update_if_needed(output_dir + '/decoder.hh', file_template % vars())
 
     # generate decoder.cc
-    includes = '#include "%s/decoder.hh"' % include_path
+    includes = '#include "decoder.hh"'
     global_output = global_code.decoder_output
     namespace_output = namespace_code.decoder_output
-    namespace_output += namespace_code.decode_block
+    # namespace_output += namespace_code.decode_block
+    decode_function = namespace_code.decode_block
     update_if_needed(output_dir + '/decoder.cc', file_template % vars())
 
     # generate per-cpu exec files
     for cpu in CpuModel.list:
-        includes = '#include "%s/decoder.hh"\n' % include_path
+        includes = '#include "decoder.hh"\n'
         includes += cpu.includes
         global_output = global_code.exec_output[cpu.name]
         namespace_output = namespace_code.exec_output[cpu.name]
+        decode_function = ''
         update_if_needed(output_dir + '/' + cpu.filename,
                           file_template % vars())
 
 # Called as script: get args from command line.
 if __name__ == '__main__':
-    parse_isa_desc(sys.argv[1], sys.argv[2], sys.argv[3])
+    parse_isa_desc(sys.argv[1], sys.argv[2])

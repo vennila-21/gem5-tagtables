@@ -205,8 +205,8 @@ output decoder {{
 
 def template JumpOrBranchDecode {{
     return (RA == 31)
-        ? (StaticInst<AlphaISA> *)new %(class_name)s(machInst)
-        : (StaticInst<AlphaISA> *)new %(class_name)sAndLink(machInst);
+        ? (StaticInst *)new %(class_name)s(machInst)
+        : (StaticInst *)new %(class_name)sAndLink(machInst);
 }};
 
 def format CondBranch(code) {{

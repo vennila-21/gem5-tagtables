@@ -35,6 +35,7 @@
 #include "sim/host.hh"
 #include "sim/serialize.hh"
 #include "arch/isa_traits.hh"
+//#include "arch/isa_registers.hh"
 #include "sim/byteswap.hh"
 
 // forward declaration: see functional_memory.hh
@@ -66,6 +67,10 @@ namespace Kernel { class Binning; class Statistics; }
 
 class ExecContext
 {
+  protected:
+    typedef TheISA::RegFile RegFile;
+    typedef TheISA::MachInst MachInst;
+    typedef TheISA::MiscRegFile MiscRegFile;
   public:
     enum Status
     {
@@ -80,7 +85,7 @@ class ExecContext
         Active,
 
         /// Temporarily inactive.  Entered while waiting for
-        /// synchronization, etc.
+        /// initialization,synchronization, etc.
         Suspended,
 
         /// Permanently shut down.  Entered when target executes
@@ -94,6 +99,8 @@ class ExecContext
 
   public:
     Status status() const { return _status; }
+
+    void setStatus(Status newStatus) { _status = newStatus; }
 
     /// Set the status to Active.  Optional delay indicates number of
     /// cycles to wait before beginning execution.
@@ -240,7 +247,7 @@ class ExecContext
         // put the asid in the upper 16 bits of the paddr
         req->paddr = req->vaddr & ~((Addr)0xffff << sizeof(Addr) * 8 - 16);
         req->paddr = req->paddr | (Addr)req->asid << sizeof(Addr) * 8 - 16;
-        return No_Fault;
+        return NoFault;
     }
     Fault translateInstReq(MemReqPtr &req)
     {
@@ -301,7 +308,7 @@ class ExecContext
                                   << "on cpu " << req->xc->cpu_id
                                   << std::endl;
                     }
-                    return No_Fault;
+                    return NoFault;
                 }
                 else req->xc->storeCondFailures = 0;
             }
@@ -431,15 +438,15 @@ class ExecContext
     void trap(Fault fault);
 
 #if !FULL_SYSTEM
-    IntReg getSyscallArg(int i)
+    TheISA::IntReg getSyscallArg(int i)
     {
-        return regs.intRegFile[ArgumentReg0 + i];
+        return regs.intRegFile[TheISA::ArgumentReg0 + i];
     }
 
     // used to shift args for indirect syscall
-    void setSyscallArg(int i, IntReg val)
+    void setSyscallArg(int i, TheISA::IntReg val)
     {
-        regs.intRegFile[ArgumentReg0 + i] = val;
+        regs.intRegFile[TheISA::ArgumentReg0 + i] = val;
     }
 
     void setSyscallReturn(SyscallReturn return_value)
@@ -451,11 +458,11 @@ class ExecContext
         if (return_value.successful()) {
             // no error
             regs.intRegFile[RegA3] = 0;
-            regs.intRegFile[ReturnValueReg] = return_value.value();
+            regs.intRegFile[TheISA::ReturnValueReg] = return_value.value();
         } else {
             // got an error, return details
-            regs.intRegFile[RegA3] = (IntReg) -1;
-            regs.intRegFile[ReturnValueReg] = -return_value.value();
+            regs.intRegFile[RegA3] = (TheISA::IntReg) -1;
+            regs.intRegFile[TheISA::ReturnValueReg] = -return_value.value();
         }
     }
 

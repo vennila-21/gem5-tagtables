@@ -272,7 +272,7 @@ PciDev::readBar(MemReqPtr &req, uint8_t *data)
         return readBar4(req, req->paddr - BARAddrs[4], data);
     if (isBAR(req->paddr, 5))
         return readBar5(req, req->paddr - BARAddrs[5], data);
-    return Machine_Check_Fault;
+    return MachineCheckFault;
 }
 
 inline Fault
@@ -290,7 +290,7 @@ PciDev::writeBar(MemReqPtr &req, const uint8_t *data)
         return writeBar4(req, req->paddr - BARAddrs[4], data);
     if (isBAR(req->paddr, 5))
         return writeBar5(req, req->paddr - BARAddrs[5], data);
-    return Machine_Check_Fault;
+    return MachineCheckFault;
 }
 
 #endif // __DEV_PCIDEV_HH__

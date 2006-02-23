@@ -39,8 +39,9 @@
 template <class Impl>
 class AlphaFullCPU : public FullO3CPU<Impl>
 {
+  protected:
+    typedef TheISA::IntReg IntReg;
   public:
-    typedef typename Impl::ISA AlphaISA;
     typedef typename Impl::Params Params;
 
   public:
@@ -87,7 +88,7 @@ class AlphaFullCPU : public FullO3CPU<Impl>
         // put the asid in the upper 16 bits of the paddr
         req->paddr = req->vaddr & ~((Addr)0xffff << sizeof(Addr) * 8 - 16);
         req->paddr = req->paddr | (Addr)req->asid << sizeof(Addr) * 8 - 16;
-        return No_Fault;
+        return NoFault;
     }
 
     Fault translateInstReq(MemReqPtr &req)
@@ -259,7 +260,7 @@ class AlphaFullCPU : public FullO3CPU<Impl>
                                   << "on cpu " << this->cpu_id
                                   << std::endl;
                     }
-                    return No_Fault;
+                    return NoFault;
                 }
                 else req->xc->storeCondFailures = 0;
             }

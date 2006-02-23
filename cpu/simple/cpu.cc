@@ -76,7 +76,7 @@
 
 using namespace std;
 //The SimpleCPU does alpha only
-using namespace LittleEndianGuest;
+using namespace AlphaISA;
 
 
 SimpleCPU::TickEvent::TickEvent(SimpleCPU *c, int w)
@@ -336,7 +336,7 @@ SimpleCPU::copySrcTranslate(Addr src)
 
     // Make sure block doesn't span page
     if (no_warn &&
-        (src & TheISA::PageMask) != ((src + blk_size) & TheISA::PageMask) &&
+        (src & PageMask) != ((src + blk_size) & PageMask) &&
         (src >> 40) != 0xfffffc) {
         warn("Copied block source spans pages %x.", src);
         no_warn = false;
@@ -347,9 +347,9 @@ SimpleCPU::copySrcTranslate(Addr src)
     // translate to physical address
     Fault fault = xc->translateDataReadReq(memReq);
 
-    assert(fault != Alignment_Fault);
+    assert(fault != AlignmentFault);
 
-    if (fault == No_Fault) {
+    if (fault == NoFault) {
         xc->copySrcAddr = src;
         xc->copySrcPhysAddr = memReq->paddr + offset;
     } else {
@@ -372,7 +372,7 @@ SimpleCPU::copy(Addr dest)
 
     // Make sure block doesn't span page
     if (no_warn &&
-        (dest & TheISA::PageMask) != ((dest + blk_size) & TheISA::PageMask) &&
+        (dest & PageMask) != ((dest + blk_size) & PageMask) &&
         (dest >> 40) != 0xfffffc) {
         no_warn = false;
         warn("Copied block destination spans pages %x. ", dest);
@@ -382,9 +382,9 @@ SimpleCPU::copy(Addr dest)
     // translate to physical address
     Fault fault = xc->translateDataWriteReq(memReq);
 
-    assert(fault != Alignment_Fault);
+    assert(fault != AlignmentFault);
 
-    if (fault == No_Fault) {
+    if (fault == NoFault) {
         Addr dest_addr = memReq->paddr + offset;
         // Need to read straight from memory since we have more than 8 bytes.
         memReq->paddr = xc->copySrcPhysAddr;
@@ -425,7 +425,7 @@ SimpleCPU::read(Addr addr, T &data, unsigned flags)
     Fault fault = xc->translateDataReadReq(memReq);
 
     // if we have a cache, do cache access too
-    if (fault == No_Fault && dcacheInterface) {
+    if (fault == NoFault && dcacheInterface) {
         memReq->cmd = Read;
         memReq->completionEvent = NULL;
         memReq->time = curTick;
@@ -445,7 +445,7 @@ SimpleCPU::read(Addr addr, T &data, unsigned flags)
             fault = xc->read(memReq, data);
 
         }
-    } else if(fault == No_Fault) {
+    } else if(fault == NoFault) {
         // do functional access
         fault = xc->read(memReq, data);
 
@@ -510,10 +510,10 @@ SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
     Fault fault = xc->translateDataWriteReq(memReq);
 
     // do functional access
-    if (fault == No_Fault)
+    if (fault == NoFault)
         fault = xc->write(memReq, data);
 
-    if (fault == No_Fault && dcacheInterface) {
+    if (fault == NoFault && dcacheInterface) {
         memReq->cmd = Write;
         memcpy(memReq->data,(uint8_t *)&data,memReq->size);
         memReq->completionEvent = NULL;
@@ -532,7 +532,7 @@ SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
         }
     }
 
-    if (res && (fault == No_Fault))
+    if (res && (fault == NoFault))
         *res = memReq->result;
 
     if (!dcacheInterface && (memReq->flags & UNCACHEABLE))
@@ -651,7 +651,7 @@ SimpleCPU::tick()
 
     traceData = NULL;
 
-    Fault fault = No_Fault;
+    Fault fault = NoFault;
 
 #if FULL_SYSTEM
     if (checkInterrupts && check_interrupts() && !xc->inPalMode() &&
@@ -661,20 +661,20 @@ SimpleCPU::tick()
         checkInterrupts = false;
         IntReg *ipr = xc->regs.ipr;
 
-        if (xc->regs.ipr[TheISA::IPR_SIRR]) {
-            for (int i = TheISA::INTLEVEL_SOFTWARE_MIN;
-                 i < TheISA::INTLEVEL_SOFTWARE_MAX; i++) {
-                if (ipr[TheISA::IPR_SIRR] & (ULL(1) << i)) {
+        if (xc->regs.ipr[IPR_SIRR]) {
+            for (int i = INTLEVEL_SOFTWARE_MIN;
+                 i < INTLEVEL_SOFTWARE_MAX; i++) {
+                if (ipr[IPR_SIRR] & (ULL(1) << i)) {
                     // See table 4-19 of 21164 hardware reference
-                    ipl = (i - TheISA::INTLEVEL_SOFTWARE_MIN) + 1;
+                    ipl = (i - INTLEVEL_SOFTWARE_MIN) + 1;
                     summary |= (ULL(1) << i);
                 }
             }
         }
 
         uint64_t interrupts = xc->cpu->intr_status();
-        for (int i = TheISA::INTLEVEL_EXTERNAL_MIN;
-            i < TheISA::INTLEVEL_EXTERNAL_MAX; i++) {
+        for (int i = INTLEVEL_EXTERNAL_MIN;
+            i < INTLEVEL_EXTERNAL_MAX; i++) {
             if (interrupts & (ULL(1) << i)) {
                 // See table 4-19 of 21164 hardware reference
                 ipl = i;
@@ -682,16 +682,16 @@ SimpleCPU::tick()
             }
         }
 
-        if (ipr[TheISA::IPR_ASTRR])
+        if (ipr[IPR_ASTRR])
             panic("asynchronous traps not implemented\n");
 
-        if (ipl && ipl > xc->regs.ipr[TheISA::IPR_IPLR]) {
-            ipr[TheISA::IPR_ISR] = summary;
-            ipr[TheISA::IPR_INTID] = ipl;
-            xc->ev5_trap(Interrupt_Fault);
+        if (ipl && ipl > xc->regs.ipr[IPR_IPLR]) {
+            ipr[IPR_ISR] = summary;
+            ipr[IPR_INTID] = ipl;
+            xc->ev5_trap(InterruptFault);
 
             DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
-                    ipr[TheISA::IPR_IPLR], ipl, summary);
+                    ipr[IPR_IPLR], ipl, summary);
         }
     }
 #endif
@@ -726,10 +726,10 @@ SimpleCPU::tick()
 
         fault = xc->translateInstReq(memReq);
 
-        if (fault == No_Fault)
+        if (fault == NoFault)
             fault = xc->mem->read(memReq, inst);
 
-        if (icacheInterface && fault == No_Fault) {
+        if (icacheInterface && fault == NoFault) {
             memReq->completionEvent = NULL;
 
             memReq->time = curTick;
@@ -751,7 +751,7 @@ SimpleCPU::tick()
 
     // If we've got a valid instruction (i.e., no fault on instruction
     // fetch), then execute it.
-    if (fault == No_Fault) {
+    if (fault == NoFault) {
 
         // keep an instruction count
         numInst++;
@@ -762,7 +762,7 @@ SimpleCPU::tick()
 
         // decode the instruction
         inst = gtoh(inst);
-        curStaticInst = StaticInst<TheISA>::decode(inst);
+        curStaticInst = StaticInst::decode(inst);
 
         traceData = Trace::getInstRecord(curTick, xc, this, curStaticInst,
                                          xc->regs.pc);
@@ -808,9 +808,9 @@ SimpleCPU::tick()
 
         traceFunctions(xc->regs.pc);
 
-    }	// if (fault == No_Fault)
+    }	// if (fault == NoFault)
 
-    if (fault != No_Fault) {
+    if (fault != NoFault) {
 #if FULL_SYSTEM
         xc->ev5_trap(fault);
 #else // !FULL_SYSTEM

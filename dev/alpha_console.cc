@@ -53,6 +53,7 @@
 #include "sim/system.hh"
 
 using namespace std;
+using namespace AlphaISA;
 
 AlphaConsole::AlphaConsole(const string &name, SimConsole *cons, SimpleDisk *d,
                            System *s, BaseCPU *c, Platform *p,
@@ -181,10 +182,10 @@ AlphaConsole::read(MemReqPtr &req, uint8_t *data)
             }
             break;
         default:
-            return Machine_Check_Fault;
+            return MachineCheckFault;
     }
 
-    return No_Fault;
+    return NoFault;
 }
 
 Fault
@@ -201,7 +202,7 @@ AlphaConsole::write(MemReqPtr &req, const uint8_t *data)
         val = *(uint64_t *)data;
         break;
       default:
-        return Machine_Check_Fault;
+        return MachineCheckFault;
     }
 
     Addr daddr = req->paddr - (addr & EV5::PAddrImplMask);
@@ -251,7 +252,7 @@ AlphaConsole::write(MemReqPtr &req, const uint8_t *data)
             panic("Unknown 64bit access, %#x\n", daddr);
     }
 
-    return No_Fault;
+    return NoFault;
 }
 
 Tick
