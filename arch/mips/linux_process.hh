@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,37 +26,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ARCH_ISA_SPECIFIC_HH__
-#define __ARCH_ISA_SPECIFIC_HH__
+#ifndef __MIPS_LINUX_PROCESS_HH__
+#define __MIPS_LINUX_PROCESS_HH__
 
-//This file provides a mechanism for other source code to bring in
-//files from the ISA being compiled with
+#include "sim/process.hh"
 
-//These are constants so you can selective compile code based on the isa
-//To use them, do something like
-//
-//#if THE_ISA == YOUR_FAVORITE_ISA
-//	conditional_code
-//#endif
-//
-//Note that this is how this file sets up the other isa "hooks"
 
-//These macros have numerical values because otherwise the preprocessor
-//would treat them as 0 in comparisons.
-#define ALPHA_ISA 21064
-#define SPARC_ISA 42
-#define MIPS_ISA 1337
+/// A process with emulated Mips/Linux syscalls.
+class MipsLinuxProcess : public LiveProcess
+{
+  public:
+    /// Constructor.
+    MipsLinuxProcess(const std::string &name,
+                      ObjectFile *objFile,
+                      int stdin_fd, int stdout_fd, int stderr_fd,
+                      std::vector<std::string> &argv,
+                      std::vector<std::string> &envp);
 
-//These tell the preprocessor where to find the files of a particular
-//ISA, and set the "TheISA" macro for use elsewhere.
-#if THE_ISA == ALPHA_ISA
-    #define TheISA AlphaISA
-#elif THE_ISA == SPARC_ISA
-    #define TheISA SparcISA
-#elif THE_ISA == MIPS_ISA
-    #define TheISA MipsISA
-#else
-    #error "THE_ISA not set"
-#endif
+    virtual SyscallDesc* getDesc(int callnum);
 
-#endif
+    /// The target system's hostname.
+    static const char *hostname;
+
+     /// Array of syscall descriptors, indexed by call number.
+    static SyscallDesc syscallDescs[];
+
+    const int Num_Syscall_Descs;
+};
+
+
+#endif // __MIPS_LINUX_PROCESS_HH__
