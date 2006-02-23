@@ -41,7 +41,6 @@ class ExecContext;
 class FnEvent;
 // What does kernel stats expect is included?
 class System;
-enum Fault;
 
 namespace Kernel {
 
@@ -106,7 +105,7 @@ class Binning
 
     cpu_mode themode;
     void palSwapContext(ExecContext *xc);
-    void execute(ExecContext *xc, StaticInstPtr<TheISA> inst);
+    void execute(ExecContext *xc, StaticInstPtr inst);
     void call(ExecContext *xc, Stats::MainBin *myBin);
     void changeMode(cpu_mode mode);
 
@@ -124,6 +123,7 @@ class Binning
 
 class Statistics : public Serializable
 {
+  private:
     friend class Binning;
 
   private:
@@ -176,7 +176,13 @@ class Statistics : public Serializable
     void ivlb() { _ivlb++; }
     void ivle() { _ivle++; }
     void hwrei() { _hwrei++; }
-    void fault(Fault fault) { _faults[fault]++; }
+    void fault(Fault fault)
+    {
+            if(fault == NoFault) _faults[0]++;
+            else if(fault == MachineCheckFault) _faults[2]++;
+            else if(fault == AlignmentFault) _faults[7]++;
+            else _faults[fault->id]++;
+    }// FIXME: When there are no generic system fault objects, this will go back to _faults[fault]++; }
     void swpipl(int ipl);
     void mode(cpu_mode newmode);
     void context(Addr oldpcbb, Addr newpcbb);

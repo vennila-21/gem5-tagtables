@@ -280,9 +280,9 @@ AlphaFullCPU<Impl>::hwrei()
     uint64_t *ipr = getIpr();
 
     if (!inPalMode())
-        return Unimplemented_Opcode_Fault;
+        return UnimplementedOpcodeFault;
 
-    setNextPC(ipr[AlphaISA::IPR_EXC_ADDR]);
+    this->setNextPC(ipr[AlphaISA::IPR_EXC_ADDR]);
 
 //    kernelStats.hwrei();
 
@@ -292,7 +292,7 @@ AlphaFullCPU<Impl>::hwrei()
     this->checkInterrupts = true;
 
     // FIXME: XXX check for interrupts? XXX
-    return No_Fault;
+    return NoFault;
 }
 
 template <class Impl>
@@ -329,22 +329,22 @@ AlphaFullCPU<Impl>::trap(Fault fault)
     // miss
     uint64_t PC = this->commit.readCommitPC();
 
-    DPRINTF(Fault, "Fault %s\n", FaultName(fault));
-    this->recordEvent(csprintf("Fault %s", FaultName(fault)));
+    DPRINTF(Fault, "Fault %s\n", fault ? fault->name : "name");
+    this->recordEvent(csprintf("Fault %s", fault ? fault->name : "name"));
 
 //    kernelStats.fault(fault);
 
-    if (fault == Arithmetic_Fault)
+    if (fault == ArithmeticFault)
         panic("Arithmetic traps are unimplemented!");
 
-    typename AlphaISA::InternalProcReg *ipr = getIpr();
+    AlphaISA::InternalProcReg *ipr = getIpr();
 
     // exception restart address - Get the commit PC
-    if (fault != Interrupt_Fault || !inPalMode(PC))
+    if (fault != InterruptFault || !inPalMode(PC))
         ipr[AlphaISA::IPR_EXC_ADDR] = PC;
 
-    if (fault == Pal_Fault || fault == Arithmetic_Fault /* ||
-        fault == Interrupt_Fault && !PC_PAL(regs.pc) */) {
+    if (fault == PalFault || fault == ArithmeticFault /* ||
+        fault == InterruptFault && !PC_PAL(regs.pc) */) {
         // traps...  skip faulting instruction
         ipr[AlphaISA::IPR_EXC_ADDR] += 4;
     }
@@ -353,7 +353,7 @@ AlphaFullCPU<Impl>::trap(Fault fault)
         swapPALShadow(true);
 
     this->regFile.setPC( ipr[AlphaISA::IPR_PAL_BASE] +
-                         AlphaISA::fault_addr[fault] );
+                         AlphaISA::fault_addr(fault) );
     this->regFile.setNextPC(PC + sizeof(MachInst));
 }
 

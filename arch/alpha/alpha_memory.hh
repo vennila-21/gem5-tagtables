@@ -32,6 +32,7 @@
 #include <map>
 
 #include "arch/alpha/isa_traits.hh"
+#include "arch/alpha/faults.hh"
 #include "base/statistics.hh"
 #include "mem/mem_req.hh"
 #include "sim/sim_object.hh"

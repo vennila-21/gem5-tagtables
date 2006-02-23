@@ -48,8 +48,12 @@
 
 class ExecContext;
 class FunctionalMemory;
+class SyscallDesc;
 class Process : public SimObject
 {
+  protected:
+    typedef TheISA::RegFile RegFile;
+    typedef TheISA::MachInst MachInst;
   public:
 
     // have we initialized an execution context from this process?  If
@@ -200,6 +204,11 @@ class LiveProcess : public Process
                                std::string executable,
                                std::vector<std::string> &argv,
                                std::vector<std::string> &envp);
+
+    virtual void syscall(ExecContext *xc);
+
+    virtual SyscallDesc* getDesc(int callnum) { panic("Must be implemented."); }
+
 };
 
 

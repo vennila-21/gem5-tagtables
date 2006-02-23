@@ -51,7 +51,6 @@
  */
 
 // Forward declaration.
-template <class ISA>
 class StaticInstPtr;
 
 template <class Impl>
@@ -61,25 +60,20 @@ class BaseDynInst : public FastAlloc, public RefCounted
     // Typedef for the CPU.
     typedef typename Impl::FullCPU FullCPU;
 
-    //Typedef to get the ISA.
-    typedef typename Impl::ISA ISA;
-
     /// Binary machine instruction type.
-    typedef typename ISA::MachInst MachInst;
-    /// Memory address type.
-    typedef typename ISA::Addr	   Addr;
+    typedef TheISA::MachInst MachInst;
     /// Logical register index type.
-    typedef typename ISA::RegIndex RegIndex;
+    typedef TheISA::RegIndex RegIndex;
     /// Integer register index type.
-    typedef typename ISA::IntReg   IntReg;
+    typedef TheISA::IntReg IntReg;
 
     enum {
-        MaxInstSrcRegs = ISA::MaxInstSrcRegs,	//< Max source regs
-        MaxInstDestRegs = ISA::MaxInstDestRegs,	//< Max dest regs
+        MaxInstSrcRegs = TheISA::MaxInstSrcRegs,        //< Max source regs
+        MaxInstDestRegs = TheISA::MaxInstDestRegs,      //< Max dest regs
     };
 
     /** The static inst used by this dyn inst. */
-    StaticInstPtr<ISA> staticInst;
+    StaticInstPtr staticInst;
 
     ////////////////////////////////////////////
     //
@@ -214,7 +208,7 @@ class BaseDynInst : public FastAlloc, public RefCounted
                 FullCPU *cpu);
 
     /** BaseDynInst constructor given a static inst pointer. */
-    BaseDynInst(StaticInstPtr<ISA> &_staticInst);
+    BaseDynInst(StaticInstPtr &_staticInst);
 
     /** BaseDynInst destructor. */
     ~BaseDynInst();
@@ -472,7 +466,7 @@ BaseDynInst<Impl>::read(Addr addr, T &data, unsigned flags)
     req->paddr = req->vaddr;
 #endif
 
-    if (fault == No_Fault) {
+    if (fault == NoFault) {
         fault = cpu->read(req, data, lqIdx);
     } else {
         // Return a fixed value to keep simulation deterministic even
@@ -520,14 +514,14 @@ BaseDynInst<Impl>::write(T data, Addr addr, unsigned flags, uint64_t *res)
     req->paddr = req->vaddr;
 #endif
 
-    if (fault == No_Fault) {
+    if (fault == NoFault) {
         fault = cpu->write(req, data, sqIdx);
     }
 
     if (res) {
         // always return some result to keep misspeculated paths
         // (which will ignore faults) deterministic
-        *res = (fault == No_Fault) ? req->result : 0;
+        *res = (fault == NoFault) ? req->result : 0;
     }
 
     return fault;
