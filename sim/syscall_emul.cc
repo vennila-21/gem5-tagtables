@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <fcntl.h>
 #include <unistd.h>
 
 #include <string>
@@ -40,6 +41,7 @@
 #include "sim/sim_events.hh"
 
 using namespace std;
+using namespace TheISA;
 
 void
 SyscallDesc::doSyscall(int callnum, Process *process, ExecContext *xc)
@@ -89,7 +91,7 @@ exitFunc(SyscallDesc *desc, int callnum, Process *process,
 SyscallReturn
 getpagesizeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
-    return VMPageSize;
+    return (int)VMPageSize;
 }
 
 
@@ -278,3 +280,48 @@ fchownFunc(SyscallDesc *desc, int num, Process *process, ExecContext *xc)
     int result = fchown(fd, hostOwner, hostGroup);
     return (result == -1) ? -errno : result;
 }
+
+
+SyscallReturn
+fcntlFunc(SyscallDesc *desc, int num, Process *process,
+          ExecContext *xc)
+{
+    int fd = xc->getSyscallArg(0);
+
+    if (fd < 0 || process->sim_fd(fd) < 0)
+        return -EBADF;
+
+    int cmd = xc->getSyscallArg(1);
+    switch (cmd) {
+      case 0: // F_DUPFD
+        // if we really wanted to support this, we'd need to do it
+        // in the target fd space.
+        warn("fcntl(%d, F_DUPFD) not supported, error returned\n", fd);
+        return -EMFILE;
+
+      case 1: // F_GETFD (get close-on-exec flag)
+      case 2: // F_SETFD (set close-on-exec flag)
+        return 0;
+
+      case 3: // F_GETFL (get file flags)
+      case 4: // F_SETFL (set file flags)
+        // not sure if this is totally valid, but we'll pass it through
+        // to the underlying OS
+        warn("fcntl(%d, %d) passed through to host\n", fd, cmd);
+        return fcntl(process->sim_fd(fd), cmd);
+        // return 0;
+
+      case 7: // F_GETLK  (get lock)
+      case 8: // F_SETLK  (set lock)
+      case 9: // F_SETLKW (set lock and wait)
+        // don't mess with file locking... just act like it's OK
+        warn("File lock call (fcntl(%d, %d)) ignored.\n", fd, cmd);
+        return 0;
+
+      default:
+        warn("Unknown fcntl command %d\n", cmd);
+        return 0;
+    }
+}
+
+

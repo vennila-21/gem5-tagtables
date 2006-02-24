@@ -46,6 +46,7 @@
 #include "sim/builder.hh"
 
 using namespace std;
+using namespace TheISA;
 
 Uart8250::IntrEvent::IntrEvent(Uart8250 *u, int bit)
     : Event(&mainEventQueue), uart(u)
@@ -111,7 +112,7 @@ Uart8250::Uart8250(const string &name, SimConsole *c, MemoryController *mmu,
 
 }
 
-Fault *
+Fault
 Uart8250::read(MemReqPtr &req, uint8_t *data)
 {
     Addr daddr = req->paddr - (addr & EV5::PAddrImplMask);
@@ -187,7 +188,7 @@ Uart8250::read(MemReqPtr &req, uint8_t *data)
 
 }
 
-Fault *
+Fault
 Uart8250::write(MemReqPtr &req, const uint8_t *data)
 {
     Addr daddr = req->paddr - (addr & EV5::PAddrImplMask);

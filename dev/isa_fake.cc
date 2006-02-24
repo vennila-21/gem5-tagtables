@@ -45,6 +45,7 @@
 #include "sim/system.hh"
 
 using namespace std;
+using namespace TheISA;
 
 IsaFake::IsaFake(const string &name, Addr a, MemoryController *mmu,
                          HierParams *hier, Bus *pio_bus, Addr size)
@@ -59,7 +60,7 @@ IsaFake::IsaFake(const string &name, Addr a, MemoryController *mmu,
     }
 }
 
-Fault *
+Fault
 IsaFake::read(MemReqPtr &req, uint8_t *data)
 {
     DPRINTF(Tsunami, "read  va=%#x size=%d\n",
@@ -92,7 +93,7 @@ IsaFake::read(MemReqPtr &req, uint8_t *data)
     return NoFault;
 }
 
-Fault *
+Fault
 IsaFake::write(MemReqPtr &req, const uint8_t *data)
 {
     DPRINTF(Tsunami, "write - va=%#x size=%d \n",

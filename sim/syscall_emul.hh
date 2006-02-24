@@ -239,6 +239,10 @@ SyscallReturn chownFunc(SyscallDesc *desc, int num,
 SyscallReturn fchownFunc(SyscallDesc *desc, int num,
                          Process *p, ExecContext *xc);
 
+/// Target fnctl() handler.
+SyscallReturn fcntlFunc(SyscallDesc *desc, int num,
+                        Process *process, ExecContext *xc);
+
 /// This struct is used to build an target-OS-dependent table that
 /// maps the target's open() flags to the host open() flags.
 struct OpenFlagTransTable {
@@ -646,7 +650,7 @@ mmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
     if (start == 0) {
         // user didn't give an address... pick one from our "mmap region"
         start = p->mmap_end;
-        p->mmap_end += roundUp(length, VMPageSize);
+        p->mmap_end += roundUp(length, TheISA::VMPageSize);
         if (p->nxm_start != 0) {
             //If we have an nxm space, make sure we haven't colided
             assert(p->mmap_end < p->nxm_start);

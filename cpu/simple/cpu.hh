@@ -63,9 +63,12 @@ namespace Trace {
 
 class SimpleCPU : public BaseCPU
 {
+  protected:
+    typedef TheISA::MachInst MachInst;
   public:
     // main simulation loop (one cycle)
     void tick();
+    virtual void init();
 
   private:
     struct TickEvent : public Event
@@ -172,7 +175,7 @@ class SimpleCPU : public BaseCPU
     // the next switchover
     Sampler *sampler;
 
-    StaticInstPtr<TheISA> curStaticInst;
+    StaticInstPtr curStaticInst;
 
     class CacheCompletionEvent : public Event
     {
@@ -234,10 +237,10 @@ class SimpleCPU : public BaseCPU
     virtual void unserialize(Checkpoint *cp, const std::string &section);
 
     template <class T>
-    Fault * read(Addr addr, T &data, unsigned flags);
+    Fault read(Addr addr, T &data, unsigned flags);
 
     template <class T>
-    Fault * write(T data, Addr addr, unsigned flags, uint64_t *res);
+    Fault write(T data, Addr addr, unsigned flags, uint64_t *res);
 
     // These functions are only used in CPU models that split
     // effective address computation from the actual memory access.
@@ -254,9 +257,9 @@ class SimpleCPU : public BaseCPU
         // need to do this...
     }
 
-    Fault * copySrcTranslate(Addr src);
+    Fault copySrcTranslate(Addr src);
 
-    Fault * copy(Addr dest);
+    Fault copy(Addr dest);
 
     // The register accessor methods provide the index of the
     // instruction's operand (e.g., 0 or 1), not the architectural
@@ -269,47 +272,47 @@ class SimpleCPU : public BaseCPU
     // storage (which is pretty hard to imagine they would have reason
     // to do).
 
-    uint64_t readIntReg(const StaticInst<TheISA> *si, int idx)
+    uint64_t readIntReg(const StaticInst *si, int idx)
     {
         return xc->readIntReg(si->srcRegIdx(idx));
     }
 
-    float readFloatRegSingle(const StaticInst<TheISA> *si, int idx)
+    float readFloatRegSingle(const StaticInst *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegSingle(reg_idx);
     }
 
-    double readFloatRegDouble(const StaticInst<TheISA> *si, int idx)
+    double readFloatRegDouble(const StaticInst *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegDouble(reg_idx);
     }
 
-    uint64_t readFloatRegInt(const StaticInst<TheISA> *si, int idx)
+    uint64_t readFloatRegInt(const StaticInst *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegInt(reg_idx);
     }
 
-    void setIntReg(const StaticInst<TheISA> *si, int idx, uint64_t val)
+    void setIntReg(const StaticInst *si, int idx, uint64_t val)
     {
         xc->setIntReg(si->destRegIdx(idx), val);
     }
 
-    void setFloatRegSingle(const StaticInst<TheISA> *si, int idx, float val)
+    void setFloatRegSingle(const StaticInst *si, int idx, float val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegSingle(reg_idx, val);
     }
 
-    void setFloatRegDouble(const StaticInst<TheISA> *si, int idx, double val)
+    void setFloatRegDouble(const StaticInst *si, int idx, double val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegDouble(reg_idx, val);
     }
 
-    void setFloatRegInt(const StaticInst<TheISA> *si, int idx, uint64_t val)
+    void setFloatRegInt(const StaticInst *si, int idx, uint64_t val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegInt(reg_idx, val);
@@ -325,13 +328,13 @@ class SimpleCPU : public BaseCPU
     void setFpcr(uint64_t val) { xc->setFpcr(val); }
 
 #if FULL_SYSTEM
-    uint64_t readIpr(int idx, Fault * &fault) { return xc->readIpr(idx, fault); }
-    Fault * setIpr(int idx, uint64_t val) { return xc->setIpr(idx, val); }
-    Fault * hwrei() { return xc->hwrei(); }
+    uint64_t readIpr(int idx, Fault &fault) { return xc->readIpr(idx, fault); }
+    Fault setIpr(int idx, uint64_t val) { return xc->setIpr(idx, val); }
+    Fault hwrei() { return xc->hwrei(); }
     int readIntrFlag() { return xc->readIntrFlag(); }
     void setIntrFlag(int val) { xc->setIntrFlag(val); }
     bool inPalMode() { return xc->inPalMode(); }
-    void ev5_trap(Fault * fault) { xc->ev5_trap(fault); }
+    void ev5_trap(Fault fault) { xc->ev5_trap(fault); }
     bool simPalCheck(int palFunc) { return xc->simPalCheck(palFunc); }
 #else
     void syscall() { xc->syscall(); }

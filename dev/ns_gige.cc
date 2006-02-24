@@ -84,6 +84,7 @@ const char *NsDmaState[] =
 
 using namespace std;
 using namespace Net;
+using namespace TheISA;
 
 ///////////////////////////////////////////////////////////////////////
 //
@@ -129,8 +130,6 @@ NSGigE::NSGigE(Params *p)
                                                  p->dma_no_allocate);
     } else if (p->payload_bus)
         panic("Must define a header bus if defining a payload bus");
-
-    pioDelayWrite = p->pio_delay_write && pioInterface;
 
     intrDelay = p->intr_delay;
     dmaReadDelay = p->dma_read_delay;
@@ -558,7 +557,7 @@ NSGigE::writeConfig(int offset, int size, const uint8_t* data)
  * This reads the device registers, which are detailed in the NS83820
  * spec sheet
  */
-Fault *
+Fault
 NSGigE::read(MemReqPtr &req, uint8_t *data)
 {
     assert(ioEnable);
@@ -787,7 +786,7 @@ NSGigE::read(MemReqPtr &req, uint8_t *data)
     return NoFault;
 }
 
-Fault *
+Fault
 NSGigE::write(MemReqPtr &req, const uint8_t *data)
 {
     assert(ioEnable);
@@ -804,13 +803,6 @@ NSGigE::write(MemReqPtr &req, const uint8_t *data)
     } else if (daddr > 0x3FC)
         panic("Something is messed up!\n");
 
-    if (pioDelayWrite) {
-        int cpu = (req->xc->regs.ipr[TheISA::IPR_PALtemp16] >> 8) & 0xff;
-        if (cpu >= writeQueue.size())
-            writeQueue.resize(cpu + 1);
-        writeQueue[cpu].push_back(RegWriteData(daddr, *(uint32_t *)data));
-    }
-
     if (req->size == sizeof(uint32_t)) {
         uint32_t reg = *(uint32_t *)data;
         uint16_t rfaddr;
@@ -823,24 +815,20 @@ NSGigE::write(MemReqPtr &req, const uint8_t *data)
             if (reg & CR_TXD) {
                 txEnable = false;
             } else if (reg & CR_TXE) {
-                if (!pioDelayWrite) {
-                    txEnable = true;
+                txEnable = true;
 
-                    // the kernel is enabling the transmit machine
-                    if (txState == txIdle)
-                        txKick();
-                }
+                // the kernel is enabling the transmit machine
+                if (txState == txIdle)
+                    txKick();
             }
 
             if (reg & CR_RXD) {
                 rxEnable = false;
             } else if (reg & CR_RXE) {
-                if (!pioDelayWrite) {
-                    rxEnable = true;
+                rxEnable = true;
 
-                    if (rxState == rxIdle)
-                        rxKick();
-                }
+                if (rxState == rxIdle)
+                    rxKick();
             }
 
             if (reg & CR_TXR)
@@ -2948,38 +2936,9 @@ NSGigE::unserialize(Checkpoint *cp, const std::string &section)
 Tick
 NSGigE::cacheAccess(MemReqPtr &req)
 {
-    Addr daddr = req->paddr & 0xfff;
     DPRINTF(EthernetPIO, "timing access to paddr=%#x (daddr=%#x)\n",
-            req->paddr, daddr);
+            req->paddr, req->paddr & 0xfff);
 
-    if (!pioDelayWrite || !req->cmd.isWrite())
-        return curTick + pioLatency;
-
-    int cpu = (req->xc->regs.ipr[TheISA::IPR_PALtemp16] >> 8) & 0xff;
-    std::list<RegWriteData> &wq = writeQueue[cpu];
-    if (wq.empty())
-        panic("WriteQueue for cpu %d empty timing daddr=%#x", cpu, daddr);
-
-    const RegWriteData &data = wq.front();
-    if (data.daddr != daddr)
-        panic("read mismatch on cpu %d, daddr functional=%#x timing=%#x",
-              cpu, data.daddr, daddr);
-
-    if (daddr == CR) {
-        if ((data.value & (CR_TXD | CR_TXE)) == CR_TXE) {
-            txEnable = true;
-            if (txState == txIdle)
-                txKick();
-        }
-
-        if ((data.value & (CR_RXD | CR_RXE)) == CR_RXE) {
-            rxEnable = true;
-            if (rxState == rxIdle)
-                rxKick();
-        }
-    }
-
-    wq.pop_front();
     return curTick + pioLatency;
 }
 
@@ -3039,7 +2998,6 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(NSGigE)
     Param<Tick> dma_write_factor;
     Param<bool> dma_no_allocate;
     Param<Tick> pio_latency;
-    Param<bool> pio_delay_write;
     Param<Tick> intr_delay;
 
     Param<Tick> rx_delay;
@@ -3080,7 +3038,6 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(NSGigE)
     INIT_PARAM(dma_write_factor, "multiplier for dma writes"),
     INIT_PARAM(dma_no_allocate, "Should DMA reads allocate cache lines"),
     INIT_PARAM(pio_latency, "Programmed IO latency in bus cycles"),
-    INIT_PARAM(pio_delay_write, ""),
     INIT_PARAM(intr_delay, "Interrupt Delay in microseconds"),
 
     INIT_PARAM(rx_delay, "Receive Delay"),
@@ -3125,7 +3082,6 @@ CREATE_SIM_OBJECT(NSGigE)
     params->dma_write_factor = dma_write_factor;
     params->dma_no_allocate = dma_no_allocate;
     params->pio_latency = pio_latency;
-    params->pio_delay_write = pio_delay_write;
     params->intr_delay = intr_delay;
 
     params->rx_delay = rx_delay;

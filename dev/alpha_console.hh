@@ -96,7 +96,7 @@ class AlphaConsole : public PioDevice
     BaseCPU *cpu;
 
     Addr addr;
-    static const Addr size = 0x80; // equal to sizeof(alpha_access);
+    static const Addr size = sizeof(struct AlphaAccess);
 
   public:
     /** Standard Constructor */
@@ -110,8 +110,8 @@ class AlphaConsole : public PioDevice
     /**
      * memory mapped reads and writes
      */
-    virtual Fault * read(MemReqPtr &req, uint8_t *data);
-    virtual Fault * write(MemReqPtr &req, const uint8_t *data);
+    virtual Fault read(MemReqPtr &req, uint8_t *data);
+    virtual Fault write(MemReqPtr &req, const uint8_t *data);
 
     /**
      * standard serialization routines for checkpointing

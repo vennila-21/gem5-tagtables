@@ -77,7 +77,6 @@ class OoOCPU : public BaseCPU
   private:
     typedef typename Impl::DynInst DynInst;
     typedef typename Impl::DynInstPtr DynInstPtr;
-    typedef typename Impl::ISA ISA;
 
   public:
     // main simulation loop (one cycle)
@@ -286,17 +285,17 @@ class OoOCPU : public BaseCPU
     int getInstAsid() { return xc->regs.instAsid(); }
     int getDataAsid() { return xc->regs.dataAsid(); }
 
-    Fault * translateInstReq(MemReqPtr &req)
+    Fault translateInstReq(MemReqPtr &req)
     {
         return itb->translate(req);
     }
 
-    Fault * translateDataReadReq(MemReqPtr &req)
+    Fault translateDataReadReq(MemReqPtr &req)
     {
         return dtb->translate(req, false);
     }
 
-    Fault * translateDataWriteReq(MemReqPtr &req)
+    Fault translateDataWriteReq(MemReqPtr &req)
     {
         return dtb->translate(req, true);
     }
@@ -311,7 +310,7 @@ class OoOCPU : public BaseCPU
     int getInstAsid() { return xc->asid; }
     int getDataAsid() { return xc->asid; }
 
-    Fault * dummyTranslation(MemReqPtr &req)
+    Fault dummyTranslation(MemReqPtr &req)
     {
 #if 0
         assert((req->vaddr >> 48 & 0xffff) == 0);
@@ -322,15 +321,15 @@ class OoOCPU : public BaseCPU
         req->paddr = req->paddr | (Addr)req->asid << sizeof(Addr) * 8 - 16;
         return NoFault;
     }
-    Fault * translateInstReq(MemReqPtr &req)
+    Fault translateInstReq(MemReqPtr &req)
     {
         return dummyTranslation(req);
     }
-    Fault * translateDataReadReq(MemReqPtr &req)
+    Fault translateDataReadReq(MemReqPtr &req)
     {
         return dummyTranslation(req);
     }
-    Fault * translateDataWriteReq(MemReqPtr &req)
+    Fault translateDataWriteReq(MemReqPtr &req)
     {
         return dummyTranslation(req);
     }
@@ -338,10 +337,10 @@ class OoOCPU : public BaseCPU
 #endif
 
     template <class T>
-    Fault * read(Addr addr, T &data, unsigned flags, DynInstPtr inst);
+    Fault read(Addr addr, T &data, unsigned flags, DynInstPtr inst);
 
     template <class T>
-    Fault * write(T data, Addr addr, unsigned flags,
+    Fault write(T data, Addr addr, unsigned flags,
                 uint64_t *res, DynInstPtr inst);
 
     void prefetch(Addr addr, unsigned flags)
@@ -354,9 +353,9 @@ class OoOCPU : public BaseCPU
         // need to do this...
     }
 
-    Fault * copySrcTranslate(Addr src);
+    Fault copySrcTranslate(Addr src);
 
-    Fault * copy(Addr dest);
+    Fault copy(Addr dest);
 
   private:
     bool executeInst(DynInstPtr &inst);
@@ -369,7 +368,7 @@ class OoOCPU : public BaseCPU
 
     bool getOneInst();
 
-    Fault * fetchCacheLine();
+    Fault fetchCacheLine();
 
     InstSeqNum getAndIncrementInstSeq();
 
@@ -378,12 +377,12 @@ class OoOCPU : public BaseCPU
   private:
     InstSeqNum globalSeqNum;
 
-    DynInstPtr renameTable[ISA::TotalNumRegs];
-    DynInstPtr commitTable[ISA::TotalNumRegs];
+    DynInstPtr renameTable[TheISA::TotalNumRegs];
+    DynInstPtr commitTable[TheISA::TotalNumRegs];
 
     // Might need a table of the shadow registers as well.
 #if FULL_SYSTEM
-    DynInstPtr palShadowTable[ISA::NumIntRegs];
+    DynInstPtr palShadowTable[TheISA::NumIntRegs];
 #endif
 
   public:
@@ -402,47 +401,47 @@ class OoOCPU : public BaseCPU
     // rename table of DynInsts.  Also these likely shouldn't be called very
     // often, other than when adding things into the xc during say a syscall.
 
-    uint64_t readIntReg(StaticInst<TheISA> *si, int idx)
+    uint64_t readIntReg(StaticInst *si, int idx)
     {
         return xc->readIntReg(si->srcRegIdx(idx));
     }
 
-    float readFloatRegSingle(StaticInst<TheISA> *si, int idx)
+    float readFloatRegSingle(StaticInst *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegSingle(reg_idx);
     }
 
-    double readFloatRegDouble(StaticInst<TheISA> *si, int idx)
+    double readFloatRegDouble(StaticInst *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegDouble(reg_idx);
     }
 
-    uint64_t readFloatRegInt(StaticInst<TheISA> *si, int idx)
+    uint64_t readFloatRegInt(StaticInst *si, int idx)
     {
         int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
         return xc->readFloatRegInt(reg_idx);
     }
 
-    void setIntReg(StaticInst<TheISA> *si, int idx, uint64_t val)
+    void setIntReg(StaticInst *si, int idx, uint64_t val)
     {
         xc->setIntReg(si->destRegIdx(idx), val);
     }
 
-    void setFloatRegSingle(StaticInst<TheISA> *si, int idx, float val)
+    void setFloatRegSingle(StaticInst *si, int idx, float val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegSingle(reg_idx, val);
     }
 
-    void setFloatRegDouble(StaticInst<TheISA> *si, int idx, double val)
+    void setFloatRegDouble(StaticInst *si, int idx, double val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegDouble(reg_idx, val);
     }
 
-    void setFloatRegInt(StaticInst<TheISA> *si, int idx, uint64_t val)
+    void setFloatRegInt(StaticInst *si, int idx, uint64_t val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
         xc->setFloatRegInt(reg_idx, val);
@@ -479,7 +478,7 @@ class OoOCPU : public BaseCPU
     // We fold in the PISA 64- to 32-bit conversion here as well.
     Addr icacheBlockAlignPC(Addr addr)
     {
-        addr = ISA::realPCToFetchPC(addr);
+        addr = TheISA::realPCToFetchPC(addr);
         return (addr & ~(cacheBlkMask));
     }
 
@@ -512,13 +511,13 @@ class OoOCPU : public BaseCPU
     void setFpcr(uint64_t val) { xc->setFpcr(val); }
 
 #if FULL_SYSTEM
-    uint64_t readIpr(int idx, Fault * &fault) { return xc->readIpr(idx, fault); }
-    Fault * setIpr(int idx, uint64_t val) { return xc->setIpr(idx, val); }
-    Fault * hwrei() { return xc->hwrei(); }
+    uint64_t readIpr(int idx, Fault &fault) { return xc->readIpr(idx, fault); }
+    Fault setIpr(int idx, uint64_t val) { return xc->setIpr(idx, val); }
+    Fault hwrei() { return xc->hwrei(); }
     int readIntrFlag() { return xc->readIntrFlag(); }
     void setIntrFlag(int val) { xc->setIntrFlag(val); }
     bool inPalMode() { return xc->inPalMode(); }
-    void ev5_trap(Fault * fault) { xc->ev5_trap(fault); }
+    void ev5_trap(Fault fault) { xc->ev5_trap(fault); }
     bool simPalCheck(int palFunc) { return xc->simPalCheck(palFunc); }
 #else
     void syscall() { xc->syscall(); }
@@ -531,7 +530,7 @@ class OoOCPU : public BaseCPU
 // precise architected memory state accessor macros
 template <class Impl>
 template <class T>
-Fault *
+Fault
 OoOCPU<Impl>::read(Addr addr, T &data, unsigned flags, DynInstPtr inst)
 {
     MemReqPtr readReq = new MemReq();
@@ -542,7 +541,7 @@ OoOCPU<Impl>::read(Addr addr, T &data, unsigned flags, DynInstPtr inst)
     readReq->reset(addr, sizeof(T), flags);
 
     // translate to physical address - This might be an ISA impl call
-    Fault * fault = translateDataReadReq(readReq);
+    Fault fault = translateDataReadReq(readReq);
 
     // do functional access
     if (fault == NoFault)
@@ -576,7 +575,7 @@ OoOCPU<Impl>::read(Addr addr, T &data, unsigned flags, DynInstPtr inst)
 
 template <class Impl>
 template <class T>
-Fault *
+Fault
 OoOCPU<Impl>::write(T data, Addr addr, unsigned flags,
                     uint64_t *res, DynInstPtr inst)
 {
@@ -595,7 +594,7 @@ OoOCPU<Impl>::write(T data, Addr addr, unsigned flags,
     writeReq->reset(addr, sizeof(T), flags);
 
     // translate to physical address
-    Fault * fault = translateDataWriteReq(writeReq);
+    Fault fault = translateDataWriteReq(writeReq);
 
     // do functional access
     if (fault == NoFault)

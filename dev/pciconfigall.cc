@@ -47,6 +47,7 @@
 #include "sim/system.hh"
 
 using namespace std;
+using namespace TheISA;
 
 PciConfigAll::PciConfigAll(const string &name,
                            Addr a, MemoryController *mmu,
@@ -95,7 +96,7 @@ PciConfigAll::startup()
 
 }
 
-Fault *
+Fault
 PciConfigAll::read(MemReqPtr &req, uint8_t *data)
 {
 
@@ -143,7 +144,7 @@ PciConfigAll::read(MemReqPtr &req, uint8_t *data)
     return NoFault;
 }
 
-Fault *
+Fault
 PciConfigAll::write(MemReqPtr &req, const uint8_t *data)
 {
     Addr daddr = (req->paddr - (addr & EV5::PAddrImplMask));

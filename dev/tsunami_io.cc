@@ -50,6 +50,8 @@
 #include "mem/functional/memory_control.hh"
 
 using namespace std;
+//Should this be AlphaISA?
+using namespace TheISA;
 
 TsunamiIO::RTC::RTC(const string &name, Tsunami* t, Tick i)
     : _name(name), event(t, i), addr(0)
@@ -444,7 +446,7 @@ TsunamiIO::frequency() const
     return Clock::Frequency / clockInterval;
 }
 
-Fault *
+Fault
 TsunamiIO::read(MemReqPtr &req, uint8_t *data)
 {
     DPRINTF(Tsunami, "io read  va=%#x size=%d IOPorrt=%#x\n",
@@ -521,7 +523,7 @@ TsunamiIO::read(MemReqPtr &req, uint8_t *data)
     return NoFault;
 }
 
-Fault *
+Fault
 TsunamiIO::write(MemReqPtr &req, const uint8_t *data)
 {
 

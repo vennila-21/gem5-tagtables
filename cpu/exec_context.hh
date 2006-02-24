@@ -35,6 +35,7 @@
 #include "sim/host.hh"
 #include "sim/serialize.hh"
 #include "arch/isa_traits.hh"
+//#include "arch/isa_registers.hh"
 #include "sim/byteswap.hh"
 
 // forward declaration: see functional_memory.hh
@@ -66,6 +67,10 @@ namespace Kernel { class Binning; class Statistics; }
 
 class ExecContext
 {
+  protected:
+    typedef TheISA::RegFile RegFile;
+    typedef TheISA::MachInst MachInst;
+    typedef TheISA::MiscRegFile MiscRegFile;
   public:
     enum Status
     {
@@ -80,7 +85,7 @@ class ExecContext
         Active,
 
         /// Temporarily inactive.  Entered while waiting for
-        /// synchronization, etc.
+        /// initialization,synchronization, etc.
         Suspended,
 
         /// Permanently shut down.  Entered when target executes
@@ -94,6 +99,8 @@ class ExecContext
 
   public:
     Status status() const { return _status; }
+
+    void setStatus(Status newStatus) { _status = newStatus; }
 
     /// Set the status to Active.  Optional delay indicates number of
     /// cycles to wait before beginning execution.
@@ -206,17 +213,17 @@ class ExecContext
     int getInstAsid() { return regs.instAsid(); }
     int getDataAsid() { return regs.dataAsid(); }
 
-    Fault * translateInstReq(MemReqPtr &req)
+    Fault translateInstReq(MemReqPtr &req)
     {
         return itb->translate(req);
     }
 
-    Fault * translateDataReadReq(MemReqPtr &req)
+    Fault translateDataReadReq(MemReqPtr &req)
     {
         return dtb->translate(req, false);
     }
 
-    Fault * translateDataWriteReq(MemReqPtr &req)
+    Fault translateDataWriteReq(MemReqPtr &req)
     {
         return dtb->translate(req, true);
     }
@@ -231,7 +238,7 @@ class ExecContext
     int getInstAsid() { return asid; }
     int getDataAsid() { return asid; }
 
-    Fault * dummyTranslation(MemReqPtr &req)
+    Fault dummyTranslation(MemReqPtr &req)
     {
 #if 0
         assert((req->vaddr >> 48 & 0xffff) == 0);
@@ -242,15 +249,15 @@ class ExecContext
         req->paddr = req->paddr | (Addr)req->asid << sizeof(Addr) * 8 - 16;
         return NoFault;
     }
-    Fault * translateInstReq(MemReqPtr &req)
+    Fault translateInstReq(MemReqPtr &req)
     {
         return dummyTranslation(req);
     }
-    Fault * translateDataReadReq(MemReqPtr &req)
+    Fault translateDataReadReq(MemReqPtr &req)
     {
         return dummyTranslation(req);
     }
-    Fault * translateDataWriteReq(MemReqPtr &req)
+    Fault translateDataWriteReq(MemReqPtr &req)
     {
         return dummyTranslation(req);
     }
@@ -258,7 +265,7 @@ class ExecContext
 #endif
 
     template <class T>
-    Fault * read(MemReqPtr &req, T &data)
+    Fault read(MemReqPtr &req, T &data)
     {
 #if FULL_SYSTEM && defined(TARGET_ALPHA)
         if (req->flags & LOCKED) {
@@ -268,14 +275,14 @@ class ExecContext
         }
 #endif
 
-        Fault * error;
+        Fault error;
         error = mem->read(req, data);
         data = LittleEndianGuest::gtoh(data);
         return error;
     }
 
     template <class T>
-    Fault * write(MemReqPtr &req, T &data)
+    Fault write(MemReqPtr &req, T &data)
     {
 #if FULL_SYSTEM && defined(TARGET_ALPHA)
 
@@ -333,7 +340,7 @@ class ExecContext
         inst = new_inst;
     }
 
-    Fault * instRead(MemReqPtr &req)
+    Fault instRead(MemReqPtr &req)
     {
         return mem->read(req, inst);
     }
@@ -412,13 +419,13 @@ class ExecContext
     }
 
 #if FULL_SYSTEM
-    uint64_t readIpr(int idx, Fault * &fault);
-    Fault * setIpr(int idx, uint64_t val);
+    uint64_t readIpr(int idx, Fault &fault);
+    Fault setIpr(int idx, uint64_t val);
     int readIntrFlag() { return regs.intrflag; }
     void setIntrFlag(int val) { regs.intrflag = val; }
-    Fault * hwrei();
+    Fault hwrei();
     bool inPalMode() { return AlphaISA::PcPAL(regs.pc); }
-    void ev5_trap(Fault * fault);
+    void ev5_trap(Fault fault);
     bool simPalCheck(int palFunc);
 #endif
 
@@ -428,18 +435,18 @@ class ExecContext
      *  @todo How to do this properly so it's dependent upon ISA only?
      */
 
-    void trap(Fault * fault);
+    void trap(Fault fault);
 
 #if !FULL_SYSTEM
-    IntReg getSyscallArg(int i)
+    TheISA::IntReg getSyscallArg(int i)
     {
-        return regs.intRegFile[ArgumentReg0 + i];
+        return regs.intRegFile[TheISA::ArgumentReg0 + i];
     }
 
     // used to shift args for indirect syscall
-    void setSyscallArg(int i, IntReg val)
+    void setSyscallArg(int i, TheISA::IntReg val)
     {
-        regs.intRegFile[ArgumentReg0 + i] = val;
+        regs.intRegFile[TheISA::ArgumentReg0 + i] = val;
     }
 
     void setSyscallReturn(SyscallReturn return_value)
@@ -451,11 +458,11 @@ class ExecContext
         if (return_value.successful()) {
             // no error
             regs.intRegFile[RegA3] = 0;
-            regs.intRegFile[ReturnValueReg] = return_value.value();
+            regs.intRegFile[TheISA::ReturnValueReg] = return_value.value();
         } else {
             // got an error, return details
-            regs.intRegFile[RegA3] = (IntReg) -1;
-            regs.intRegFile[ReturnValueReg] = -return_value.value();
+            regs.intRegFile[RegA3] = (TheISA::IntReg) -1;
+            regs.intRegFile[TheISA::ReturnValueReg] = -return_value.value();
         }
     }
 

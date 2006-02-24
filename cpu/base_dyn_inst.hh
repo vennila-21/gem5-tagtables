@@ -51,7 +51,6 @@
  */
 
 // Forward declaration.
-template <class ISA>
 class StaticInstPtr;
 
 template <class Impl>
@@ -61,25 +60,20 @@ class BaseDynInst : public FastAlloc, public RefCounted
     // Typedef for the CPU.
     typedef typename Impl::FullCPU FullCPU;
 
-    //Typedef to get the ISA.
-    typedef typename Impl::ISA ISA;
-
     /// Binary machine instruction type.
-    typedef typename ISA::MachInst MachInst;
-    /// Memory address type.
-    typedef typename ISA::Addr	   Addr;
+    typedef TheISA::MachInst MachInst;
     /// Logical register index type.
-    typedef typename ISA::RegIndex RegIndex;
+    typedef TheISA::RegIndex RegIndex;
     /// Integer register index type.
-    typedef typename ISA::IntReg   IntReg;
+    typedef TheISA::IntReg IntReg;
 
     enum {
-        MaxInstSrcRegs = ISA::MaxInstSrcRegs,	//< Max source regs
-        MaxInstDestRegs = ISA::MaxInstDestRegs,	//< Max dest regs
+        MaxInstSrcRegs = TheISA::MaxInstSrcRegs,        //< Max source regs
+        MaxInstDestRegs = TheISA::MaxInstDestRegs,      //< Max dest regs
     };
 
     /** The static inst used by this dyn inst. */
-    StaticInstPtr<ISA> staticInst;
+    StaticInstPtr staticInst;
 
     ////////////////////////////////////////////
     //
@@ -89,16 +83,16 @@ class BaseDynInst : public FastAlloc, public RefCounted
     Trace::InstRecord *traceData;
 
     template <class T>
-    Fault * read(Addr addr, T &data, unsigned flags);
+    Fault read(Addr addr, T &data, unsigned flags);
 
     template <class T>
-    Fault * write(T data, Addr addr, unsigned flags,
+    Fault write(T data, Addr addr, unsigned flags,
                         uint64_t *res);
 
     void prefetch(Addr addr, unsigned flags);
     void writeHint(Addr addr, int size, unsigned flags);
-    Fault * copySrcTranslate(Addr src);
-    Fault * copy(Addr dest);
+    Fault copySrcTranslate(Addr src);
+    Fault copy(Addr dest);
 
     /** @todo: Consider making this private. */
   public:
@@ -154,7 +148,7 @@ class BaseDynInst : public FastAlloc, public RefCounted
     ExecContext *xc;
 
     /** The kind of fault this instruction has generated. */
-    Fault * fault;
+    Fault fault;
 
     /** The effective virtual address (lds & stores only). */
     Addr effAddr;
@@ -214,7 +208,7 @@ class BaseDynInst : public FastAlloc, public RefCounted
                 FullCPU *cpu);
 
     /** BaseDynInst constructor given a static inst pointer. */
-    BaseDynInst(StaticInstPtr<ISA> &_staticInst);
+    BaseDynInst(StaticInstPtr &_staticInst);
 
     /** BaseDynInst destructor. */
     ~BaseDynInst();
@@ -225,7 +219,7 @@ class BaseDynInst : public FastAlloc, public RefCounted
 
   public:
     void
-    trace_mem(Fault * fault,      // last fault
+    trace_mem(Fault fault,      // last fault
               MemCmd cmd,       // last command
               Addr addr,        // virtual address of access
               void *p,          // memory accessed
@@ -238,7 +232,7 @@ class BaseDynInst : public FastAlloc, public RefCounted
     void dump(std::string &outstring);
 
     /** Returns the fault type. */
-    Fault * getFault() { return fault; }
+    Fault getFault() { return fault; }
 
     /** Checks whether or not this instruction has had its branch target
      *  calculated yet.  For now it is not utilized and is hacked to be
@@ -447,7 +441,7 @@ class BaseDynInst : public FastAlloc, public RefCounted
 
 template<class Impl>
 template<class T>
-inline Fault *
+inline Fault
 BaseDynInst<Impl>::read(Addr addr, T &data, unsigned flags)
 {
     MemReqPtr req = new MemReq(addr, xc, sizeof(T), flags);
@@ -490,7 +484,7 @@ BaseDynInst<Impl>::read(Addr addr, T &data, unsigned flags)
 
 template<class Impl>
 template<class T>
-inline Fault *
+inline Fault
 BaseDynInst<Impl>::write(T data, Addr addr, unsigned flags, uint64_t *res)
 {
     if (traceData) {

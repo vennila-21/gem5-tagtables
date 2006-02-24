@@ -76,12 +76,27 @@
 
 using namespace std;
 //The SimpleCPU does alpha only
-using namespace LittleEndianGuest;
+using namespace AlphaISA;
 
 
 SimpleCPU::TickEvent::TickEvent(SimpleCPU *c, int w)
     : Event(&mainEventQueue, CPU_Tick_Pri), cpu(c), width(w)
 {
+}
+
+
+void
+SimpleCPU::init()
+{
+    BaseCPU::init();
+#if FULL_SYSTEM
+    for (int i = 0; i < execContexts.size(); ++i) {
+        ExecContext *xc = execContexts[i];
+
+        // initialize CPU, including PC
+        TheISA::initCPU(&xc->regs, xc->cpu_id);
+    }
+#endif
 }
 
 void
@@ -124,8 +139,6 @@ SimpleCPU::SimpleCPU(Params *p)
 #if FULL_SYSTEM
     xc = new ExecContext(this, 0, p->system, p->itb, p->dtb, p->mem);
 
-    // initialize CPU, including PC
-    TheISA::initCPU(&xc->regs);
 #else
     xc = new ExecContext(this, /* thread_num */ 0, p->process, /* asid */ 0);
 #endif // !FULL_SYSTEM
@@ -312,7 +325,7 @@ change_thread_state(int thread_number, int activate, int priority)
 {
 }
 
-Fault *
+Fault
 SimpleCPU::copySrcTranslate(Addr src)
 {
     static bool no_warn = true;
@@ -323,7 +336,7 @@ SimpleCPU::copySrcTranslate(Addr src)
 
     // Make sure block doesn't span page
     if (no_warn &&
-        (src & TheISA::PageMask) != ((src + blk_size) & TheISA::PageMask) &&
+        (src & PageMask) != ((src + blk_size) & PageMask) &&
         (src >> 40) != 0xfffffc) {
         warn("Copied block source spans pages %x.", src);
         no_warn = false;
@@ -332,7 +345,7 @@ SimpleCPU::copySrcTranslate(Addr src)
     memReq->reset(src & ~(blk_size - 1), blk_size);
 
     // translate to physical address
-    Fault * fault = xc->translateDataReadReq(memReq);
+    Fault fault = xc->translateDataReadReq(memReq);
 
     assert(fault != AlignmentFault);
 
@@ -346,7 +359,7 @@ SimpleCPU::copySrcTranslate(Addr src)
     return fault;
 }
 
-Fault *
+Fault
 SimpleCPU::copy(Addr dest)
 {
     static bool no_warn = true;
@@ -359,7 +372,7 @@ SimpleCPU::copy(Addr dest)
 
     // Make sure block doesn't span page
     if (no_warn &&
-        (dest & TheISA::PageMask) != ((dest + blk_size) & TheISA::PageMask) &&
+        (dest & PageMask) != ((dest + blk_size) & PageMask) &&
         (dest >> 40) != 0xfffffc) {
         no_warn = false;
         warn("Copied block destination spans pages %x. ", dest);
@@ -367,7 +380,7 @@ SimpleCPU::copy(Addr dest)
 
     memReq->reset(dest & ~(blk_size -1), blk_size);
     // translate to physical address
-    Fault * fault = xc->translateDataWriteReq(memReq);
+    Fault fault = xc->translateDataWriteReq(memReq);
 
     assert(fault != AlignmentFault);
 
@@ -394,11 +407,11 @@ SimpleCPU::copy(Addr dest)
 
 // precise architected memory state accessor macros
 template <class T>
-Fault *
+Fault
 SimpleCPU::read(Addr addr, T &data, unsigned flags)
 {
     if (status() == DcacheMissStall || status() == DcacheMissSwitch) {
-        Fault * fault = xc->read(memReq,data);
+        Fault fault = xc->read(memReq,data);
 
         if (traceData) {
             traceData->setAddr(addr);
@@ -409,7 +422,7 @@ SimpleCPU::read(Addr addr, T &data, unsigned flags)
     memReq->reset(addr, sizeof(T), flags);
 
     // translate to physical address
-    Fault * fault = xc->translateDataReadReq(memReq);
+    Fault fault = xc->translateDataReadReq(memReq);
 
     // if we have a cache, do cache access too
     if (fault == NoFault && dcacheInterface) {
@@ -447,32 +460,32 @@ SimpleCPU::read(Addr addr, T &data, unsigned flags)
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 
 template
-Fault *
+Fault
 SimpleCPU::read(Addr addr, uint64_t &data, unsigned flags);
 
 template
-Fault *
+Fault
 SimpleCPU::read(Addr addr, uint32_t &data, unsigned flags);
 
 template
-Fault *
+Fault
 SimpleCPU::read(Addr addr, uint16_t &data, unsigned flags);
 
 template
-Fault *
+Fault
 SimpleCPU::read(Addr addr, uint8_t &data, unsigned flags);
 
 #endif //DOXYGEN_SHOULD_SKIP_THIS
 
 template<>
-Fault *
+Fault
 SimpleCPU::read(Addr addr, double &data, unsigned flags)
 {
     return read(addr, *(uint64_t*)&data, flags);
 }
 
 template<>
-Fault *
+Fault
 SimpleCPU::read(Addr addr, float &data, unsigned flags)
 {
     return read(addr, *(uint32_t*)&data, flags);
@@ -480,7 +493,7 @@ SimpleCPU::read(Addr addr, float &data, unsigned flags)
 
 
 template<>
-Fault *
+Fault
 SimpleCPU::read(Addr addr, int32_t &data, unsigned flags)
 {
     return read(addr, (uint32_t&)data, flags);
@@ -488,13 +501,13 @@ SimpleCPU::read(Addr addr, int32_t &data, unsigned flags)
 
 
 template <class T>
-Fault *
+Fault
 SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 {
     memReq->reset(addr, sizeof(T), flags);
 
     // translate to physical address
-    Fault * fault = xc->translateDataWriteReq(memReq);
+    Fault fault = xc->translateDataWriteReq(memReq);
 
     // do functional access
     if (fault == NoFault)
@@ -531,32 +544,32 @@ SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 template
-Fault *
+Fault
 SimpleCPU::write(uint64_t data, Addr addr, unsigned flags, uint64_t *res);
 
 template
-Fault *
+Fault
 SimpleCPU::write(uint32_t data, Addr addr, unsigned flags, uint64_t *res);
 
 template
-Fault *
+Fault
 SimpleCPU::write(uint16_t data, Addr addr, unsigned flags, uint64_t *res);
 
 template
-Fault *
+Fault
 SimpleCPU::write(uint8_t data, Addr addr, unsigned flags, uint64_t *res);
 
 #endif //DOXYGEN_SHOULD_SKIP_THIS
 
 template<>
-Fault *
+Fault
 SimpleCPU::write(double data, Addr addr, unsigned flags, uint64_t *res)
 {
     return write(*(uint64_t*)&data, addr, flags, res);
 }
 
 template<>
-Fault *
+Fault
 SimpleCPU::write(float data, Addr addr, unsigned flags, uint64_t *res)
 {
     return write(*(uint32_t*)&data, addr, flags, res);
@@ -564,7 +577,7 @@ SimpleCPU::write(float data, Addr addr, unsigned flags, uint64_t *res)
 
 
 template<>
-Fault *
+Fault
 SimpleCPU::write(int32_t data, Addr addr, unsigned flags, uint64_t *res)
 {
     return write((uint32_t)data, addr, flags, res);
@@ -638,7 +651,7 @@ SimpleCPU::tick()
 
     traceData = NULL;
 
-    Fault * fault = NoFault;
+    Fault fault = NoFault;
 
 #if FULL_SYSTEM
     if (checkInterrupts && check_interrupts() && !xc->inPalMode() &&
@@ -648,20 +661,20 @@ SimpleCPU::tick()
         checkInterrupts = false;
         IntReg *ipr = xc->regs.ipr;
 
-        if (xc->regs.ipr[TheISA::IPR_SIRR]) {
-            for (int i = TheISA::INTLEVEL_SOFTWARE_MIN;
-                 i < TheISA::INTLEVEL_SOFTWARE_MAX; i++) {
-                if (ipr[TheISA::IPR_SIRR] & (ULL(1) << i)) {
+        if (xc->regs.ipr[IPR_SIRR]) {
+            for (int i = INTLEVEL_SOFTWARE_MIN;
+                 i < INTLEVEL_SOFTWARE_MAX; i++) {
+                if (ipr[IPR_SIRR] & (ULL(1) << i)) {
                     // See table 4-19 of 21164 hardware reference
-                    ipl = (i - TheISA::INTLEVEL_SOFTWARE_MIN) + 1;
+                    ipl = (i - INTLEVEL_SOFTWARE_MIN) + 1;
                     summary |= (ULL(1) << i);
                 }
             }
         }
 
         uint64_t interrupts = xc->cpu->intr_status();
-        for (int i = TheISA::INTLEVEL_EXTERNAL_MIN;
-            i < TheISA::INTLEVEL_EXTERNAL_MAX; i++) {
+        for (int i = INTLEVEL_EXTERNAL_MIN;
+            i < INTLEVEL_EXTERNAL_MAX; i++) {
             if (interrupts & (ULL(1) << i)) {
                 // See table 4-19 of 21164 hardware reference
                 ipl = i;
@@ -669,16 +682,16 @@ SimpleCPU::tick()
             }
         }
 
-        if (ipr[TheISA::IPR_ASTRR])
+        if (ipr[IPR_ASTRR])
             panic("asynchronous traps not implemented\n");
 
-        if (ipl && ipl > xc->regs.ipr[TheISA::IPR_IPLR]) {
-            ipr[TheISA::IPR_ISR] = summary;
-            ipr[TheISA::IPR_INTID] = ipl;
+        if (ipl && ipl > xc->regs.ipr[IPR_IPLR]) {
+            ipr[IPR_ISR] = summary;
+            ipr[IPR_INTID] = ipl;
             xc->ev5_trap(InterruptFault);
 
             DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
-                    ipr[TheISA::IPR_IPLR], ipl, summary);
+                    ipr[IPR_IPLR], ipl, summary);
         }
     }
 #endif
@@ -749,7 +762,7 @@ SimpleCPU::tick()
 
         // decode the instruction
         inst = gtoh(inst);
-        curStaticInst = StaticInst<TheISA>::decode(inst);
+        curStaticInst = StaticInst::decode(inst);
 
         traceData = Trace::getInstRecord(curTick, xc, this, curStaticInst,
                                          xc->regs.pc);

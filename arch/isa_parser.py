@@ -224,7 +224,7 @@ def p_specification(t):
     namespace = isa_name + "Inst"
     # wrap the decode block as a function definition
     t[4].wrap_decode_block('''
-StaticInstPtr<%(isa_name)s>
+StaticInstPtr
 %(isa_name)s::decodeInst(%(isa_name)s::MachInst machInst)
 {
     using namespace %(namespace)s;
@@ -712,43 +712,6 @@ yacc.yacc()
 #
 #####################################################################
 
-################
-# CpuModel class
-#
-# The CpuModel class encapsulates everything we need to know about a
-# particular CPU model.
-
-class CpuModel:
-    # List of all CPU models.  Accessible as CpuModel.list.
-    list = []
-
-    # Constructor.  Automatically adds models to CpuModel.list.
-    def __init__(self, name, filename, includes, strings):
-        self.name = name
-        self.filename = filename   # filename for output exec code
-        self.includes = includes   # include files needed in exec file
-        # The 'strings' dict holds all the per-CPU symbols we can
-        # substitute into templates etc.
-        self.strings = strings
-        # Add self to list.
-        CpuModel.list.append(self)
-
-# Define CPU models.  The following lines should contain the only
-# CPU-model-specific information in this file.  Note that the ISA
-# description itself should have *no* CPU-model-specific content.
-CpuModel('SimpleCPU', 'simple_cpu_exec.cc',
-         '#include "cpu/simple/cpu.hh"',
-         { 'CPU_exec_context': 'SimpleCPU' })
-CpuModel('FastCPU', 'fast_cpu_exec.cc',
-         '#include "cpu/fast/cpu.hh"',
-         { 'CPU_exec_context': 'FastCPU' })
-CpuModel('FullCPU', 'full_cpu_exec.cc',
-         '#include "encumbered/cpu/full/dyn_inst.hh"',
-         { 'CPU_exec_context': 'DynInst' })
-CpuModel('AlphaFullCPU', 'alpha_o3_exec.cc',
-         '#include "cpu/o3/alpha_dyn_inst.hh"',
-         { 'CPU_exec_context': 'AlphaDynInst<AlphaSimpleImpl>' })
-
 # Expand template with CPU-specific references into a dictionary with
 # an entry for each CPU model name.  The entry key is the model name
 # and the corresponding value is the template with the CPU-specific
@@ -757,7 +720,7 @@ def expand_cpu_symbols_to_dict(template):
     # Protect '%'s that don't go with CPU-specific terms
     t = re.sub(r'%(?!\(CPU_)', '%%', template)
     result = {}
-    for cpu in CpuModel.list:
+    for cpu in cpu_models:
         result[cpu.name] = t % cpu.strings
     return result
 
@@ -816,7 +779,7 @@ class GenCode:
     # concatenates all the individual strings in the operands.
     def __add__(self, other):
         exec_output = {}
-        for cpu in CpuModel.list:
+        for cpu in cpu_models:
             n = cpu.name
             exec_output[n] = self.exec_output[n] + other.exec_output[n]
         return GenCode(self.header_output + other.header_output,
@@ -830,7 +793,7 @@ class GenCode:
         self.header_output = pre + self.header_output
         self.decoder_output  = pre + self.decoder_output
         self.decode_block = pre + self.decode_block
-        for cpu in CpuModel.list:
+        for cpu in cpu_models:
             self.exec_output[cpu.name] = pre + self.exec_output[cpu.name]
 
     # Wrap the decode block in a pair of strings (e.g., 'case foo:'
@@ -1351,6 +1314,7 @@ class MemOperand(Operand):
     def makeAccSize(self):
         return self.size
 
+
 class NPCOperand(Operand):
     def makeConstructor(self):
         return ''
@@ -1361,6 +1325,15 @@ class NPCOperand(Operand):
     def makeWrite(self):
         return 'xc->setNextPC(%s);\n' % self.base_name
 
+class NNPCOperand(Operand):
+    def makeConstructor(self):
+        return ''
+
+    def makeRead(self):
+        return '%s = xc->readPC() + 8;\n' % self.base_name
+
+    def makeWrite(self):
+        return 'xc->setNextNPC(%s);\n' % self.base_name
 
 def buildOperandNameMap(userDict, lineno):
     global operandNameMap
@@ -1686,6 +1659,8 @@ namespace %(namespace)s {
 %(namespace_output)s
 
 } // namespace %(namespace)s
+
+%(decode_function)s
 '''
 
 
@@ -1739,7 +1714,7 @@ def preprocess_isa_desc(isa_desc):
 #
 # Read in and parse the ISA description.
 #
-def parse_isa_desc(isa_desc_file, output_dir, include_path):
+def parse_isa_desc(isa_desc_file, output_dir):
     # set a global var for the input filename... used in error messages
     global input_filename
     input_filename = isa_desc_file
@@ -1765,24 +1740,33 @@ def parse_isa_desc(isa_desc_file, output_dir, include_path):
     includes = '#include "base/bitfield.hh" // for bitfield support'
     global_output = global_code.header_output
     namespace_output = namespace_code.header_output
+    decode_function = ''
     update_if_needed(output_dir + '/decoder.hh', file_template % vars())
 
     # generate decoder.cc
-    includes = '#include "%s/decoder.hh"' % include_path
+    includes = '#include "decoder.hh"'
     global_output = global_code.decoder_output
     namespace_output = namespace_code.decoder_output
-    namespace_output += namespace_code.decode_block
+    # namespace_output += namespace_code.decode_block
+    decode_function = namespace_code.decode_block
     update_if_needed(output_dir + '/decoder.cc', file_template % vars())
 
     # generate per-cpu exec files
-    for cpu in CpuModel.list:
-        includes = '#include "%s/decoder.hh"\n' % include_path
+    for cpu in cpu_models:
+        includes = '#include "decoder.hh"\n'
         includes += cpu.includes
         global_output = global_code.exec_output[cpu.name]
         namespace_output = namespace_code.exec_output[cpu.name]
+        decode_function = ''
         update_if_needed(output_dir + '/' + cpu.filename,
                           file_template % vars())
 
+# global list of CpuModel objects (see cpu_models.py)
+cpu_models = []
+
 # Called as script: get args from command line.
+# Args are: <path to cpu_models.py> <isa desc file> <output dir> <cpu models>
 if __name__ == '__main__':
-    parse_isa_desc(sys.argv[1], sys.argv[2], sys.argv[3])
+    execfile(sys.argv[1])  # read in CpuModel definitions
+    cpu_models = [CpuModel.dict[cpu] for cpu in sys.argv[4:]]
+    parse_isa_desc(sys.argv[2], sys.argv[3])
