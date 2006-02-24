@@ -79,7 +79,7 @@ AlphaISA::initCPU(RegFile *regs, int cpuId)
     regs->intRegFile[16] = cpuId;
     regs->intRegFile[0] = cpuId;
 
-    regs->pc = regs->ipr[IPR_PAL_BASE] + fault_addr(ResetFault);
+    regs->pc = regs->ipr[IPR_PAL_BASE] + (new ResetFault)->vect();
     regs->npc = regs->pc + sizeof(MachInst);
 }
 
@@ -92,10 +92,10 @@ AlphaISA::fault_addr(Fault fault)
 {
         //Check for the system wide faults
         if(fault == NoFault) return 0x0000;
-        else if(fault == MachineCheckFault) return 0x0401;
-        else if(fault == AlignmentFault) return 0x0301;
+        else if(fault->isA<MachineCheckFault>()) return 0x0401;
+        else if(fault->isA<AlignmentFault>()) return 0x0301;
         //Deal with the alpha specific faults
-        return ((AlphaFault*)fault)->vect;
+        return ((AlphaFault *)(fault.get()))->vect();
 };
 
 const int AlphaISA::reg_redir[AlphaISA::NumIntRegs] = {
@@ -162,7 +162,7 @@ AlphaISA::processInterrupts(CPU *cpu)
     if (ipl && ipl > ipr[IPR_IPLR]) {
         ipr[IPR_ISR] = summary;
         ipr[IPR_INTID] = ipl;
-        cpu->trap(InterruptFault);
+        cpu->trap(new InterruptFault);
         DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
                 ipr[IPR_IPLR], ipl, summary);
     }
@@ -183,22 +183,22 @@ AlphaISA::zeroRegisters(CPU *cpu)
 void
 ExecContext::ev5_trap(Fault fault)
 {
-    DPRINTF(Fault, "Fault %s at PC: %#x\n", fault->name, regs.pc);
-    cpu->recordEvent(csprintf("Fault %s", fault->name));
+    DPRINTF(Fault, "Fault %s at PC: %#x\n", fault->name(), regs.pc);
+    cpu->recordEvent(csprintf("Fault %s", fault->name()));
 
     assert(!misspeculating());
     kernelStats->fault(fault);
 
-    if (fault == ArithmeticFault)
+    if (fault->isA<ArithmeticFault>())
         panic("Arithmetic traps are unimplemented!");
 
     AlphaISA::InternalProcReg *ipr = regs.ipr;
 
     // exception restart address
-    if (fault != InterruptFault || !inPalMode())
+    if (!fault->isA<InterruptFault>() || !inPalMode())
         ipr[AlphaISA::IPR_EXC_ADDR] = regs.pc;
 
-    if (fault == PalFault || fault == ArithmeticFault /* ||
+    if (fault->isA<PalFault>() || fault->isA<ArithmeticFault>() /* ||
         fault == InterruptFault && !inPalMode() */) {
         // traps...  skip faulting instruction
         ipr[AlphaISA::IPR_EXC_ADDR] += 4;
@@ -218,11 +218,11 @@ AlphaISA::intr_post(RegFile *regs, Fault fault, Addr pc)
     InternalProcReg *ipr = regs->ipr;
     bool use_pc = (fault == NoFault);
 
-    if (fault == ArithmeticFault)
+    if (fault->isA<ArithmeticFault>())
         panic("arithmetic faults NYI...");
 
     // compute exception restart address
-    if (use_pc || fault == PalFault || fault == ArithmeticFault) {
+    if (use_pc || fault->isA<PalFault>() || fault->isA<ArithmeticFault>()) {
         // traps...  skip faulting instruction
         ipr[IPR_EXC_ADDR] = regs->pc + 4;
     } else {
@@ -245,7 +245,7 @@ ExecContext::hwrei()
     uint64_t *ipr = regs.ipr;
 
     if (!inPalMode())
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
 
     setNextPC(ipr[AlphaISA::IPR_EXC_ADDR]);
 
@@ -357,12 +357,12 @@ ExecContext::readIpr(int idx, Fault &fault)
       case AlphaISA::IPR_DTB_IAP:
       case AlphaISA::IPR_ITB_IA:
       case AlphaISA::IPR_ITB_IAP:
-        fault = UnimplementedOpcodeFault;
+        fault = new UnimplementedOpcodeFault;
         break;
 
       default:
         // invalid IPR
-        fault = UnimplementedOpcodeFault;
+        fault = new UnimplementedOpcodeFault;
         break;
     }
 
@@ -527,7 +527,7 @@ ExecContext::setIpr(int idx, uint64_t val)
       case AlphaISA::IPR_ITB_PTE_TEMP:
       case AlphaISA::IPR_DTB_PTE_TEMP:
         // read-only registers
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
 
       case AlphaISA::IPR_HWINT_CLR:
       case AlphaISA::IPR_SL_XMIT:
@@ -629,7 +629,7 @@ ExecContext::setIpr(int idx, uint64_t val)
 
       default:
         // invalid IPR
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
     }
 
     // no error...
