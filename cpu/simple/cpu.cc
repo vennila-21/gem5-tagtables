@@ -347,7 +347,7 @@ SimpleCPU::copySrcTranslate(Addr src)
     // translate to physical address
     Fault fault = xc->translateDataReadReq(memReq);
 
-    assert(fault != AlignmentFault);
+    assert(!fault->isA<AlignmentFault>());
 
     if (fault == NoFault) {
         xc->copySrcAddr = src;
@@ -382,7 +382,7 @@ SimpleCPU::copy(Addr dest)
     // translate to physical address
     Fault fault = xc->translateDataWriteReq(memReq);
 
-    assert(fault != AlignmentFault);
+    assert(!fault->isA<AlignmentFault>());
 
     if (fault == NoFault) {
         Addr dest_addr = memReq->paddr + offset;
@@ -688,7 +688,7 @@ SimpleCPU::tick()
         if (ipl && ipl > xc->regs.ipr[IPR_IPLR]) {
             ipr[IPR_ISR] = summary;
             ipr[IPR_INTID] = ipl;
-            xc->ev5_trap(InterruptFault);
+            xc->ev5_trap(new InterruptFault);
 
             DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
                     ipr[IPR_IPLR], ipl, summary);
