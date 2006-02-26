@@ -1,0 +1,63 @@
+// -*- mode:c++ -*-
+
+////////////////////////////////////////////////////////////////////
+//
+// Base class for MIPS instructions, and some support functions
+//
+
+//Outputs to decoder.hh
+output header {{
+        /**
+         * Base class for all MIPS static instructions.
+         */
+        class MipsStaticInst : public StaticInst<MIPSISA>
+        {
+        protected:
+
+                // Constructor.
+                MipsStaticInst(const char *mnem, MachInst _machInst, OpClass __opClass)
+                    : StaticInst<MIPSISA>(mnem, _machInst, __opClass)
+                {
+                }
+
+                std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
+        };
+
+}};
+
+//Ouputs to decoder.cc
+output decoder {{
+
+        std::string MipsStaticInst::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+        {
+                std::stringstream ss;
+
+                ccprintf(ss, "%-10s ", mnemonic);
+
+                // just print the first two source regs... if there's
+                // a third one, it's a read-modify-write dest (Rc),
+                // e.g. for CMOVxx
+                if(_numSrcRegs > 0)
+                {
+                        printReg(ss, _srcRegIdx[0]);
+                }
+                if(_numSrcRegs > 1)
+                {
+                        ss << ",";
+                        printReg(ss, _srcRegIdx[1]);
+                }
+
+                // just print the first dest... if there's a second one,
+                // it's generally implicit
+                if(_numDestRegs > 0)
+                {
+                        if(_numSrcRegs > 0)
+                                ss << ",";
+                        printReg(ss, _destRegIdx[0]);
+                }
+
+                return ss.str();
+        }
+
+}};
+
