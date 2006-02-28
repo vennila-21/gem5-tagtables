@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,51 +26,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/types.h>
-#include <algorithm>
+#ifndef __MIPS_LINUX_PROCESS_HH__
+#define __MIPS_LINUX_PROCESS_HH__
 
-#include "base/cprintf.hh"
-#include "base/trace.hh"
-#include "cpu/exec_context.hh"
-#include "kern/tru64/mbuf.hh"
-#include "sim/host.hh"
-#include "arch/arguments.hh"
-#include "arch/isa_traits.hh"
-#include "arch/vtophys.hh"
+#include "sim/process.hh"
 
-using namespace TheISA;
 
-namespace tru64 {
-
-void
-DumpMbuf(AlphaArguments args)
+/// A process with emulated Mips/Linux syscalls.
+class MipsLinuxProcess : public LiveProcess
 {
-    ExecContext *xc = args.getExecContext();
-    Addr addr = (Addr)args;
-    struct mbuf m;
+  public:
+    /// Constructor.
+    MipsLinuxProcess(const std::string &name,
+                      ObjectFile *objFile,
+                      int stdin_fd, int stdout_fd, int stderr_fd,
+                      std::vector<std::string> &argv,
+                      std::vector<std::string> &envp);
 
-    CopyOut(xc, &m, addr, sizeof(m));
+    virtual SyscallDesc* getDesc(int callnum);
 
-    int count = m.m_pkthdr.len;
+    /// The target system's hostname.
+    static const char *hostname;
 
-    ccprintf(DebugOut(), "m=%#lx, m->m_pkthdr.len=%#d\n", addr,
-             m.m_pkthdr.len);
+     /// Array of syscall descriptors, indexed by call number.
+    static SyscallDesc syscallDescs[];
 
-    while (count > 0) {
-        ccprintf(DebugOut(), "m=%#lx, m->m_data=%#lx, m->m_len=%d\n",
-                 addr, m.m_data, m.m_len);
-        char *buffer = new char[m.m_len];
-        CopyOut(xc, buffer, m.m_data, m.m_len);
-        Trace::dataDump(curTick, xc->system->name(), (uint8_t *)buffer,
-                        m.m_len);
-        delete [] buffer;
+    const int Num_Syscall_Descs;
+};
 
-        count -= m.m_len;
-        if (!m.m_next)
-            break;
 
-        CopyOut(xc, &m, m.m_next, sizeof(m));
-    }
-}
-
-} // namespace Tru64
+#endif // __MIPS_LINUX_PROCESS_HH__
