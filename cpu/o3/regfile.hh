@@ -31,14 +31,14 @@
 
 // @todo: Destructor
 
-#include "arch/alpha/isa_traits.hh"
-#include "arch/alpha/faults.hh"
+#include "arch/isa_traits.hh"
+#include "arch/faults.hh"
 #include "base/trace.hh"
 #include "config/full_system.hh"
 #include "cpu/o3/comm.hh"
 
 #if FULL_SYSTEM
-#include "arch/alpha/ev5.hh"
+#include "arch/ev5.hh"
 #include "kern/kernel_stats.hh"
 
 using namespace EV5;
@@ -372,12 +372,12 @@ PhysRegFile<Impl>::readIpr(int idx, Fault &fault)
       case TheISA::IPR_DTB_IAP:
       case TheISA::IPR_ITB_IA:
       case TheISA::IPR_ITB_IAP:
-        fault = UnimplementedOpcodeFault;
+        fault = new UnimplementedOpcodeFault;
         break;
 
       default:
         // invalid IPR
-        fault = UnimplementedOpcodeFault;
+        fault = new UnimplementedOpcodeFault;
         break;
     }
 
@@ -525,7 +525,7 @@ PhysRegFile<Impl>::setIpr(int idx, uint64_t val)
       case TheISA::IPR_ITB_PTE_TEMP:
       case TheISA::IPR_DTB_PTE_TEMP:
         // read-only registers
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
 
       case TheISA::IPR_HWINT_CLR:
       case TheISA::IPR_SL_XMIT:
@@ -627,7 +627,7 @@ PhysRegFile<Impl>::setIpr(int idx, uint64_t val)
 
       default:
         // invalid IPR
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
     }
 
     // no error...

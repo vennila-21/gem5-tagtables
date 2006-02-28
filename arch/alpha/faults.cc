@@ -27,37 +27,95 @@
  */
 
 #include "arch/alpha/faults.hh"
+#include "cpu/exec_context.hh"
 
-ResetFaultType * const ResetFault =
-    new ResetFaultType("reset", 1, 0x0001);
-ArithmeticFaultType * const ArithmeticFault =
-    new ArithmeticFaultType("arith", 3, 0x0501);
-InterruptFaultType * const InterruptFault =
-    new InterruptFaultType("interrupt", 4, 0x0101);
-NDtbMissFaultType * const NDtbMissFault =
-    new NDtbMissFaultType("dtb_miss_single", 5, 0x0201);
-PDtbMissFaultType * const PDtbMissFault =
-    new PDtbMissFaultType("dtb_miss_double", 6, 0x0281);
-DtbPageFaultType * const DtbPageFault =
-    new DtbPageFaultType("dfault", 8, 0x0381);
-DtbAcvFaultType * const DtbAcvFault =
-    new DtbAcvFaultType("dfault", 9, 0x0381);
-ItbMissFaultType * const ItbMissFault =
-    new ItbMissFaultType("itbmiss", 10, 0x0181);
-ItbPageFaultType * const ItbPageFault =
-    new ItbPageFaultType("itbmiss", 11, 0x0181);
-ItbAcvFaultType * const ItbAcvFault =
-    new ItbAcvFaultType("iaccvio", 12, 0x0081);
-UnimplementedOpcodeFaultType * const UnimplementedOpcodeFault =
-    new UnimplementedOpcodeFaultType("opdec", 13, 0x0481);
-FloatEnableFaultType * const FloatEnableFault =
-    new FloatEnableFaultType("fen", 14, 0x0581);
-PalFaultType * const PalFault =
-    new PalFaultType("pal", 15, 0x2001);
-IntegerOverflowFaultType * const IntegerOverflowFault =
-    new IntegerOverflowFaultType("intover", 16, 0x0501);
+namespace AlphaISA
+{
 
-Fault * ListOfFaults[] = {
+FaultVect AlphaMachineCheckFault::_vect = 0x0401;
+FaultStat AlphaMachineCheckFault::_stat;
+
+FaultVect AlphaAlignmentFault::_vect = 0x0301;
+FaultStat AlphaAlignmentFault::_stat;
+
+FaultName ResetFault::_name = "reset";
+FaultVect ResetFault::_vect = 0x0001;
+FaultStat ResetFault::_stat;
+
+FaultName ArithmeticFault::_name = "arith";
+FaultVect ArithmeticFault::_vect = 0x0501;
+FaultStat ArithmeticFault::_stat;
+
+FaultName InterruptFault::_name = "interrupt";
+FaultVect InterruptFault::_vect = 0x0101;
+FaultStat InterruptFault::_stat;
+
+FaultName NDtbMissFault::_name = "dtb_miss_single";
+FaultVect NDtbMissFault::_vect = 0x0201;
+FaultStat NDtbMissFault::_stat;
+
+FaultName PDtbMissFault::_name = "dtb_miss_double";
+FaultVect PDtbMissFault::_vect = 0x0281;
+FaultStat PDtbMissFault::_stat;
+
+FaultName DtbPageFault::_name = "dfault";
+FaultVect DtbPageFault::_vect = 0x0381;
+FaultStat DtbPageFault::_stat;
+
+FaultName DtbAcvFault::_name = "dfault";
+FaultVect DtbAcvFault::_vect = 0x0381;
+FaultStat DtbAcvFault::_stat;
+
+FaultName ItbMissFault::_name = "itbmiss";
+FaultVect ItbMissFault::_vect = 0x0181;
+FaultStat ItbMissFault::_stat;
+
+FaultName ItbPageFault::_name = "itbmiss";
+FaultVect ItbPageFault::_vect = 0x0181;
+FaultStat ItbPageFault::_stat;
+
+FaultName ItbAcvFault::_name = "iaccvio";
+FaultVect ItbAcvFault::_vect = 0x0081;
+FaultStat ItbAcvFault::_stat;
+
+FaultName UnimplementedOpcodeFault::_name = "opdec";
+FaultVect UnimplementedOpcodeFault::_vect = 0x0481;
+FaultStat UnimplementedOpcodeFault::_stat;
+
+FaultName FloatEnableFault::_name = "fen";
+FaultVect FloatEnableFault::_vect = 0x0581;
+FaultStat FloatEnableFault::_stat;
+
+FaultName PalFault::_name = "pal";
+FaultVect PalFault::_vect = 0x2001;
+FaultStat PalFault::_stat;
+
+FaultName IntegerOverflowFault::_name = "intover";
+FaultVect IntegerOverflowFault::_vect = 0x0501;
+FaultStat IntegerOverflowFault::_stat;
+
+#if FULL_SYSTEM
+
+void AlphaFault::ev5_trap(ExecContext * xc)
+{
+    xc->ev5_temp_trap(this);
+}
+
+void AlphaMachineCheckFault::ev5_trap(ExecContext * xc)
+{
+    xc->ev5_temp_trap(this);
+}
+
+void AlphaAlignmentFault::ev5_trap(ExecContext * xc)
+{
+    xc->ev5_temp_trap(this);
+}
+
+#endif
+
+} // namespace AlphaISA
+
+/*Fault * ListOfFaults[] = {
         (Fault *)&NoFault,
         (Fault *)&ResetFault,
         (Fault *)&MachineCheckFault,
@@ -77,4 +135,4 @@ Fault * ListOfFaults[] = {
         (Fault *)&IntegerOverflowFault,
         };
 
-int NumFaults = sizeof(ListOfFaults) / sizeof(Fault *);
+int NumFaults = sizeof(ListOfFaults) / sizeof(Fault *);*/
