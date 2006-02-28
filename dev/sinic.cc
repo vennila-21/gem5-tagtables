@@ -47,7 +47,7 @@
 #include "sim/eventq.hh"
 #include "sim/host.hh"
 #include "sim/stats.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/vtophys.hh"
 
 using namespace Net;
 using namespace TheISA;
@@ -363,11 +363,11 @@ Device::read(MemReqPtr &req, uint8_t *data)
     assert(config.command & PCI_CMD_MSE);
     Fault fault = readBar(req, data);
 
-    if (fault == MachineCheckFault) {
+    if (fault->isMachineCheckFault()) {
         panic("address does not map to a BAR pa=%#x va=%#x size=%d",
               req->paddr, req->vaddr, req->size);
 
-        return MachineCheckFault;
+        return genMachineCheckFault();
     }
 
     return fault;
@@ -459,11 +459,11 @@ Device::write(MemReqPtr &req, const uint8_t *data)
     assert(config.command & PCI_CMD_MSE);
     Fault fault = writeBar(req, data);
 
-    if (fault == MachineCheckFault) {
+    if (fault->isMachineCheckFault()) {
         panic("address does not map to a BAR pa=%#x va=%#x size=%d",
               req->paddr, req->vaddr, req->size);
 
-        return MachineCheckFault;
+        return genMachineCheckFault();
     }
 
     return fault;
@@ -489,16 +489,34 @@ Device::writeBar0(MemReqPtr &req, Addr daddr, const uint8_t *data)
         panic("invalid size for %s: cpu=%d da=%#x pa=%#x va=%#x size=%d",
               info.name, cpu, daddr, req->paddr, req->vaddr, req->size);
 
+    //These are commmented out because when the DPRINTF below isn't used,
+    //these values aren't used and gcc issues a warning. With -Werror,
+    //this prevents compilation.
+    //uint32_t reg32 = *(uint32_t *)data;
+    //uint64_t reg64 = *(uint64_t *)data;
+    DPRINTF(EthernetPIO,
+            "write %s: cpu=%d val=%#x da=%#x pa=%#x va=%#x size=%d\n",
+            info.name, cpu, info.size == 4 ?
+            (*(uint32_t *)data) :
+            (*(uint32_t *)data),
+            daddr, req->paddr, req->vaddr, req->size);
+
+    prepareWrite(cpu, index);
+
+    regWrite(daddr, cpu, data);
+
+    return NoFault;
+}
+
+void
+Device::regWrite(Addr daddr, int cpu, const uint8_t *data)
+{
+    Addr index = daddr >> Regs::VirtualShift;
+    Addr raddr = daddr & Regs::VirtualMask;
+
     uint32_t reg32 = *(uint32_t *)data;
     uint64_t reg64 = *(uint64_t *)data;
     VirtualReg &vnic = virtualRegs[index];
-
-    DPRINTF(EthernetPIO,
-            "write %s: cpu=%d val=%#x da=%#x pa=%#x va=%#x size=%d\n",
-            info.name, cpu, info.size == 4 ? reg32 : reg64, daddr,
-            req->paddr, req->vaddr, req->size);
-
-    prepareWrite(cpu, index);
 
     switch (raddr) {
       case Regs::Config:
@@ -546,8 +564,6 @@ Device::writeBar0(MemReqPtr &req, Addr daddr, const uint8_t *data)
         }
         break;
     }
-
-    return NoFault;
 }
 
 void
