@@ -276,7 +276,7 @@ class AlphaFullCPU : public FullO3CPU<Impl>
 
 #endif
 
-        return this->mem->write(req, (T)::htog(data));
+        return this->mem->write(req, (T)htog(data));
     }
 
     template <class T>

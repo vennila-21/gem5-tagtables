@@ -67,9 +67,9 @@
 #include "mem/functional/memory_control.hh"
 #include "mem/functional/physical.hh"
 #include "sim/system.hh"
-#include "targetarch/alpha_memory.hh"
-#include "targetarch/stacktrace.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/tlb.hh"
+#include "arch/stacktrace.hh"
+#include "arch/vtophys.hh"
 #else // !FULL_SYSTEM
 #include "mem/functional/functional.hh"
 #endif // FULL_SYSTEM
@@ -347,7 +347,7 @@ SimpleCPU::copySrcTranslate(Addr src)
     // translate to physical address
     Fault fault = xc->translateDataReadReq(memReq);
 
-    assert(fault != AlignmentFault);
+    assert(!fault->isAlignmentFault());
 
     if (fault == NoFault) {
         xc->copySrcAddr = src;
@@ -382,7 +382,7 @@ SimpleCPU::copy(Addr dest)
     // translate to physical address
     Fault fault = xc->translateDataWriteReq(memReq);
 
-    assert(fault != AlignmentFault);
+    assert(!fault->isAlignmentFault());
 
     if (fault == NoFault) {
         Addr dest_addr = memReq->paddr + offset;
@@ -687,7 +687,7 @@ SimpleCPU::tick()
         if (ipl && ipl > xc->readMiscReg(IPR_IPLR)) {
             xc->setMiscReg(IPR_ISR, summary);
             xc->setMiscReg(IPR_INTID, ipl);
-            xc->ev5_trap(InterruptFault);
+            (new InterruptFault)->ev5_trap(xc);
 
             DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
                     xc->readMiscReg(IPR_IPLR), ipl, summary);
@@ -811,7 +811,7 @@ SimpleCPU::tick()
 
     if (fault != NoFault) {
 #if FULL_SYSTEM
-        xc->ev5_trap(fault);
+        fault->ev5_trap(xc);
 #else // !FULL_SYSTEM
         fatal("fault (%d) detected @ PC 0x%08p", fault, xc->regs.pc);
 #endif // FULL_SYSTEM

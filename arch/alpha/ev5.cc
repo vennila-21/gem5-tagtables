@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "arch/alpha/alpha_memory.hh"
+#include "arch/alpha/tlb.hh"
 #include "arch/alpha/isa_traits.hh"
 #include "arch/alpha/osfpal.hh"
 #include "base/kgdb.h"
@@ -79,24 +79,9 @@ AlphaISA::initCPU(RegFile *regs, int cpuId)
     regs->intRegFile[16] = cpuId;
     regs->intRegFile[0] = cpuId;
 
-    regs->pc = regs->miscRegs.readReg(IPR_PAL_BASE) + fault_addr(ResetFault);
+    regs->pc = regs->miscRegs.readReg(IPR_PAL_BASE) + (new ResetFault)->vect();
     regs->npc = regs->pc + sizeof(MachInst);
 }
-
-////////////////////////////////////////////////////////////////////////
-//
-// alpha exceptions - value equals trap address, update with MD_FAULT_TYPE
-//
-const Addr
-AlphaISA::fault_addr(Fault fault)
-{
-        //Check for the system wide faults
-        if(fault == NoFault) return 0x0000;
-        else if(fault == MachineCheckFault) return 0x0401;
-        else if(fault == AlignmentFault) return 0x0301;
-        //Deal with the alpha specific faults
-        return ((AlphaFault*)fault)->vect;
-};
 
 const int AlphaISA::reg_redir[AlphaISA::NumIntRegs] = {
     /*  0 */ 0, 0, 0, 0, 0, 0, 0, 0,
@@ -160,7 +145,7 @@ AlphaISA::processInterrupts(CPU *cpu)
     if (ipl && ipl > cpu->readMiscReg(IPR_IPLR)) {
         cpu->setMiscReg(IPR_ISR, summary);
         cpu->setMiscReg(IPR_INTID, ipl);
-        cpu->trap(InterruptFault);
+        cpu->trap(new InterruptFault);
         DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
                 cpu->readMiscReg(IPR_IPLR), ipl, summary);
     }
@@ -179,24 +164,24 @@ AlphaISA::zeroRegisters(CPU *cpu)
 }
 
 void
-ExecContext::ev5_trap(Fault fault)
+ExecContext::ev5_temp_trap(Fault fault)
 {
-    DPRINTF(Fault, "Fault %s at PC: %#x\n", fault->name, regs.pc);
-    cpu->recordEvent(csprintf("Fault %s", fault->name));
+    DPRINTF(Fault, "Fault %s at PC: %#x\n", fault->name(), regs.pc);
+    cpu->recordEvent(csprintf("Fault %s", fault->name()));
 
     assert(!misspeculating());
     kernelStats->fault(fault);
 
-    if (fault == ArithmeticFault)
+    if (fault->isA<ArithmeticFault>())
         panic("Arithmetic traps are unimplemented!");
 
     // exception restart address
-    if (fault != InterruptFault || !inPalMode())
+    if (!fault->isA<InterruptFault>() || !inPalMode())
         setMiscReg(AlphaISA::IPR_EXC_ADDR, regs.pc);
 
-    if (fault == PalFault || fault == ArithmeticFault /* ||
+    if (fault->isA<PalFault>() || fault->isA<ArithmeticFault>() /* ||
         fault == InterruptFault && !inPalMode() */) {
-        // traps...  skip faulting instruction
+        // traps...  skip faulting instruction.
         setMiscReg(AlphaISA::IPR_EXC_ADDR,
                    readMiscReg(AlphaISA::IPR_EXC_ADDR) + 4);
     }
@@ -204,7 +189,8 @@ ExecContext::ev5_trap(Fault fault)
     if (!inPalMode())
         AlphaISA::swap_palshadow(&regs, true);
 
-    regs.pc = readMiscReg(AlphaISA::IPR_PAL_BASE) + AlphaISA::fault_addr(fault);
+    regs.pc = readMiscReg(AlphaISA::IPR_PAL_BASE) +
+        (dynamic_cast<AlphaFault *>(fault.get()))->vect();
     regs.npc = regs.pc + sizeof(MachInst);
 }
 
@@ -214,11 +200,11 @@ AlphaISA::intr_post(RegFile *regs, Fault fault, Addr pc)
 {
     bool use_pc = (fault == NoFault);
 
-    if (fault == ArithmeticFault)
+    if (fault->isA<ArithmeticFault>())
         panic("arithmetic faults NYI...");
 
     // compute exception restart address
-    if (use_pc || fault == PalFault || fault == ArithmeticFault) {
+    if (use_pc || fault->isA<PalFault>() || fault->isA<ArithmeticFault>()) {
         // traps...  skip faulting instruction
         regs->miscRegs.setReg(IPR_EXC_ADDR, regs->pc + 4);
     } else {
@@ -229,7 +215,7 @@ AlphaISA::intr_post(RegFile *regs, Fault fault, Addr pc)
     // jump to expection address (PAL PC bit set here as well...)
     if (!use_pc)
         regs->npc = regs->miscRegs.readReg(IPR_PAL_BASE) +
-            fault_addr(fault);
+            (dynamic_cast<AlphaFault *>(fault.get()))->vect();
     else
         regs->npc = regs->miscRegs.readReg(IPR_PAL_BASE) + pc;
 
@@ -240,7 +226,7 @@ Fault
 ExecContext::hwrei()
 {
     if (!inPalMode())
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
 
     setNextPC(readMiscReg(AlphaISA::IPR_EXC_ADDR));
 
@@ -357,12 +343,12 @@ AlphaISA::MiscRegFile::readIpr(int idx, Fault &fault, ExecContext *xc)
       case AlphaISA::IPR_DTB_IAP:
       case AlphaISA::IPR_ITB_IA:
       case AlphaISA::IPR_ITB_IAP:
-        fault = UnimplementedOpcodeFault;
+        fault = new UnimplementedOpcodeFault;
         break;
 
       default:
         // invalid IPR
-        fault = UnimplementedOpcodeFault;
+        fault = new UnimplementedOpcodeFault;
         break;
     }
 
@@ -526,7 +512,7 @@ AlphaISA::MiscRegFile::setIpr(int idx, uint64_t val, ExecContext *xc)
       case AlphaISA::IPR_ITB_PTE_TEMP:
       case AlphaISA::IPR_DTB_PTE_TEMP:
         // read-only registers
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
 
       case AlphaISA::IPR_HWINT_CLR:
       case AlphaISA::IPR_SL_XMIT:
@@ -628,7 +614,7 @@ AlphaISA::MiscRegFile::setIpr(int idx, uint64_t val, ExecContext *xc)
 
       default:
         // invalid IPR
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
     }
 
     // no error...

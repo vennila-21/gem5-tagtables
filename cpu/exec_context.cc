@@ -40,7 +40,7 @@
 #include "sim/serialize.hh"
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
-#include "targetarch/stacktrace.hh"
+#include "arch/stacktrace.hh"
 #else
 #include "sim/process.hh"
 #endif
@@ -227,7 +227,7 @@ ExecContext::trap(Fault fault)
 
     /** @todo: Going to hack it for now.  Do a true fixup later. */
 #if FULL_SYSTEM
-    ev5_trap(fault);
+    fault->ev5_trap(this);
 #else
     fatal("fault (%d) detected @ PC 0x%08p", fault, readPC());
 #endif

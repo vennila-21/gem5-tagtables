@@ -46,7 +46,7 @@ class BaseCPU;
 #if FULL_SYSTEM
 
 #include "sim/system.hh"
-#include "targetarch/alpha_memory.hh"
+#include "arch/tlb.hh"
 
 class FunctionProfile;
 class ProfileNode;
@@ -427,7 +427,7 @@ class ExecContext
     void setIntrFlag(int val) { regs.intrflag = val; }
     Fault hwrei();
     bool inPalMode() { return AlphaISA::PcPAL(regs.pc); }
-    void ev5_trap(Fault fault);
+    void ev5_temp_trap(Fault fault);
     bool simPalCheck(int palFunc);
 #endif
 
