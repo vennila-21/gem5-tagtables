@@ -67,9 +67,9 @@
 #include "mem/functional/memory_control.hh"
 #include "mem/functional/physical.hh"
 #include "sim/system.hh"
-#include "targetarch/alpha_memory.hh"
-#include "targetarch/stacktrace.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/tlb.hh"
+#include "arch/stacktrace.hh"
+#include "arch/vtophys.hh"
 #else // !FULL_SYSTEM
 #include "mem/functional/functional.hh"
 #endif // FULL_SYSTEM
@@ -347,7 +347,7 @@ SimpleCPU::copySrcTranslate(Addr src)
     // translate to physical address
     Fault fault = xc->translateDataReadReq(memReq);
 
-    assert(fault != AlignmentFault);
+    assert(!fault->isAlignmentFault());
 
     if (fault == NoFault) {
         xc->copySrcAddr = src;
@@ -382,7 +382,7 @@ SimpleCPU::copy(Addr dest)
     // translate to physical address
     Fault fault = xc->translateDataWriteReq(memReq);
 
-    assert(fault != AlignmentFault);
+    assert(!fault->isAlignmentFault());
 
     if (fault == NoFault) {
         Addr dest_addr = memReq->paddr + offset;
@@ -659,12 +659,11 @@ SimpleCPU::tick()
         int ipl = 0;
         int summary = 0;
         checkInterrupts = false;
-        IntReg *ipr = xc->regs.ipr;
 
-        if (xc->regs.ipr[IPR_SIRR]) {
+        if (xc->readMiscReg(IPR_SIRR)) {
             for (int i = INTLEVEL_SOFTWARE_MIN;
                  i < INTLEVEL_SOFTWARE_MAX; i++) {
-                if (ipr[IPR_SIRR] & (ULL(1) << i)) {
+                if (xc->readMiscReg(IPR_SIRR) & (ULL(1) << i)) {
                     // See table 4-19 of 21164 hardware reference
                     ipl = (i - INTLEVEL_SOFTWARE_MIN) + 1;
                     summary |= (ULL(1) << i);
@@ -682,16 +681,16 @@ SimpleCPU::tick()
             }
         }
 
-        if (ipr[IPR_ASTRR])
+        if (xc->readMiscReg(IPR_ASTRR))
             panic("asynchronous traps not implemented\n");
 
-        if (ipl && ipl > xc->regs.ipr[IPR_IPLR]) {
-            ipr[IPR_ISR] = summary;
-            ipr[IPR_INTID] = ipl;
-            xc->ev5_trap(InterruptFault);
+        if (ipl && ipl > xc->readMiscReg(IPR_IPLR)) {
+            xc->setMiscReg(IPR_ISR, summary);
+            xc->setMiscReg(IPR_INTID, ipl);
+            (new InterruptFault)->ev5_trap(xc);
 
             DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
-                    ipr[IPR_IPLR], ipl, summary);
+                    xc->readMiscReg(IPR_IPLR), ipl, summary);
         }
     }
 #endif
@@ -782,7 +781,7 @@ SimpleCPU::tick()
         }
 
         if (xc->profile) {
-            bool usermode = (xc->regs.ipr[AlphaISA::IPR_DTB_CM] & 0x18) != 0;
+            bool usermode = (xc->readMiscReg(AlphaISA::IPR_DTB_CM) & 0x18) != 0;
             xc->profilePC = usermode ? 1 : xc->regs.pc;
             ProfileNode *node = xc->profile->consume(xc, inst);
             if (node)
@@ -812,7 +811,7 @@ SimpleCPU::tick()
 
     if (fault != NoFault) {
 #if FULL_SYSTEM
-        xc->ev5_trap(fault);
+        fault->ev5_trap(xc);
 #else // !FULL_SYSTEM
         fatal("fault (%d) detected @ PC 0x%08p", fault, xc->regs.pc);
 #endif // FULL_SYSTEM

@@ -47,7 +47,7 @@
 #include "sim/eventq.hh"
 #include "sim/host.hh"
 #include "sim/stats.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/vtophys.hh"
 
 using namespace Net;
 using namespace TheISA;
@@ -363,11 +363,11 @@ Device::read(MemReqPtr &req, uint8_t *data)
     assert(config.command & PCI_CMD_MSE);
     Fault fault = readBar(req, data);
 
-    if (fault == MachineCheckFault) {
+    if (fault->isMachineCheckFault()) {
         panic("address does not map to a BAR pa=%#x va=%#x size=%d",
               req->paddr, req->vaddr, req->size);
 
-        return MachineCheckFault;
+        return genMachineCheckFault();
     }
 
     return fault;
@@ -376,7 +376,7 @@ Device::read(MemReqPtr &req, uint8_t *data)
 Fault
 Device::readBar0(MemReqPtr &req, Addr daddr, uint8_t *data)
 {
-    int cpu = (req->xc->regs.ipr[TheISA::IPR_PALtemp16] >> 8) & 0xff;
+    int cpu = (req->xc->readMiscReg(TheISA::IPR_PALtemp16) >> 8) & 0xff;
     Addr index = daddr >> Regs::VirtualShift;
     Addr raddr = daddr & Regs::VirtualMask;
 
@@ -459,11 +459,11 @@ Device::write(MemReqPtr &req, const uint8_t *data)
     assert(config.command & PCI_CMD_MSE);
     Fault fault = writeBar(req, data);
 
-    if (fault == MachineCheckFault) {
+    if (fault->isMachineCheckFault()) {
         panic("address does not map to a BAR pa=%#x va=%#x size=%d",
               req->paddr, req->vaddr, req->size);
 
-        return MachineCheckFault;
+        return genMachineCheckFault();
     }
 
     return fault;
@@ -472,7 +472,7 @@ Device::write(MemReqPtr &req, const uint8_t *data)
 Fault
 Device::writeBar0(MemReqPtr &req, Addr daddr, const uint8_t *data)
 {
-    int cpu = (req->xc->regs.ipr[TheISA::IPR_PALtemp16] >> 8) & 0xff;
+    int cpu = (req->xc->readMiscReg(TheISA::IPR_PALtemp16) >> 8) & 0xff;
     Addr index = daddr >> Regs::VirtualShift;
     Addr raddr = daddr & Regs::VirtualMask;
 
@@ -495,8 +495,8 @@ Device::writeBar0(MemReqPtr &req, Addr daddr, const uint8_t *data)
 
     DPRINTF(EthernetPIO,
             "write %s: cpu=%d val=%#x da=%#x pa=%#x va=%#x size=%d\n",
-            info.name, cpu, info.size == 4 ? reg32 : reg64, daddr,
-            req->paddr, req->vaddr, req->size);
+            info.name, cpu, info.size == 4 ? reg32 : reg64,
+            daddr, req->paddr, req->vaddr, req->size);
 
     prepareWrite(cpu, index);
 
