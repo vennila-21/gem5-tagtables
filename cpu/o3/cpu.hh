@@ -50,7 +50,7 @@
 #include "sim/process.hh"
 
 #if FULL_SYSTEM
-#include "arch/alpha/ev5.hh"
+#include "arch/ev5.hh"
 using namespace EV5;
 #endif
 
@@ -152,11 +152,11 @@ class FullO3CPU : public BaseFullCPU
 
     /** Get instruction asid. */
     int getInstAsid()
-    { return ITB_ASN_ASN(regFile.getIpr()[TheISA::IPR_ITB_ASN]); }
+    { return ITB_ASN_ASN(regFile.miscRegs.readReg(TheISA::IPR_ITB_ASN)); }
 
     /** Get data asid. */
     int getDataAsid()
-    { return DTB_ASN_ASN(regFile.getIpr()[TheISA::IPR_DTB_ASN]); }
+    { return DTB_ASN_ASN(regFile.miscRegs.readReg(TheISA::IPR_DTB_ASN)); }
 #else
     bool validInstAddr(Addr addr)
     { return thread[0]->validInstAddr(addr); }

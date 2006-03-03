@@ -136,7 +136,7 @@ Statistics::regStats(const string &_name)
         }
     }
 
-    _faults
+/*    _faults
         .init(NumFaults)
         .name(name() + ".faults")
         .desc("number of faults")
@@ -147,7 +147,7 @@ Statistics::regStats(const string &_name)
         const char *str = (*ListOfFaults[i])->name;
         if (str)
             _faults.subname(i, str);
-    }
+    }*/
 
     _mode
         .init(cpu_mode_num)
@@ -240,7 +240,7 @@ Statistics::swpipl(int ipl)
 void
 Statistics::mode(cpu_mode newmode)
 {
-    Addr pcbb = xc->regs.ipr[AlphaISA::IPR_PALtemp23];
+    Addr pcbb = xc->readMiscReg(AlphaISA::IPR_PALtemp23);
 
     if ((newmode == kernel || newmode == interrupt) &&
             pcbb == idleProcess)
