@@ -46,6 +46,16 @@ sources = []
 # List of headers to generate
 isa_switch_hdrs = Split('''
 	isa_traits.hh
+	linux_process.hh
+	tru64_process.hh
+	tlb.hh
+	aout_machdep.h
+	ecoff_machdep.h
+	arguments.hh
+	stacktrace.hh
+	vtophys.hh
+	faults.hh
+	ev5.hh
         ''')
 
 # Generate the header.  target[0] is the full path of the output
@@ -70,7 +80,7 @@ def gen_switch_hdr_string(target, source, env):
     return "Generating ISA switch header " + str(target[0])
 
 # Build SCons Action object. 'varlist' specifies env vars that this
-# action depdnds on; when env['ALL_ISA_LIST'] changes these actions
+# action depends on; when env['ALL_ISA_LIST'] changes these actions
 # should get re-executed.
 switch_hdr_action = Action(gen_switch_hdr, gen_switch_hdr_string,
                            varlist=['ALL_ISA_LIST'])

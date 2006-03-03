@@ -280,7 +280,6 @@ class Device : public Base
     Fault iprRead(Addr daddr, int cpu, uint64_t &result);
     Fault readBar0(MemReqPtr &req, Addr daddr, uint8_t *data);
     Fault writeBar0(MemReqPtr &req, Addr daddr, const uint8_t *data);
-    void regWrite(Addr daddr, int cpu, const uint8_t *data);
     Tick cacheAccess(MemReqPtr &req);
 
 /**
@@ -356,6 +355,7 @@ class Device : public Base
         bool dma_no_allocate;
         bool rx_thread;
         bool tx_thread;
+        bool rss;
     };
 
   protected:

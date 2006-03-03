@@ -28,9 +28,6 @@
 
 #include "sim/faults.hh"
 
-NoFaultType * const NoFault = new NoFaultType("none");
-MachineCheckFaultType * const MachineCheckFault =
-    new MachineCheckFaultType("mchk");
-AlignmentFaultType * const AlignmentFault =
-    new AlignmentFaultType("unalign");
+FaultName MachineCheckFault::_name = "mchk";
+FaultName AlignmentFault::_name = "unalign";
 

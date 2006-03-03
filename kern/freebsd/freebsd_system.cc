@@ -42,7 +42,7 @@
 #include "sim/builder.hh"
 #include "arch/isa_traits.hh"
 #include "sim/byteswap.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/vtophys.hh"
 
 #define TIMER_FREQUENCY 1193180
 
