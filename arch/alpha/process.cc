@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,12 +26,36 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "sim/faults.hh"
-#include "cpu/exec_context.hh"
+#include "arch/alpha/process.hh"
 
-#if !FULL_SYSTEM
-void FaultBase::invoke(ExecContext * xc)
+namespace AlphaISA
 {
-    fatal("fault (%s) detected @ PC 0x%08p", name(), xc->readPC());
+
+LiveProcess *
+createProcess(const std::string &nm, ObjectFile * objFile,
+        int stdin_fd, int stdout_fd, int stderr_fd,
+        std::vector<std::string> &argv, std::vector<std::string> &envp)
+{
+    LiveProcess * process = NULL;
+    if (objFile->getArch() != ObjectFile::Alpha)
+        fatal("Object file does not match architecture.");
+    switch (objFile->getOpSys()) {
+      case ObjectFile::Tru64:
+        process = new AlphaTru64Process(nm, objFile,
+                                        stdin_fd, stdout_fd, stderr_fd,
+                                        argv, envp);
+        break;
+
+      case ObjectFile::Linux:
+        process = new AlphaLinuxProcess(nm, objFile,
+                                        stdin_fd, stdout_fd, stderr_fd,
+                                        argv, envp);
+        break;
+
+      default:
+        fatal("Unknown/unsupported operating system.");
+    }
+    return process;
 }
-#endif
+
+} // namespace AlphaISA

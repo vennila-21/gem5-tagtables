@@ -134,35 +134,6 @@ AlphaISA::zeroRegisters(CPU *cpu)
     cpu->xc->setFloatRegDouble(ZeroReg, 0.0);
 }
 
-void
-ExecContext::ev5_temp_trap(Fault fault)
-{
-    DPRINTF(Fault, "Fault %s at PC: %#x\n", fault->name(), regs.pc);
-    cpu->recordEvent(csprintf("Fault %s", fault->name()));
-
-    assert(!misspeculating());
-    kernelStats->fault(fault);
-
-    if (fault->isA<ArithmeticFault>())
-        panic("Arithmetic traps are unimplemented!");
-
-    // exception restart address
-    if (!fault->isA<InterruptFault>() || !inPalMode())
-        setMiscReg(AlphaISA::IPR_EXC_ADDR, regs.pc);
-
-    if (fault->isA<PalFault>() || fault->isA<ArithmeticFault>() /* ||
-        fault == InterruptFault && !inPalMode() */) {
-        // traps...  skip faulting instruction.
-        setMiscReg(AlphaISA::IPR_EXC_ADDR,
-                   readMiscReg(AlphaISA::IPR_EXC_ADDR) + 4);
-    }
-
-    regs.pc = readMiscReg(AlphaISA::IPR_PAL_BASE) +
-        (dynamic_cast<AlphaFault *>(fault.get()))->vect();
-    regs.npc = regs.pc + sizeof(MachInst);
-}
-
-
 Fault
 ExecContext::hwrei()
 {

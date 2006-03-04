@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,12 +26,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "sim/faults.hh"
-#include "cpu/exec_context.hh"
+#ifndef __SPARC_LINUX_PROCESS_HH__
+#define __SPARC_LINUX_PROCESS_HH__
 
-#if !FULL_SYSTEM
-void FaultBase::invoke(ExecContext * xc)
+#include "sim/process.hh"
+
+
+/// A process with emulated SPARC/Linux syscalls.
+class SparcLinuxProcess : public LiveProcess
 {
-    fatal("fault (%s) detected @ PC 0x%08p", name(), xc->readPC());
-}
-#endif
+  public:
+    /// Constructor.
+    SparcLinuxProcess(const std::string &name,
+                      ObjectFile *objFile,
+                      int stdin_fd, int stdout_fd, int stderr_fd,
+                      std::vector<std::string> &argv,
+                      std::vector<std::string> &envp);
+
+    virtual SyscallDesc* getDesc(int callnum);
+
+    /// The target system's hostname.
+    static const char *hostname;
+
+     /// Array of syscall descriptors, indexed by call number.
+    static SyscallDesc syscallDescs[];
+
+    const int Num_Syscall_Descs;
+};
+
+
+#endif // __ALPHA_LINUX_PROCESS_HH__
