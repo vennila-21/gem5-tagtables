@@ -28,15 +28,20 @@
 
 #include "arch/alpha/faults.hh"
 #include "cpu/exec_context.hh"
+#include "cpu/base.hh"
+#include "base/trace.hh"
+#include "kern/kernel_stats.hh"
 
 namespace AlphaISA
 {
 
-FaultVect AlphaMachineCheckFault::_vect = 0x0401;
-FaultStat AlphaMachineCheckFault::_stat;
+FaultName MachineCheckFault::_name = "mchk";
+FaultVect MachineCheckFault::_vect = 0x0401;
+FaultStat MachineCheckFault::_stat;
 
-FaultVect AlphaAlignmentFault::_vect = 0x0301;
-FaultStat AlphaAlignmentFault::_stat;
+FaultName AlignmentFault::_name = "unalign";
+FaultVect AlignmentFault::_vect = 0x0301;
+FaultStat AlignmentFault::_stat;
 
 FaultName ResetFault::_name = "reset";
 FaultVect ResetFault::_vect = 0x0001;
@@ -96,20 +101,47 @@ FaultStat IntegerOverflowFault::_stat;
 
 #if FULL_SYSTEM
 
-void AlphaFault::ev5_trap(ExecContext * xc)
+void AlphaFault::invoke(ExecContext * xc)
 {
-    xc->ev5_temp_trap(this);
+    DPRINTF(Fault, "Fault %s at PC: %#x\n", name(), xc->regs.pc);
+    xc->cpu->recordEvent(csprintf("Fault %s", name()));
+
+    assert(!xc->misspeculating());
+    xc->kernelStats->fault(this);
+
+    // exception restart address
+    if (setRestartAddress() || !xc->inPalMode())
+        xc->setMiscReg(AlphaISA::IPR_EXC_ADDR, xc->regs.pc);
+
+    if (skipFaultingInstruction()) {
+        // traps...  skip faulting instruction.
+        xc->setMiscReg(AlphaISA::IPR_EXC_ADDR,
+                   xc->readMiscReg(AlphaISA::IPR_EXC_ADDR) + 4);
+    }
+
+    if (!xc->inPalMode())
+        AlphaISA::swap_palshadow(&(xc->regs), true);
+
+    xc->regs.pc = xc->readMiscReg(AlphaISA::IPR_PAL_BASE) + vect();
+    xc->regs.npc = xc->regs.pc + sizeof(MachInst);
 }
 
-void AlphaMachineCheckFault::ev5_trap(ExecContext * xc)
+void ArithmeticFault::invoke(ExecContext * xc)
 {
-    xc->ev5_temp_trap(this);
+    DPRINTF(Fault, "Fault %s at PC: %#x\n", name(), xc->regs.pc);
+    xc->cpu->recordEvent(csprintf("Fault %s", name()));
+
+    assert(!xc->misspeculating());
+    xc->kernelStats->fault(this);
+
+    panic("Arithmetic traps are unimplemented!");
 }
 
-void AlphaAlignmentFault::ev5_trap(ExecContext * xc)
+
+/*void ArithmeticFault::invoke(ExecContext * xc)
 {
-    xc->ev5_temp_trap(this);
-}
+    panic("Arithmetic traps are unimplemented!");
+}*/
 
 #endif
 

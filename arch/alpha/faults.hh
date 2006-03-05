@@ -40,51 +40,50 @@ typedef const Addr FaultVect;
 
 class AlphaFault : public virtual FaultBase
 {
+  protected:
+    virtual bool skipFaultingInstruction() {return false;}
+    virtual bool setRestartAddress() {return true;}
   public:
 #if FULL_SYSTEM
-    void ev5_trap(ExecContext * xc);
+    void invoke(ExecContext * xc);
 #endif
     virtual FaultVect vect() = 0;
 };
 
-class AlphaMachineCheckFault :
-    public MachineCheckFault,
-    public AlphaFault
+class MachineCheckFault : public AlphaFault
 {
   private:
+    static FaultName _name;
     static FaultVect _vect;
     static FaultStat _stat;
   public:
-#if FULL_SYSTEM
-    void ev5_trap(ExecContext * xc);
-#endif
+    FaultName name() {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & stat() {return _stat;}
+    bool isMachineCheckFault() {return true;}
 };
 
-class AlphaAlignmentFault :
-    public AlignmentFault,
-    public AlphaFault
+class AlignmentFault : public AlphaFault
 {
   private:
+    static FaultName _name;
     static FaultVect _vect;
     static FaultStat _stat;
   public:
-#if FULL_SYSTEM
-    void ev5_trap(ExecContext * xc);
-#endif
+    FaultName name() {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & stat() {return _stat;}
+    bool isAlignmentFault() {return true;}
 };
 
 static inline Fault genMachineCheckFault()
 {
-    return new AlphaMachineCheckFault;
+    return new MachineCheckFault;
 }
 
 static inline Fault genAlignmentFault()
 {
-    return new AlphaAlignmentFault;
+    return new AlignmentFault;
 }
 
 class ResetFault : public AlphaFault
@@ -101,6 +100,8 @@ class ResetFault : public AlphaFault
 
 class ArithmeticFault : public AlphaFault
 {
+  protected:
+    bool skipFaultingInstruction() {return true;}
   private:
     static FaultName _name;
     static FaultVect _vect;
@@ -109,10 +110,15 @@ class ArithmeticFault : public AlphaFault
     FaultName name() {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & stat() {return _stat;}
+#if FULL_SYSTEM
+    void invoke(ExecContext * xc);
+#endif
 };
 
 class InterruptFault : public AlphaFault
 {
+  protected:
+    bool setRestartAddress() {return false;}
   private:
     static FaultName _name;
     static FaultVect _vect;
@@ -233,6 +239,8 @@ class FloatEnableFault : public AlphaFault
 
 class PalFault : public AlphaFault
 {
+  protected:
+    bool skipFaultingInstruction() {return true;}
   private:
     static FaultName _name;
     static FaultVect _vect;
