@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,12 +26,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "sim/faults.hh"
-#include "cpu/exec_context.hh"
+#ifndef __SPARC_PROCESS_HH__
+#define __SPARC_PROCESS_HH__
 
-#if !FULL_SYSTEM
-void FaultBase::invoke(ExecContext * xc)
+#include "arch/sparc/linux_process.hh"
+#include "base/loader/object_file.hh"
+
+namespace SparcISA
 {
-    fatal("fault (%s) detected @ PC 0x%08p", name(), xc->readPC());
-}
-#endif
+
+LiveProcess *
+createProcess(const string &nm, ObjectFile * objFile,
+        int stdin_fd, int stdout_fd, int stderr_fd,
+        vector<string> &argv, vector<string> &envp);
+
+} // namespace SparcISA
+
+#endif // __SPARC_PROCESS_HH__

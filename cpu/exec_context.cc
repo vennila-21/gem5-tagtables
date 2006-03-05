@@ -253,15 +253,3 @@ ExecContext::regStats(const string &name)
 #endif
 }
 
-void
-ExecContext::trap(Fault fault)
-{
-    //TheISA::trap(fault);    //One possible way to do it...
-
-    /** @todo: Going to hack it for now.  Do a true fixup later. */
-#if FULL_SYSTEM
-    fault->ev5_trap(this);
-#else
-    fatal("fault (%d) detected @ PC 0x%08p", fault, readPC());
-#endif
-}
