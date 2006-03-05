@@ -29,34 +29,40 @@
 #ifndef __FAULTS_HH__
 #define __FAULTS_HH__
 
-class FaultBase;
-typedef FaultBase * Fault;
+#include "base/refcnt.hh"
+#include "sim/stats.hh"
+#include "config/full_system.hh"
 
-class FaultBase
+class ExecContext;
+class FaultBase;
+typedef RefCountingPtr<FaultBase> Fault;
+
+typedef const char * FaultName;
+typedef Stats::Scalar<> FaultStat;
+
+// Each class has it's name statically define in _name,
+// and has a virtual function to access it's name.
+// The function is necessary because otherwise, all objects
+// which are being accessed cast as a FaultBase * (namely
+// all faults returned using the Fault type) will use the
+// generic FaultBase name.
+
+class FaultBase : public RefCounted
 {
-public:
-        FaultBase(char * newName, int newId = 0) : name(newName), id(newId) {;}
-        const char * name;
-        int id;
+  public:
+    virtual FaultName name() = 0;
+    virtual FaultStat & stat() = 0;
+#if FULL_SYSTEM
+    virtual void invoke(ExecContext * xc) = 0;
+#else
+    virtual void invoke(ExecContext * xc);
+#endif
+//    template<typename T>
+//    bool isA() {return dynamic_cast<T *>(this);}
+    virtual bool isMachineCheckFault() {return false;}
+    virtual bool isAlignmentFault() {return false;}
 };
 
-extern class NoFaultType : public FaultBase
-{
-public:
-        NoFaultType(char * newName) : FaultBase(newName) {;}
-} * const NoFault;
-
-extern class MachineCheckFaultType : public FaultBase
-{
-public:
-        MachineCheckFaultType(char * newName) : FaultBase(newName) {;}
-} * const MachineCheckFault;
-
-extern class AlignmentFaultType : public FaultBase
-{
-public:
-        AlignmentFaultType(char * newName) : FaultBase(newName) {;}
-} * const AlignmentFault;
-
+FaultBase * const NoFault = 0;
 
 #endif // __FAULTS_HH__

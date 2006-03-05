@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,31 +26,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __KERN_FREEBSD_FREEBSD_SYSTEM_HH__
-#define __KERN_FREEBSD_FREEBSD_SYSTEM_HH__
+#ifndef __MIPS_LINUX_PROCESS_HH__
+#define __MIPS_LINUX_PROCESS_HH__
 
-#include "kern/system_events.hh"
+#include "sim/process.hh"
 
-class FreebsdSystem : public System
+
+/// A process with emulated Mips/Linux syscalls.
+class MipsLinuxProcess : public LiveProcess
 {
-  private:
-    class SkipCalibrateClocksEvent : public SkipFuncEvent
-    {
-      public:
-        SkipCalibrateClocksEvent(PCEventQueue *q, const std::string &desc,
-                                 Addr addr)
-            : SkipFuncEvent(q, desc, addr) {}
-        virtual void process(ExecContext *xc);
-    };
-
-    SkipFuncEvent *skipDelayEvent;
-    SkipCalibrateClocksEvent *skipCalibrateClocks;
-
   public:
-    FreebsdSystem(Params *p);
-    ~FreebsdSystem();
-    void doCalibrateClocks(ExecContext *xc);
+    /// Constructor.
+    MipsLinuxProcess(const std::string &name,
+                      ObjectFile *objFile,
+                      int stdin_fd, int stdout_fd, int stderr_fd,
+                      std::vector<std::string> &argv,
+                      std::vector<std::string> &envp);
 
+    virtual SyscallDesc* getDesc(int callnum);
+
+    /// The target system's hostname.
+    static const char *hostname;
+
+     /// Array of syscall descriptors, indexed by call number.
+    static SyscallDesc syscallDescs[];
+
+    const int Num_Syscall_Descs;
 };
 
-#endif // __KERN_FREEBSD_FREEBSD_SYSTEM_HH__
+
+#endif // __MIPS_LINUX_PROCESS_HH__

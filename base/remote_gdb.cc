@@ -129,7 +129,7 @@
 #include "cpu/static_inst.hh"
 #include "mem/functional/physical.hh"
 #include "sim/system.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/vtophys.hh"
 
 using namespace std;
 using namespace TheISA;
@@ -424,12 +424,25 @@ void
 RemoteGDB::getregs()
 {
     memset(gdbregs, 0, sizeof(gdbregs));
-    memcpy(&gdbregs[KGDB_REG_V0], context->regs.intRegFile, 32 * sizeof(uint64_t));
-#ifdef KGDB_FP_REGS
-    memcpy(&gdbregs[KGDB_REG_F0], context->regs.floatRegFile.q,
-           32 * sizeof(uint64_t));
-#endif
+
     gdbregs[KGDB_REG_PC] = context->readPC();
+
+    // @todo: Currently this is very Alpha specific.
+    if (AlphaISA::PcPAL(gdbregs[KGDB_REG_PC])) {
+        for (int i = 0; i < TheISA::NumIntArchRegs; ++i) {
+            gdbregs[i] = context->readIntReg(AlphaISA::reg_redir[i]);
+        }
+    } else {
+        for (int i = 0; i < TheISA::NumIntArchRegs; ++i) {
+            gdbregs[i] = context->readIntReg(i);
+        }
+    }
+
+#ifdef KGDB_FP_REGS
+    for (int i = 0; i < TheISA::NumFloatArchRegs; ++i) {
+        gdbregs[i + KGDB_REG_F0] = context->readFloatRegInt(i);
+    }
+#endif
 }
 
 ///////////////////////////////////////////////////////////
@@ -441,11 +454,21 @@ RemoteGDB::getregs()
 void
 RemoteGDB::setregs()
 {
-    memcpy(context->regs.intRegFile, &gdbregs[KGDB_REG_V0],
-           32 * sizeof(uint64_t));
+    // @todo: Currently this is very Alpha specific.
+    if (AlphaISA::PcPAL(gdbregs[KGDB_REG_PC])) {
+        for (int i = 0; i < TheISA::NumIntArchRegs; ++i) {
+            context->setIntReg(AlphaISA::reg_redir[i], gdbregs[i]);
+        }
+    } else {
+        for (int i = 0; i < TheISA::NumIntArchRegs; ++i) {
+            context->setIntReg(i, gdbregs[i]);
+        }
+    }
+
 #ifdef KGDB_FP_REGS
-    memcpy(context->regs.floatRegFile.q, &gdbregs[KGDB_REG_F0],
-           32 * sizeof(uint64_t));
+    for (int i = 0; i < TheISA::NumFloatArchRegs; ++i) {
+        context->setFloatRegInt(i, gdbregs[i + KGDB_REG_F0]);
+    }
 #endif
     context->setPC(gdbregs[KGDB_REG_PC]);
 }

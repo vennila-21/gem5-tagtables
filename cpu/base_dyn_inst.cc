@@ -36,7 +36,7 @@
 #include "base/cprintf.hh"
 #include "base/trace.hh"
 
-#include "arch/alpha/faults.hh"
+#include "arch/faults.hh"
 #include "cpu/exetrace.hh"
 #include "mem/mem_req.hh"
 
@@ -45,6 +45,7 @@
 #include "cpu/o3/alpha_cpu.hh"
 
 using namespace std;
+using namespace TheISA;
 
 #define NOHASH
 #ifndef NOHASH
@@ -113,7 +114,7 @@ BaseDynInst<Impl>::initVars()
     asid = 0;
 
     // Initialize the fault to be unimplemented opcode.
-    fault = UnimplementedOpcodeFault;
+    fault = new UnimplementedOpcodeFault;
 
     ++instcount;
 
@@ -325,7 +326,7 @@ BaseDynInst<Impl>::mem_access(mem_cmd cmd, Addr addr, void *p, int nbytes)
         break;
 
       default:
-        fault = MachineCheckFault;
+        fault = genMachineCheckFault();
         break;
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004 The Regents of The University of Michigan
+ * Copyright (c) 2004-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,63 +26,31 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __KERN_LINUX_LINUX_TREADNIFO_HH__
-#define __KERN_LINUX_LINUX_TREADNIFO_HH__
+#ifndef __KERN_FREEBSD_FREEBSD_SYSTEM_HH__
+#define __KERN_FREEBSD_FREEBSD_SYSTEM_HH__
 
-#include "kern/linux/thread_info.hh"
-#include "kern/linux/sched.hh"
-#include "sim/vptr.hh"
+#include "kern/system_events.hh"
 
-namespace Linux {
-
-class ThreadInfo
+class FreebsdAlphaSystem : public AlphaSystem
 {
   private:
-    ExecContext *xc;
+    class SkipCalibrateClocksEvent : public SkipFuncEvent
+    {
+      public:
+        SkipCalibrateClocksEvent(PCEventQueue *q, const std::string &desc,
+                                 Addr addr)
+            : SkipFuncEvent(q, desc, addr) {}
+        virtual void process(ExecContext *xc);
+    };
+
+    SkipFuncEvent *skipDelayEvent;
+    SkipCalibrateClocksEvent *skipCalibrateClocks;
 
   public:
-    ThreadInfo(ExecContext *exec) : xc(exec) {}
-    ~ThreadInfo() {}
+    FreebsdAlphaSystem(Params *p);
+    ~FreebsdAlphaSystem();
+    void doCalibrateClocks(ExecContext *xc);
 
-    inline VPtr<thread_info>
-    curThreadInfo()
-    {
-        Addr current;
-
-        /* Each kernel stack is only 2 pages, the start of which is the
-         * thread_info struct. So we can get the address by masking off
-         * the lower 14 bits.
-         */
-        current = xc->readIntReg(TheISA::StackPointerReg) & ~0x3fff;
-        return VPtr<thread_info>(xc, current);
-    }
-
-    inline VPtr<task_struct>
-    curTaskInfo()
-    {
-        Addr task = curThreadInfo()->task;
-        return VPtr<task_struct>(xc, task);
-    }
-
-    std::string
-    curTaskName()
-    {
-        return curTaskInfo()->name;
-    }
-
-    int32_t
-    curTaskPID()
-    {
-        return curTaskInfo()->pid;
-    }
-
-    uint64_t
-    curTaskStart()
-    {
-        return curTaskInfo()->start;
-    }
 };
 
-/* namespace Linux */ }
-
-#endif // __KERN_LINUX_LINUX_THREADINFO_HH__
+#endif // __KERN_FREEBSD_FREEBSD_SYSTEM_HH__

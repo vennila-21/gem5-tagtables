@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@
 #include <string>
 
 #include "sim/pseudo_inst.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/vtophys.hh"
 #include "cpu/base.hh"
 #include "cpu/sampler/sampler.hh"
 #include "cpu/exec_context.hh"
@@ -75,6 +75,42 @@ namespace AlphaPseudo
 
         xc->suspend();
         xc->getCpuPtr()->kernelStats->quiesce();
+    }
+
+    void
+    quiesceNs(ExecContext *xc, uint64_t ns)
+    {
+        if (!doQuiesce || ns == 0)
+            return;
+
+        if (xc->quiesceEvent.scheduled())
+            xc->quiesceEvent.reschedule(curTick + Clock::Int::ns * ns);
+        else
+            xc->quiesceEvent.schedule(curTick + Clock::Int::ns * ns);
+
+        xc->suspend();
+        xc->kernelStats->quiesce();
+    }
+
+    void
+    quiesceCycles(ExecContext *xc, uint64_t cycles)
+    {
+        if (!doQuiesce || cycles == 0)
+            return;
+
+        if (xc->quiesceEvent.scheduled())
+            xc->quiesceEvent.reschedule(curTick + xc->cpu->cycles(cycles));
+        else
+            xc->quiesceEvent.schedule(curTick + xc->cpu->cycles(cycles));
+
+        xc->suspend();
+        xc->kernelStats->quiesce();
+    }
+
+    uint64_t
+    quiesceTime(ExecContext *xc)
+    {
+        return (xc->lastActivate - xc->lastSuspend) / Clock::Int::ns ;
     }
 
     void
@@ -171,7 +207,7 @@ namespace AlphaPseudo
     uint64_t
     readfile(ExecContext *xc, Addr vaddr, uint64_t len, uint64_t offset)
     {
-        const string &file = xc->getCpuPtr()->system->params->readfile;
+        const string &file = xc->getCpuPtr()->system->params()->readfile;
         if (file.empty()) {
             return ULL(0);
         }

@@ -212,6 +212,11 @@ mysql_sources = Split('''
 
 # Full-system sources
 full_system_sources = Split('''
+	arch/alpha/freebsd/system.cc
+	arch/alpha/linux/system.cc
+        arch/alpha/system.cc
+	arch/alpha/tru64/system.cc
+
 	base/crc.cc
 	base/inet.cc
 	base/remote_gdb.cc
@@ -251,15 +256,13 @@ full_system_sources = Split('''
 	kern/kernel_binning.cc
 	kern/kernel_stats.cc
 	kern/system_events.cc
-	kern/freebsd/freebsd_system.cc
+	kern/linux/events.cc
 	kern/linux/linux_syscalls.cc
-	kern/linux/linux_system.cc
 	kern/linux/printk.cc
 	kern/tru64/dump_mbuf.cc
 	kern/tru64/printf.cc
 	kern/tru64/tru64_events.cc
 	kern/tru64/tru64_syscalls.cc
-	kern/tru64/tru64_system.cc
 
 	mem/functional/memory_control.cc
 	mem/functional/physical.cc
@@ -299,29 +302,6 @@ syscall_emulation_sources = Split('''
 	sim/process.cc
 	sim/syscall_emul.cc
         ''')
-
-# The following stuff (targetarch code and global define of THE_ISA)
-# are legacy things that assume we're only compiling one ISA at a
-# time.  These will have to go away if we want to build a binary that
-# supports multiple ISAs.
-
-targetarch_files = Split('''
-        alpha_linux_process.hh
-        alpha_memory.hh
-        alpha_tru64_process.hh
-        aout_machdep.h
-        arguments.hh
-        ecoff_machdep.h
-        ev5.hh
-        faults.hh
-        stacktrace.hh
-        vtophys.hh
-        ''')
-
-# Set up bridging headers to the architecture specific versions
-for f in targetarch_files:
-    env.Command('targetarch/' + f, 'arch/%s/%s' % (env['TARGET_ISA'], f),
-                '''echo '#include "arch/%s/%s"' > $TARGET''' % (env['TARGET_ISA'], f))
 
 # Add a flag defining what THE_ISA should be for all compilation
 env.Append(CPPDEFINES=[('THE_ISA','%s_ISA' % env['TARGET_ISA'].upper())])
@@ -397,6 +377,7 @@ def make_objs(sources, env):
 # the corresponding build directory to pick up generated include
 # files.
 env.Append(CPPPATH='.')
+env.Append(CPPPATH='./libelf')
 
 # Debug binary
 debugEnv = env.Copy(OBJSUFFIX='.do')

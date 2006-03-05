@@ -31,14 +31,14 @@
 
 // @todo: Destructor
 
-#include "arch/alpha/isa_traits.hh"
-#include "arch/alpha/faults.hh"
+#include "arch/isa_traits.hh"
+#include "arch/faults.hh"
 #include "base/trace.hh"
 #include "config/full_system.hh"
 #include "cpu/o3/comm.hh"
 
 #if FULL_SYSTEM
-#include "arch/alpha/ev5.hh"
+#include "arch/ev5.hh"
 #include "kern/kernel_stats.hh"
 
 using namespace EV5;
@@ -236,7 +236,7 @@ class PhysRegFile
 #if FULL_SYSTEM
   private:
     // This is ISA specifc stuff; remove it eventually once ISAImpl is used
-    IntReg palregs[NumIntRegs];	// PAL shadow registers
+//    IntReg palregs[NumIntRegs];	// PAL shadow registers
     InternalProcReg ipr[NumInternalProcRegs]; // internal processor regs
     int intrflag;			// interrupt flag
     bool pal_shadow;		// using pal_shadow registers

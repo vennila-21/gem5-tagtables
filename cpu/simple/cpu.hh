@@ -350,7 +350,7 @@ class SimpleCPU : public BaseCPU
     int readIntrFlag() { return cpuXC->readIntrFlag(); }
     void setIntrFlag(int val) { cpuXC->setIntrFlag(val); }
     bool inPalMode() { return cpuXC->inPalMode(); }
-    void ev5_trap(Fault fault) { cpuXC->ev5_trap(fault); }
+    void ev5_trap(Fault fault) { fault->invoke(xcProxy); }
     bool simPalCheck(int palFunc) { return cpuXC->simPalCheck(palFunc); }
 #else
     void syscall() { cpuXC->syscall(); }
