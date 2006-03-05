@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2004-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,74 +26,80 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * @file
+ * Modifications for the FreeBSD kernel.
+ * Based on kern/linux/linux_system.cc.
+ *
+ */
+
+#include "arch/alpha/system.hh"
+#include "arch/alpha/freebsd/system.hh"
 #include "base/loader/symtab.hh"
-#include "base/trace.hh"
-#include "cpu/base.hh"
 #include "cpu/exec_context.hh"
-#include "kern/tru64/tru64_events.hh"
-#include "kern/tru64/tru64_system.hh"
-#include "kern/system_events.hh"
 #include "mem/functional/memory_control.hh"
 #include "mem/functional/physical.hh"
-#include "sim/builder.hh"
 #include "arch/isa_traits.hh"
-#include "targetarch/vtophys.hh"
+#include "sim/builder.hh"
+#include "sim/byteswap.hh"
+#include "arch/vtophys.hh"
+
+#define TIMER_FREQUENCY 1193180
 
 using namespace std;
+using namespace AlphaISA;
 
-Tru64System::Tru64System(Tru64System::Params *p)
-    : System(p)
+FreebsdAlphaSystem::FreebsdAlphaSystem(Params *p)
+    : AlphaSystem(p)
 {
-    Addr addr = 0;
-    if (kernelSymtab->findAddress("enable_async_printf", addr)) {
-        Addr paddr = vtophys(physmem, addr);
-        uint8_t *enable_async_printf =
-            physmem->dma_addr(paddr, sizeof(uint32_t));
-
-        if (enable_async_printf)
-            *(uint32_t *)enable_async_printf = 0;
-    }
-
-#ifdef DEBUG
-    kernelPanicEvent = addKernelFuncEvent<BreakPCEvent>("panic");
-    if (!kernelPanicEvent)
-        panic("could not find kernel symbol \'panic\'");
-#endif
-
-    badaddrEvent = addKernelFuncEvent<BadAddrEvent>("badaddr");
-    if (!badaddrEvent)
-        panic("could not find kernel symbol \'badaddr\'");
-
-    skipPowerStateEvent =
-        addKernelFuncEvent<SkipFuncEvent>("tl_v48_capture_power_state");
-    skipScavengeBootEvent =
-        addKernelFuncEvent<SkipFuncEvent>("pmap_scavenge_boot");
-
-#if TRACING_ON
-    printfEvent = addKernelFuncEvent<PrintfEvent>("printf");
-    debugPrintfEvent = addKernelFuncEvent<DebugPrintfEvent>("m5printf");
-    debugPrintfrEvent = addKernelFuncEvent<DebugPrintfrEvent>("m5printfr");
-    dumpMbufEvent = addKernelFuncEvent<DumpMbufEvent>("m5_dump_mbuf");
-#endif
+    /**
+     * Any time DELAY is called just skip the function.
+     * Shouldn't we actually emulate the delay?
+     */
+    skipDelayEvent = addKernelFuncEvent<SkipFuncEvent>("DELAY");
+    skipCalibrateClocks =
+        addKernelFuncEvent<SkipCalibrateClocksEvent>("calibrate_clocks");
 }
 
-Tru64System::~Tru64System()
+
+FreebsdAlphaSystem::~FreebsdAlphaSystem()
 {
-#ifdef DEBUG
-    delete kernelPanicEvent;
-#endif
-    delete badaddrEvent;
-    delete skipPowerStateEvent;
-    delete skipScavengeBootEvent;
-#if TRACING_ON
-    delete printfEvent;
-    delete debugPrintfEvent;
-    delete debugPrintfrEvent;
-    delete dumpMbufEvent;
-#endif
+    delete skipDelayEvent;
+    delete skipCalibrateClocks;
 }
 
-BEGIN_DECLARE_SIM_OBJECT_PARAMS(Tru64System)
+
+void
+FreebsdAlphaSystem::doCalibrateClocks(ExecContext *xc)
+{
+    Addr ppc_vaddr = 0;
+    Addr timer_vaddr = 0;
+    Addr ppc_paddr = 0;
+    Addr timer_paddr = 0;
+
+    ppc_vaddr = (Addr)xc->readIntReg(ArgumentReg1);
+    timer_vaddr = (Addr)xc->readIntReg(ArgumentReg2);
+
+    ppc_paddr = vtophys(physmem, ppc_vaddr);
+    timer_paddr = vtophys(physmem, timer_vaddr);
+
+    uint8_t *ppc = physmem->dma_addr(ppc_paddr, sizeof(uint32_t));
+    uint8_t *timer = physmem->dma_addr(timer_paddr, sizeof(uint32_t));
+
+    *(uint32_t *)ppc = htog((uint32_t)Clock::Frequency);
+    *(uint32_t *)timer = htog((uint32_t)TIMER_FREQUENCY);
+}
+
+
+void
+FreebsdAlphaSystem::SkipCalibrateClocksEvent::process(ExecContext *xc)
+{
+    SkipFuncEvent::process(xc);
+    ((FreebsdAlphaSystem *)xc->getSystemPtr())->doCalibrateClocks(xc);
+}
+
+
+BEGIN_DECLARE_SIM_OBJECT_PARAMS(FreebsdAlphaSystem)
 
     Param<Tick> boot_cpu_frequency;
     SimObjectParam<MemoryController *> memctrl;
@@ -112,12 +118,13 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(Tru64System)
 
     Param<bool> bin;
     VectorParam<string> binned_fns;
+    Param<bool> bin_int;
 
-END_DECLARE_SIM_OBJECT_PARAMS(Tru64System)
+END_DECLARE_SIM_OBJECT_PARAMS(FreebsdAlphaSystem)
 
-BEGIN_INIT_SIM_OBJECT_PARAMS(Tru64System)
+BEGIN_INIT_SIM_OBJECT_PARAMS(FreebsdAlphaSystem)
 
-    INIT_PARAM(boot_cpu_frequency, "frequency of the boot cpu"),
+    INIT_PARAM(boot_cpu_frequency, "Frequency of the boot CPU"),
     INIT_PARAM(memctrl, "memory controller"),
     INIT_PARAM(physmem, "phsyical memory"),
     INIT_PARAM(kernel, "file that contains the kernel code"),
@@ -127,16 +134,17 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(Tru64System)
                     "a"),
     INIT_PARAM_DFLT(readfile, "file to read startup script from", ""),
     INIT_PARAM_DFLT(init_param, "numerical value to pass into simulator", 0),
-    INIT_PARAM_DFLT(system_type, "Type of system we are emulating", 12),
-    INIT_PARAM_DFLT(system_rev, "Revision of system we are emulating", 2<<1),
+    INIT_PARAM_DFLT(system_type, "Type of system we are emulating", 34),
+    INIT_PARAM_DFLT(system_rev, "Revision of system we are emulating", 1<<10),
     INIT_PARAM_DFLT(bin, "is this system to be binned", false),
-    INIT_PARAM(binned_fns, "functions to be broken down and binned")
+    INIT_PARAM(binned_fns, "functions to be broken down and binned"),
+    INIT_PARAM_DFLT(bin_int, "is interrupt code binned seperately?", true)
 
-END_INIT_SIM_OBJECT_PARAMS(Tru64System)
+END_INIT_SIM_OBJECT_PARAMS(FreebsdAlphaSystem)
 
-CREATE_SIM_OBJECT(Tru64System)
+CREATE_SIM_OBJECT(FreebsdAlphaSystem)
 {
-    System::Params *p = new System::Params;
+    AlphaSystem::Params *p = new AlphaSystem::Params;
     p->name = getInstanceName();
     p->boot_cpu_frequency = boot_cpu_frequency;
     p->memctrl = memctrl;
@@ -151,9 +159,9 @@ CREATE_SIM_OBJECT(Tru64System)
     p->system_rev = system_rev;
     p->bin = bin;
     p->binned_fns = binned_fns;
-    p->bin_int = false;
-
-    return new Tru64System(p);
+    p->bin_int = bin_int;
+    return new FreebsdAlphaSystem(p);
 }
 
-REGISTER_SIM_OBJECT("Tru64System", Tru64System)
+REGISTER_SIM_OBJECT("FreebsdAlphaSystem", FreebsdAlphaSystem)
+

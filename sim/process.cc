@@ -49,10 +49,7 @@
 #include "sim/stats.hh"
 #include "sim/syscall_emul.hh"
 
-#ifdef TARGET_ALPHA
-#include "arch/alpha/alpha_tru64_process.hh"
-#include "arch/alpha/alpha_linux_process.hh"
-#endif
+#include "arch/process.hh"
 
 using namespace std;
 using namespace TheISA;
@@ -381,27 +378,10 @@ LiveProcess::create(const string &nm,
         fatal("Can't load object file %s", executable);
     }
 
-    // check object type & set up syscall emulation pointer
-    if (objFile->getArch() == ObjectFile::Alpha) {
-        switch (objFile->getOpSys()) {
-          case ObjectFile::Tru64:
-            process = new AlphaTru64Process(nm, objFile,
-                                            stdin_fd, stdout_fd, stderr_fd,
-                                            argv, envp);
-            break;
-
-          case ObjectFile::Linux:
-            process = new AlphaLinuxProcess(nm, objFile,
-                                            stdin_fd, stdout_fd, stderr_fd,
-                                            argv, envp);
-            break;
-
-          default:
-            fatal("Unknown/unsupported operating system.");
-        }
-    } else {
-        fatal("Unknown object file architecture.");
-    }
+    // set up syscall emulation pointer for the current ISA
+    process = createProcess(nm, objFile,
+                            stdin_fd, stdout_fd, stderr_fd,
+                            argv, envp);
 
     delete objFile;
 

@@ -47,7 +47,7 @@
 #include "sim/eventq.hh"
 #include "sim/host.hh"
 #include "sim/stats.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/vtophys.hh"
 
 using namespace Net;
 using namespace TheISA;
@@ -363,11 +363,11 @@ Device::read(MemReqPtr &req, uint8_t *data)
     assert(config.command & PCI_CMD_MSE);
     Fault fault = readBar(req, data);
 
-    if (fault == MachineCheckFault) {
+    if (fault->isMachineCheckFault()) {
         panic("address does not map to a BAR pa=%#x va=%#x size=%d",
               req->paddr, req->vaddr, req->size);
 
-        return MachineCheckFault;
+        return genMachineCheckFault();
     }
 
     return fault;
@@ -459,11 +459,11 @@ Device::write(MemReqPtr &req, const uint8_t *data)
     assert(config.command & PCI_CMD_MSE);
     Fault fault = writeBar(req, data);
 
-    if (fault == MachineCheckFault) {
+    if (fault->isMachineCheckFault()) {
         panic("address does not map to a BAR pa=%#x va=%#x size=%d",
               req->paddr, req->vaddr, req->size);
 
-        return MachineCheckFault;
+        return genMachineCheckFault();
     }
 
     return fault;
@@ -495,8 +495,8 @@ Device::writeBar0(MemReqPtr &req, Addr daddr, const uint8_t *data)
 
     DPRINTF(EthernetPIO,
             "write %s: cpu=%d val=%#x da=%#x pa=%#x va=%#x size=%d\n",
-            info.name, cpu, info.size == 4 ? reg32 : reg64, daddr,
-            req->paddr, req->vaddr, req->size);
+            info.name, cpu, info.size == 4 ? reg32 : reg64,
+            daddr, req->paddr, req->vaddr, req->size);
 
     prepareWrite(cpu, index);
 
@@ -761,6 +761,8 @@ Device::reset()
         regs.Config |= Config_RxThread;
     if (params()->tx_thread)
         regs.Config |= Config_TxThread;
+    if (params()->rss)
+        regs.Config |= Config_RSS;
     regs.IntrMask = Intr_Soft | Intr_RxHigh | Intr_RxPacket | Intr_TxLow;
     regs.RxMaxCopy = params()->rx_max_copy;
     regs.TxMaxCopy = params()->tx_max_copy;
@@ -1624,6 +1626,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(Device)
     Param<string> hardware_address;
     Param<bool> rx_thread;
     Param<bool> tx_thread;
+    Param<bool> rss;
 
 END_DECLARE_SIM_OBJECT_PARAMS(Device)
 
@@ -1666,7 +1669,8 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(Device)
     INIT_PARAM(rx_filter, "Enable Receive Filter"),
     INIT_PARAM(hardware_address, "Ethernet Hardware Address"),
     INIT_PARAM(rx_thread, ""),
-    INIT_PARAM(tx_thread, "")
+    INIT_PARAM(tx_thread, ""),
+    INIT_PARAM(rss, "")
 
 END_INIT_SIM_OBJECT_PARAMS(Device)
 
@@ -1714,6 +1718,7 @@ CREATE_SIM_OBJECT(Device)
     params->eaddr = hardware_address;
     params->rx_thread = rx_thread;
     params->tx_thread = tx_thread;
+    params->rss = rss;
 
     return new Device(params);
 }

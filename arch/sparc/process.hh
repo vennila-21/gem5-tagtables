@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,16 +26,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __KERN_LINUX_THREAD_INFO_H__
-#define __KERN_LINUX_THREAD_INFO_H__
+#ifndef __SPARC_PROCESS_HH__
+#define __SPARC_PROCESS_HH__
 
-#include "kern/linux/hwrpb.hh"
+#include "arch/sparc/linux_process.hh"
+#include "base/loader/object_file.hh"
 
-namespace Linux {
-    struct thread_info {
-        struct pcb_struct       pcb;
-        Addr_a                  task;
-    };
-}
+namespace SparcISA
+{
 
-#endif // __KERN_LINUX_THREAD_INFO_H__
+LiveProcess *
+createProcess(const string &nm, ObjectFile * objFile,
+        int stdin_fd, int stdout_fd, int stderr_fd,
+        vector<string> &argv, vector<string> &envp);
+
+} // namespace SparcISA
+
+#endif // __SPARC_PROCESS_HH__

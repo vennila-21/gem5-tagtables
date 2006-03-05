@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001-2005 The Regents of The University of Michigan
+ * Copyright (c) 2001-2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,12 +36,13 @@
 #include "base/callback.hh"
 #include "base/cprintf.hh"
 #include "base/output.hh"
+#include "base/trace.hh"
 #include "cpu/profile.hh"
 #include "kern/kernel_stats.hh"
 #include "sim/serialize.hh"
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
-#include "targetarch/stacktrace.hh"
+#include "arch/stacktrace.hh"
 #else
 #include "sim/process.hh"
 #endif
@@ -54,8 +55,9 @@ CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_sys,
                          AlphaITB *_itb, AlphaDTB *_dtb,
                          FunctionalMemory *_mem)
     : _status(ExecContext::Unallocated), cpu(_cpu), thread_num(_thread_num),
-      cpu_id(-1), mem(_mem), itb(_itb), dtb(_dtb), system(_sys),
-      memctrl(_sys->memctrl), physmem(_sys->physmem), profile(NULL),
+      cpu_id(-1), lastActivate(0), lastSuspend(0), mem(_mem), itb(_itb),
+      dtb(_dtb), system(_sys), memctrl(_sys->memctrl), physmem(_sys->physmem),
+      fnbin(kernelBinning->fnbin), profile(NULL), quiesceEvent(this),
       func_exe_inst(0), storeCondFailures(0)
 {
     proxy = new ProxyExecContext<CPUExecContext>(this);
@@ -80,8 +82,8 @@ CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_sys,
 CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num,
                          Process *_process, int _asid)
     : _status(ExecContext::Unallocated),
-      cpu(_cpu), thread_num(_thread_num), cpu_id(-1),
-      process(_process), mem(process->getMemory()), asid(_asid),
+      cpu(_cpu), thread_num(_thread_num), cpu_id(-1), lastActivate(0),
+      lastSuspend(0), process(_process), mem(process->getMemory()), asid(_asid),
       func_exe_inst(0), storeCondFailures(0)
 {
     memset(&regs, 0, sizeof(RegFile));
@@ -117,7 +119,23 @@ void
 CPUExecContext::dumpFuncProfile()
 {
     std::ostream *os = simout.create(csprintf("profile.%s.dat", cpu->name()));
-    profile->dump(proxy, *os);
+}
+
+ExecContext::EndQuiesceEvent::EndQuiesceEvent(ExecContext *_xc)
+    : Event(&mainEventQueue), xc(_xc)
+{
+}
+
+void
+ExecContext::EndQuiesceEvent::process()
+{
+    xc->activate();
+}
+
+const char*
+ExecContext::EndQuiesceEvent::description()
+{
+    return "End Quiesce Event.";
 }
 #endif
 
@@ -153,6 +171,14 @@ CPUExecContext::serialize(ostream &os)
     // thread_num and cpu_id are deterministic from the config
     SERIALIZE_SCALAR(func_exe_inst);
     SERIALIZE_SCALAR(inst);
+
+#if FULL_SYSTEM
+    Tick quiesceEndTick = 0;
+    if (quiesceEvent.scheduled())
+        quiesceEndTick = quiesceEvent.when();
+    SERIALIZE_SCALAR(quiesceEndTick);
+
+#endif
 }
 
 
@@ -164,6 +190,13 @@ CPUExecContext::unserialize(Checkpoint *cp, const std::string &section)
     // thread_num and cpu_id are deterministic from the config
     UNSERIALIZE_SCALAR(func_exe_inst);
     UNSERIALIZE_SCALAR(inst);
+
+#if FULL_SYSTEM
+    Tick quiesceEndTick;
+    UNSERIALIZE_SCALAR(quiesceEndTick);
+    if (quiesceEndTick)
+        quiesceEvent.schedule(quiesceEndTick);
+#endif
 }
 
 
@@ -172,6 +205,8 @@ CPUExecContext::activate(int delay)
 {
     if (status() == ExecContext::Active)
         return;
+
+    lastActivate = curTick;
 
     _status = ExecContext::Active;
     cpu->activateContext(thread_num, delay);
@@ -183,6 +218,9 @@ CPUExecContext::suspend()
     if (status() == ExecContext::Suspended)
         return;
 
+    lastActivate = curTick;
+    lastSuspend = curTick;
+/*
 #if FULL_SYSTEM
     // Don't change the status from active if there are pending interrupts
     if (cpu->check_interrupts()) {
@@ -190,7 +228,7 @@ CPUExecContext::suspend()
         return;
     }
 #endif
-
+*/
     _status = ExecContext::Suspended;
     cpu->suspendContext(thread_num);
 }
@@ -248,15 +286,3 @@ CPUExecContext::copyArchRegs(ExecContext *xc)
     setNextPC(xc->readNextPC());
 }
 
-void
-CPUExecContext::trap(Fault fault)
-{
-    //TheISA::trap(fault);    //One possible way to do it...
-
-    /** @todo: Going to hack it for now.  Do a true fixup later. */
-#if FULL_SYSTEM
-    ev5_trap(fault);
-#else
-    fatal("fault (%d) detected @ PC 0x%08p", fault, readPC());
-#endif
-}

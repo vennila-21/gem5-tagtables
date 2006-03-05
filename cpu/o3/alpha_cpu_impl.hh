@@ -260,7 +260,7 @@ Fault
 AlphaFullCPU<Impl>::hwrei()
 {
     if (!inPalMode())
-        return UnimplementedOpcodeFault;
+        return new UnimplementedOpcodeFault;
 
     this->setNextPC(this->regFile.miscRegs.readReg(AlphaISA::IPR_EXC_ADDR));
 
@@ -305,24 +305,25 @@ template <class Impl>
 void
 AlphaFullCPU<Impl>::trap(Fault fault)
 {
-    // Keep in mind that a trap may be initiated by fetch if there's a TLB
+/*    // Keep in mind that a trap may be initiated by fetch if there's a TLB
     // miss
     uint64_t PC = this->commit.readCommitPC();
 
-    DPRINTF(Fault, "Fault %s\n", fault ? fault->name : "name");
-    this->recordEvent(csprintf("Fault %s", fault ? fault->name : "name"));
+    DPRINTF(Fault, "Fault %s\n", fault->name());
+    this->recordEvent(csprintf("Fault %s", fault->name()));
 
-//    kernelStats.fault(fault);
+    //kernelStats.fault(fault);
 
-    if (fault == ArithmeticFault)
+    if (fault->isA<ArithmeticFault>())
         panic("Arithmetic traps are unimplemented!");
 
     // exception restart address - Get the commit PC
-    if (fault != InterruptFault || !inPalMode(PC))
+    if (!fault->isA<InterruptFault>() || !inPalMode(PC))
         this->regFile.miscRegs.setReg(AlphaISA::IPR_EXC_ADDR, PC);
 
-    if (fault == PalFault || fault == ArithmeticFault /* ||
-        fault == InterruptFault && !PC_PAL(regs.pc) */) {
+    if (fault->isA<PalFault>() || fault->isA<ArithmeticFault>())
+    //    || fault == InterruptFault && !PC_PAL(regs.pc)
+        {
         // traps...  skip faulting instruction
         AlphaISA::MiscReg ipr_exc_addr =
             this->regFile.miscRegs.readReg(AlphaISA::IPR_EXC_ADDR);
@@ -334,8 +335,8 @@ AlphaFullCPU<Impl>::trap(Fault fault)
         swapPALShadow(true);
 
     this->regFile.setPC(this->regFile.miscRegs.readReg(AlphaISA::IPR_PAL_BASE) +
-                         AlphaISA::fault_addr(fault) );
-    this->regFile.setNextPC(PC + sizeof(MachInst));
+                         (dynamic_cast<AlphaFault *>(fault.get()))->vect());
+    this->regFile.setNextPC(PC + sizeof(MachInst));*/
 }
 
 template <class Impl>

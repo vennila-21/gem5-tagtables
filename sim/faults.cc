@@ -27,10 +27,11 @@
  */
 
 #include "sim/faults.hh"
+#include "cpu/exec_context.hh"
 
-NoFaultType * const NoFault = new NoFaultType("none");
-MachineCheckFaultType * const MachineCheckFault =
-    new MachineCheckFaultType("mchk");
-AlignmentFaultType * const AlignmentFault =
-    new AlignmentFaultType("unalign");
-
+#if !FULL_SYSTEM
+void FaultBase::invoke(ExecContext * xc)
+{
+    fatal("fault (%s) detected @ PC 0x%08p", name(), xc->readPC());
+}
+#endif

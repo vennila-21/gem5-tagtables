@@ -68,9 +68,9 @@
 #include "mem/functional/memory_control.hh"
 #include "mem/functional/physical.hh"
 #include "sim/system.hh"
-#include "targetarch/alpha_memory.hh"
-#include "targetarch/stacktrace.hh"
-#include "targetarch/vtophys.hh"
+#include "arch/tlb.hh"
+#include "arch/stacktrace.hh"
+#include "arch/vtophys.hh"
 #else // !FULL_SYSTEM
 #include "mem/functional/functional.hh"
 #endif // FULL_SYSTEM
@@ -350,12 +350,12 @@ SimpleCPU::copySrcTranslate(Addr src)
     // translate to physical address
     Fault fault = cpuXC->translateDataReadReq(memReq);
 
-    assert(fault != AlignmentFault);
-
     if (fault == NoFault) {
         cpuXC->copySrcAddr = src;
         cpuXC->copySrcPhysAddr = memReq->paddr + offset;
     } else {
+        assert(!fault->isAlignmentFault());
+
         cpuXC->copySrcAddr = 0;
         cpuXC->copySrcPhysAddr = 0;
     }
@@ -385,8 +385,6 @@ SimpleCPU::copy(Addr dest)
     // translate to physical address
     Fault fault = cpuXC->translateDataWriteReq(memReq);
 
-    assert(fault != AlignmentFault);
-
     if (fault == NoFault) {
         Addr dest_addr = memReq->paddr + offset;
         // Need to read straight from memory since we have more than 8 bytes.
@@ -405,6 +403,9 @@ SimpleCPU::copy(Addr dest)
             dcacheInterface->access(memReq);
         }
     }
+    else
+        assert(!fault->isAlignmentFault());
+
     return fault;
 }
 
@@ -690,7 +691,8 @@ SimpleCPU::tick()
         if (ipl && ipl > cpuXC->readMiscReg(IPR_IPLR)) {
             cpuXC->setMiscReg(IPR_ISR, summary);
             cpuXC->setMiscReg(IPR_INTID, ipl);
-            cpuXC->ev5_trap(InterruptFault);
+
+            Fault(new InterruptFault)->invoke(xcProxy);
 
             DPRINTF(Flow, "Interrupt! IPLR=%d ipl=%d summary=%x\n",
                     cpuXC->readMiscReg(IPR_IPLR), ipl, summary);
@@ -764,7 +766,7 @@ SimpleCPU::tick()
 
         // decode the instruction
         inst = gtoh(inst);
-        curStaticInst = StaticInst::decode(inst);
+        curStaticInst = StaticInst::decode(makeExtMI(inst, xc->readPC()));
 
         traceData = Trace::getInstRecord(curTick, xcProxy, this, curStaticInst,
                                          cpuXC->readPC());
@@ -815,7 +817,7 @@ SimpleCPU::tick()
 
     if (fault != NoFault) {
 #if FULL_SYSTEM
-        cpuXC->ev5_trap(fault);
+        fault->invoke(xcProxy);
 #else // !FULL_SYSTEM
         fatal("fault (%d) detected @ PC 0x%08p", fault, cpuXC->readPC());
 #endif // FULL_SYSTEM

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,44 +26,31 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __KERN_TRU64_TRU64_SYSTEM_HH__
-#define __KERN_TRU64_TRU64_SYSTEM_HH__
+#include "arch/sparc/process.hh"
 
-#include "sim/system.hh"
-#include "arch/isa_traits.hh"
-
-class ExecContext;
-
-class BreakPCEvent;
-class BadAddrEvent;
-class SkipFuncEvent;
-class PrintfEvent;
-class DebugPrintfEvent;
-class DumpMbufEvent;
-class AlphaArguments;
-
-class Tru64System : public System
+namespace SparcISA
 {
-  private:
-#ifdef DEBUG
-    /** Event to halt the simulator if the kernel calls panic()  */
-    BreakPCEvent *kernelPanicEvent;
-#endif
 
-    BadAddrEvent *badaddrEvent;
-    SkipFuncEvent *skipPowerStateEvent;
-    SkipFuncEvent *skipScavengeBootEvent;
-    PrintfEvent *printfEvent;
-    DebugPrintfEvent  *debugPrintfEvent;
-    DebugPrintfrEvent *debugPrintfrEvent;
-    DumpMbufEvent *dumpMbufEvent;
+LiveProcess *
+createProcess(const string &nm, ObjectFile * objFile,
+        int stdin_fd, int stdout_fd, int stderr_fd,
+        vector<string> &argv, vector<string> &envp)
+{
+    LiveProcess * process = NULL;
+    if (objFile->getArch() != ObjectFile::SPARC)
+        fatal("Object file does not match architecture.");
+    switch (objFile->getOpSys()) {
+      case ObjectFile::Linux:
+        process = new SparcLinuxProcess(nm, objFile,
+                                        stdin_fd, stdout_fd, stderr_fd,
+                                        argv, envp);
+        break;
 
-  public:
-    Tru64System(Params *p);
-    ~Tru64System();
+      case ObjectFile::Solaris:
+      default:
+        fatal("Unknown/unsupported operating system.");
+    }
+    return process;
+}
 
-    static void Printf(AlphaArguments args);
-    static void DumpMbuf(AlphaArguments args);
-};
-
-#endif // __KERN_TRU64_TRU64_SYSTEM_HH__
+} // namespace SparcISA
