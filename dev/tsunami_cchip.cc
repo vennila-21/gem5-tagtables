@@ -42,6 +42,7 @@
 #include "mem/bus/pio_interface.hh"
 #include "mem/bus/pio_interface_impl.hh"
 #include "mem/functional/memory_control.hh"
+#include "cpu/exec_context.hh"
 #include "cpu/intr_control.hh"
 #include "sim/builder.hh"
 #include "sim/system.hh"
@@ -113,7 +114,7 @@ TsunamiCChip::read(MemReqPtr &req, uint8_t *data)
               case TSDEV_CC_MISC:
                   *(uint64_t*)data = (ipint << 8) & 0xF |
                                      (itint << 4) & 0xF |
-                                     (xc->cpu_id & 0x3);
+                                     (xc->readCpuId() & 0x3);
                   return NoFault;
               case TSDEV_CC_AAR0:
               case TSDEV_CC_AAR1:

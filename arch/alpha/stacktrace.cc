@@ -35,6 +35,7 @@
 #include "base/trace.hh"
 #include "cpu/base.hh"
 #include "cpu/exec_context.hh"
+#include "sim/system.hh"
 
 using namespace std;
 using namespace AlphaISA;
@@ -44,23 +45,23 @@ ProcessInfo::ProcessInfo(ExecContext *_xc)
 {
     Addr addr = 0;
 
-    if (!xc->system->kernelSymtab->findAddress("thread_info_size", addr))
+    if (!xc->getSystemPtr()->kernelSymtab->findAddress("thread_info_size", addr))
         panic("thread info not compiled into kernel\n");
     thread_info_size = *(int32_t *)vtomem(xc, addr, sizeof(int32_t));
 
-    if (!xc->system->kernelSymtab->findAddress("task_struct_size", addr))
+    if (!xc->getSystemPtr()->kernelSymtab->findAddress("task_struct_size", addr))
         panic("thread info not compiled into kernel\n");
     task_struct_size = *(int32_t *)vtomem(xc, addr, sizeof(int32_t));
 
-    if (!xc->system->kernelSymtab->findAddress("thread_info_task", addr))
+    if (!xc->getSystemPtr()->kernelSymtab->findAddress("thread_info_task", addr))
         panic("thread info not compiled into kernel\n");
     task_off = *(int32_t *)vtomem(xc, addr, sizeof(int32_t));
 
-    if (!xc->system->kernelSymtab->findAddress("task_struct_pid", addr))
+    if (!xc->getSystemPtr()->kernelSymtab->findAddress("task_struct_pid", addr))
         panic("thread info not compiled into kernel\n");
     pid_off = *(int32_t *)vtomem(xc, addr, sizeof(int32_t));
 
-    if (!xc->system->kernelSymtab->findAddress("task_struct_comm", addr))
+    if (!xc->getSystemPtr()->kernelSymtab->findAddress("task_struct_comm", addr))
         panic("thread info not compiled into kernel\n");
     name_off = *(int32_t *)vtomem(xc, addr, sizeof(int32_t));
 }
@@ -126,8 +127,9 @@ StackTrace::trace(ExecContext *_xc, bool is_call)
 
     bool usermode = (xc->readMiscReg(AlphaISA::IPR_DTB_CM) & 0x18) != 0;
 
-    Addr pc = xc->regs.npc;
-    bool kernel = xc->system->kernelStart <= pc && pc <= xc->system->kernelEnd;
+    Addr pc = xc->readNextPC();
+    bool kernel = xc->getSystemPtr()->kernelStart <= pc &&
+        pc <= xc->getSystemPtr()->kernelEnd;
 
     if (usermode) {
         stack.push_back(user);
@@ -139,8 +141,8 @@ StackTrace::trace(ExecContext *_xc, bool is_call)
         return;
     }
 
-    SymbolTable *symtab = xc->system->kernelSymtab;
-    Addr ksp = xc->regs.intRegFile[TheISA::StackPointerReg];
+    SymbolTable *symtab = xc->getSystemPtr()->kernelSymtab;
+    Addr ksp = xc->readIntReg(TheISA::StackPointerReg);
     Addr bottom = ksp & ~0x3fff;
     Addr addr;
 
@@ -149,7 +151,7 @@ StackTrace::trace(ExecContext *_xc, bool is_call)
             panic("could not find address %#x", pc);
 
         stack.push_back(addr);
-        pc = xc->regs.pc;
+        pc = xc->readPC();
     }
 
     Addr ra;
@@ -181,8 +183,8 @@ StackTrace::trace(ExecContext *_xc, bool is_call)
             return;
         }
 
-        bool kernel = xc->system->kernelStart <= pc &&
-            pc <= xc->system->kernelEnd;
+        bool kernel = xc->getSystemPtr()->kernelStart <= pc &&
+            pc <= xc->getSystemPtr()->kernelEnd;
         if (!kernel)
             return;
 
@@ -323,8 +325,8 @@ StackTrace::decodePrologue(Addr sp, Addr callpc, Addr func,
 void
 StackTrace::dump()
 {
-    StringWrap name(xc->cpu->name());
-    SymbolTable *symtab = xc->system->kernelSymtab;
+    StringWrap name(xc->getCpuPtr()->name());
+    SymbolTable *symtab = xc->getSystemPtr()->kernelSymtab;
 
     DPRINTFN("------ Stack ------\n");
 

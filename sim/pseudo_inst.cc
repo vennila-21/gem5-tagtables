@@ -64,7 +64,7 @@ namespace AlphaPseudo
     void
     arm(ExecContext *xc)
     {
-        xc->kernelStats->arm();
+        xc->getCpuPtr()->kernelStats->arm();
     }
 
     void
@@ -74,7 +74,7 @@ namespace AlphaPseudo
             return;
 
         xc->suspend();
-        xc->kernelStats->quiesce();
+        xc->getCpuPtr()->kernelStats->quiesce();
     }
 
     void
@@ -83,13 +83,15 @@ namespace AlphaPseudo
         if (!doQuiesce || ns == 0)
             return;
 
-        if (xc->quiesceEvent.scheduled())
-            xc->quiesceEvent.reschedule(curTick + Clock::Int::ns * ns);
+        Event *quiesceEvent = xc->getQuiesceEvent();
+
+        if (quiesceEvent->scheduled())
+            quiesceEvent->reschedule(curTick + Clock::Int::ns * ns);
         else
-            xc->quiesceEvent.schedule(curTick + Clock::Int::ns * ns);
+            quiesceEvent->schedule(curTick + Clock::Int::ns * ns);
 
         xc->suspend();
-        xc->kernelStats->quiesce();
+        xc->getCpuPtr()->kernelStats->quiesce();
     }
 
     void
@@ -98,25 +100,29 @@ namespace AlphaPseudo
         if (!doQuiesce || cycles == 0)
             return;
 
-        if (xc->quiesceEvent.scheduled())
-            xc->quiesceEvent.reschedule(curTick + xc->cpu->cycles(cycles));
+        Event *quiesceEvent = xc->getQuiesceEvent();
+
+        if (quiesceEvent->scheduled())
+            quiesceEvent->reschedule(curTick +
+                                     xc->getCpuPtr()->cycles(cycles));
         else
-            xc->quiesceEvent.schedule(curTick + xc->cpu->cycles(cycles));
+            quiesceEvent->schedule(curTick +
+                                   xc->getCpuPtr()->cycles(cycles));
 
         xc->suspend();
-        xc->kernelStats->quiesce();
+        xc->getCpuPtr()->kernelStats->quiesce();
     }
 
     uint64_t
     quiesceTime(ExecContext *xc)
     {
-        return (xc->lastActivate - xc->lastSuspend) / Clock::Int::ns ;
+        return (xc->readLastActivate() - xc->readLastSuspend()) / Clock::Int::ns;
     }
 
     void
     ivlb(ExecContext *xc)
     {
-        xc->kernelStats->ivlb();
+        xc->getCpuPtr()->kernelStats->ivlb();
     }
 
     void
@@ -174,7 +180,7 @@ namespace AlphaPseudo
 
         DPRINTF(Loader, "Loaded symbol: %s @ %#llx\n", symbol, addr);
 
-        xc->system->kernelSymtab->insert(addr,symbol);
+        xc->getSystemPtr()->kernelSymtab->insert(addr,symbol);
     }
 
     void
@@ -207,7 +213,7 @@ namespace AlphaPseudo
     uint64_t
     readfile(ExecContext *xc, Addr vaddr, uint64_t len, uint64_t offset)
     {
-        const string &file = xc->cpu->system->params()->readfile;
+        const string &file = xc->getCpuPtr()->system->params()->readfile;
         if (file.empty()) {
             return ULL(0);
         }
