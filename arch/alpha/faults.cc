@@ -107,7 +107,7 @@ void AlphaFault::invoke(ExecContext * xc)
 
     // exception restart address
     if (setRestartAddress() || !xc->inPalMode())
-        xc->setMiscReg(AlphaISA::IPR_EXC_ADDR, xc->regs.pc);
+        xc->setMiscReg(AlphaISA::IPR_EXC_ADDR, xc->readPC());
 
     if (skipFaultingInstruction()) {
         // traps...  skip faulting instruction.
@@ -115,8 +115,8 @@ void AlphaFault::invoke(ExecContext * xc)
                    xc->readMiscReg(AlphaISA::IPR_EXC_ADDR) + 4);
     }
 
-    xc->regs.pc = xc->readMiscReg(AlphaISA::IPR_PAL_BASE) + vect();
-    xc->regs.npc = xc->regs.pc + sizeof(MachInst);
+    xc->setPC(xc->readMiscReg(AlphaISA::IPR_PAL_BASE) + vect());
+    xc->setNextPC(xc->readPC() + sizeof(MachInst));
 }
 
 void ArithmeticFault::invoke(ExecContext * xc)
