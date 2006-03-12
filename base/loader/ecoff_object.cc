@@ -29,8 +29,7 @@
 #include <string>
 
 #include "base/loader/ecoff_object.hh"
-
-#include "mem/functional/functional.hh"
+#include "base/misc.hh"
 #include "base/loader/symtab.hh"
 
 #include "base/trace.hh"	// for DPRINTF
@@ -68,36 +67,19 @@ EcoffObject::EcoffObject(const string &_filename, int _fd,
 
     text.baseAddr = aoutHdr->text_start;
     text.size = aoutHdr->tsize;
+    text.fileImage = fileData + ECOFF_TXTOFF(execHdr);
 
     data.baseAddr = aoutHdr->data_start;
     data.size = aoutHdr->dsize;
+    data.fileImage = fileData + ECOFF_DATOFF(execHdr);
 
     bss.baseAddr = aoutHdr->bss_start;
     bss.size = aoutHdr->bsize;
+    bss.fileImage = NULL;
 
     DPRINTFR(Loader, "text: 0x%x %d\ndata: 0x%x %d\nbss: 0x%x %d\n",
              text.baseAddr, text.size, data.baseAddr, data.size,
              bss.baseAddr, bss.size);
-}
-
-
-bool
-EcoffObject::loadSections(FunctionalMemory *mem, bool loadPhys)
-{
-    Addr textAddr = text.baseAddr;
-    Addr dataAddr = data.baseAddr;
-
-    if (loadPhys) {
-        textAddr &= (ULL(1) << 40) - 1;
-        dataAddr &= (ULL(1) << 40) - 1;
-    }
-
-    // Since we don't really have an MMU and all memory is
-    // zero-filled, there's no need to set up the BSS segment.
-    mem->prot_write(textAddr, fileData + ECOFF_TXTOFF(execHdr), text.size);
-    mem->prot_write(dataAddr, fileData + ECOFF_DATOFF(execHdr), data.size);
-
-    return true;
 }
 
 

@@ -38,13 +38,11 @@
 #include "sim/sim_object.hh"
 #include "arch/isa_traits.hh"
 
-#if FULL_SYSTEM
 class System;
 namespace Kernel { class Statistics; }
-#endif
-
 class BranchPred;
 class ExecContext;
+class Port;
 
 class BaseCPU : public SimObject
 {
@@ -123,8 +121,8 @@ class BaseCPU : public SimObject
         Tick clock;
         bool functionTrace;
         Tick functionTraceStart;
-#if FULL_SYSTEM
         System *system;
+#if FULL_SYSTEM
         int cpu_id;
         Tick profile;
 #endif
@@ -173,9 +171,9 @@ class BaseCPU : public SimObject
      */
     EventQueue **comLoadEventQueue;
 
-#if FULL_SYSTEM
     System *system;
 
+#if FULL_SYSTEM
     /**
      * Serialize this object to the given output stream.
      * @param os The stream to serialize to.

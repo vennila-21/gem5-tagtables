@@ -32,16 +32,13 @@
 #include "arch/isa_traits.hh"
 #include "config/full_system.hh"
 #include "cpu/exec_context.hh"
-#include "mem/functional/functional.hh"
-#include "mem/mem_req.hh"
+#include "mem/physical.hh"
+#include "mem/request.hh"
 #include "sim/byteswap.hh"
 #include "sim/eventq.hh"
 #include "sim/host.hh"
 #include "sim/serialize.hh"
 
-// forward declaration: see functional_memory.hh
-class FunctionalMemory;
-class PhysicalMemory;
 class BaseCPU;
 
 #if FULL_SYSTEM
@@ -56,6 +53,7 @@ class MemoryController;
 #else // !FULL_SYSTEM
 
 #include "sim/process.hh"
+class TranslatingPort;
 
 #endif // FULL_SYSTEM
 
@@ -118,17 +116,21 @@ class CPUExecContext
     Tick lastActivate;
     Tick lastSuspend;
 
+    System *system;
+
+    /// Port that syscalls can use to access memory (provides translation step).
+    TranslatingPort *port;
+//    Memory *mem;
+
 #if FULL_SYSTEM
-    FunctionalMemory *mem;
     AlphaITB *itb;
     AlphaDTB *dtb;
-    System *system;
 
     // the following two fields are redundant, since we can always
     // look them up through the system pointer, but we'll leave them
     // here for now for convenience
     MemoryController *memctrl;
-    PhysicalMemory *physmem;
+//    PhysicalMemory *physmem;
 
     FunctionProfile *profile;
     ProfileNode *profileNode;
@@ -163,8 +165,6 @@ class CPUExecContext
 
 #else
     Process *process;
-
-    FunctionalMemory *mem;	// functional storage for process address space
 
     // Address space ID.  Note that this is used for TIMING cache
     // simulation only; all functional memory accesses should use
@@ -202,9 +202,7 @@ class CPUExecContext
     CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_system,
                    AlphaITB *_itb, AlphaDTB *_dtb, FunctionalMemory *_dem);
 #else
-    CPUExecContext(BaseCPU *_cpu, int _thread_num, Process *_process, int _asid);
-    CPUExecContext(BaseCPU *_cpu, int _thread_num, FunctionalMemory *_mem,
-                   int _asid);
+    CPUExecContext(BaseCPU *_cpu, int _thread_num, Process *_process, int _asid, Port *mem_port);
     // Constructor to use XC to pass reg file around.  Not used for anything
     // else.
     CPUExecContext(RegFile *regFile);
@@ -217,6 +215,8 @@ class CPUExecContext
 
     void serialize(std::ostream &os);
     void unserialize(Checkpoint *cp, const std::string &section);
+
+    TranslatingPort *getMemPort() { return port; }
 
     BaseCPU *getCpuPtr() { return cpu; }
 
@@ -238,17 +238,17 @@ class CPUExecContext
     int getInstAsid() { return regs.instAsid(); }
     int getDataAsid() { return regs.dataAsid(); }
 
-    Fault translateInstReq(MemReqPtr &req)
+    Fault translateInstReq(CpuRequestPtr &req)
     {
         return itb->translate(req);
     }
 
-    Fault translateDataReadReq(MemReqPtr &req)
+    Fault translateDataReadReq(CpuRequestPtr &req)
     {
         return dtb->translate(req, false);
     }
 
-    Fault translateDataWriteReq(MemReqPtr &req)
+    Fault translateDataWriteReq(CpuRequestPtr &req)
     {
         return dtb->translate(req, true);
     }
@@ -265,36 +265,28 @@ class CPUExecContext
     int getInstAsid() { return asid; }
     int getDataAsid() { return asid; }
 
-    Fault dummyTranslation(MemReqPtr &req)
+    Fault translateInstReq(CpuRequestPtr &req)
     {
-#if 0
-        assert((req->vaddr >> 48 & 0xffff) == 0);
-#endif
+        return process->pTable->translate(req);
+    }
 
-        // put the asid in the upper 16 bits of the paddr
-        req->paddr = req->vaddr & ~((Addr)0xffff << sizeof(Addr) * 8 - 16);
-        req->paddr = req->paddr | (Addr)req->asid << sizeof(Addr) * 8 - 16;
-        return NoFault;
-    }
-    Fault translateInstReq(MemReqPtr &req)
+    Fault translateDataReadReq(CpuRequestPtr &req)
     {
-        return dummyTranslation(req);
+        return process->pTable->translate(req);
     }
-    Fault translateDataReadReq(MemReqPtr &req)
+
+    Fault translateDataWriteReq(CpuRequestPtr &req)
     {
-        return dummyTranslation(req);
-    }
-    Fault translateDataWriteReq(MemReqPtr &req)
-    {
-        return dummyTranslation(req);
+        return process->pTable->translate(req);
     }
 
 #endif
 
+/*
     template <class T>
-    Fault read(MemReqPtr &req, T &data)
+    Fault read(CpuRequestPtr &req, T &data)
     {
-#if FULL_SYSTEM && defined(TARGET_ALPHA)
+#if FULL_SYSTEM && THE_ISA == ALPHA_ISA
         if (req->flags & LOCKED) {
             req->xc->setMiscReg(TheISA::Lock_Addr_DepTag, req->paddr);
             req->xc->setMiscReg(TheISA::Lock_Flag_DepTag, true);
@@ -302,15 +294,15 @@ class CPUExecContext
 #endif
 
         Fault error;
-        error = mem->read(req, data);
+        error = mem->prot_read(req->paddr, data, req->size);
         data = LittleEndianGuest::gtoh(data);
         return error;
     }
 
     template <class T>
-    Fault write(MemReqPtr &req, T &data)
+    Fault write(CpuRequestPtr &req, T &data)
     {
-#if FULL_SYSTEM && defined(TARGET_ALPHA)
+#if FULL_SYSTEM && THE_ISA == ALPHA_ISA
         ExecContext *xc;
 
         // If this is a store conditional, act appropriately
@@ -356,9 +348,9 @@ class CPUExecContext
         }
 
 #endif
-        return mem->write(req, (T)LittleEndianGuest::htog(data));
+        return mem->prot_write(req->paddr, (T)htog(data), req->size);
     }
-
+*/
     virtual bool misspeculating();
 
 
@@ -369,16 +361,16 @@ class CPUExecContext
         inst = new_inst;
     }
 
-    Fault instRead(MemReqPtr &req)
+    Fault instRead(CpuRequestPtr &req)
     {
-        return mem->read(req, inst);
+        panic("instRead not implemented");
+        // return funcPhysMem->read(req, inst);
+        return NoFault;
     }
 
     void setCpuId(int id) { cpu_id = id; }
 
     int readCpuId() { return cpu_id; }
-
-    FunctionalMemory *getMemPtr() { return mem; }
 
     void copyArchRegs(ExecContext *xc);
 

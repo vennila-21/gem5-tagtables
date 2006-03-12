@@ -41,21 +41,31 @@
 #include <vector>
 
 #include "arch/isa_traits.hh"
-#include "sim/sim_object.hh"
-#include "sim/stats.hh"
 #include "base/statistics.hh"
 #include "base/trace.hh"
+#include "mem/memory.hh"
+//#include "mem/mem_interface.hh"
+#include "mem/page_table.hh"
+#include "sim/sim_object.hh"
+#include "sim/stats.hh"
+#include "arch/isa_traits.hh"
 
 class CPUExecContext;
 class ExecContext;
-class FunctionalMemory;
 class SyscallDesc;
+class TranslatingPort;
+class System;
+
 class Process : public SimObject
 {
   protected:
     typedef TheISA::RegFile RegFile;
     typedef TheISA::MachInst MachInst;
   public:
+
+    /// Pointer to object representing the system this process is
+    /// running on.
+    System *system;
 
     // have we initialized an execution context from this process?  If
     // yes, subsequent contexts are assumed to be for dynamically
@@ -76,15 +86,11 @@ class Process : public SimObject
 
         WaitRec(Addr chan, ExecContext *ctx)
             : waitChan(chan), waitingContext(ctx)
-        {
-        }
+        {	}
     };
 
     // list of all blocked contexts
     std::list<WaitRec> waitList;
-
-    RegFile *init_regs;		// initial register contents
-    CPUExecContext *cpuXC;      // XC to hold the init_regs
 
     Addr text_base;		// text (code) segment base
     unsigned text_size;		// text (code) size in bytes
@@ -118,6 +124,7 @@ class Process : public SimObject
   protected:
     // constructor
     Process(const std::string &nm,
+            System *_system,
             int stdin_fd, 	// initial I/O descriptors
             int stdout_fd,
             int stderr_fd);
@@ -126,7 +133,11 @@ class Process : public SimObject
     virtual void startup();
 
   protected:
-    FunctionalMemory *memory;
+    /// Memory object for initialization (image loading)
+    TranslatingPort *initVirtMem;
+
+  public:
+    PageTable *pTable;
 
   private:
     // file descriptor remapping support
@@ -181,8 +192,6 @@ class Process : public SimObject
     }
 
     virtual void syscall(ExecContext *xc) = 0;
-
-    virtual FunctionalMemory *getMemory() { return memory; }
 };
 
 //
@@ -192,16 +201,23 @@ class ObjectFile;
 class LiveProcess : public Process
 {
   protected:
+    ObjectFile *objFile;
+    std::vector<std::string> argv;
+    std::vector<std::string> envp;
+
     LiveProcess(const std::string &nm, ObjectFile *objFile,
-                int stdin_fd, int stdout_fd, int stderr_fd,
+                System *_system, int stdin_fd, int stdout_fd, int stderr_fd,
                 std::vector<std::string> &argv,
                 std::vector<std::string> &envp);
+
+    void startup();
 
   public:
     // this function is used to create the LiveProcess object, since
     // we can't tell which subclass of LiveProcess to use until we
     // open and look at the object file.
     static LiveProcess *create(const std::string &nm,
+                               System *_system,
                                int stdin_fd, int stdout_fd, int stderr_fd,
                                std::string executable,
                                std::vector<std::string> &argv,

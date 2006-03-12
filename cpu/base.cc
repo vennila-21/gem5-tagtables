@@ -65,7 +65,7 @@ BaseCPU::BaseCPU(Params *p)
 #else
 BaseCPU::BaseCPU(Params *p)
     : SimObject(p->name), clock(p->clock), params(p),
-      number_of_threads(p->numberOfThreads)
+      number_of_threads(p->numberOfThreads), system(p->system)
 #endif
 {
     DPRINTF(FullCPU, "BaseCPU: Creating object, mem address %#x.\n", this);
@@ -229,6 +229,7 @@ BaseCPU::registerExecContexts()
 {
     for (int i = 0; i < execContexts.size(); ++i) {
         ExecContext *xc = execContexts[i];
+
 #if FULL_SYSTEM
         int id = params->cpu_id;
         if (id != -1)

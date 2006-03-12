@@ -36,6 +36,9 @@
 #include "cpu/pc_event.hh"
 #include "cpu/sampler/sampler.hh"
 #include "cpu/static_inst.hh"
+#include "mem/packet.hh"
+#include "mem/port.hh"
+#include "mem/request.hh"
 #include "sim/eventq.hh"
 
 // forward declarations
@@ -43,7 +46,7 @@
 class Processor;
 class AlphaITB;
 class AlphaDTB;
-class PhysicalMemory;
+class Memory;
 
 class RemoteGDB;
 class GDBListener;
@@ -62,11 +65,48 @@ namespace Trace {
     class InstRecord;
 }
 
+
+// Set exactly one of these symbols to 1 to set the memory access
+// model.  Probably should make these template parameters, or even
+// just fork the CPU models.
+//
+#define SIMPLE_CPU_MEM_TIMING    0
+#define SIMPLE_CPU_MEM_ATOMIC    0
+#define SIMPLE_CPU_MEM_IMMEDIATE 1
+
+
 class SimpleCPU : public BaseCPU
 {
   protected:
     typedef TheISA::MachInst MachInst;
     typedef TheISA::MiscReg MiscReg;
+    class CpuPort : public Port
+    {
+
+        SimpleCPU *cpu;
+
+      public:
+
+        CpuPort(SimpleCPU *_cpu)
+            : cpu(_cpu)
+        { }
+
+      protected:
+
+        virtual bool recvTiming(Packet &pkt);
+
+        virtual Tick recvAtomic(Packet &pkt);
+
+        virtual void recvFunctional(Packet &pkt);
+
+        virtual void recvStatusChange(Status status);
+
+        virtual Packet *recvRetry();
+    };
+
+    CpuPort icachePort;
+    CpuPort dcachePort;
+
   public:
     // main simulation loop (one cycle)
     void tick();
@@ -109,10 +149,12 @@ class SimpleCPU : public BaseCPU
     enum Status {
         Running,
         Idle,
-        IcacheMissStall,
-        IcacheMissComplete,
-        DcacheMissStall,
-        DcacheMissSwitch,
+        IcacheRetry,
+        IcacheWaitResponse,
+        IcacheAccessComplete,
+        DcacheRetry,
+        DcacheWaitResponse,
+        DcacheWaitSwitch,
         SwitchedOut
     };
 
@@ -133,14 +175,12 @@ class SimpleCPU : public BaseCPU
   public:
     struct Params : public BaseCPU::Params
     {
-        MemInterface *icache_interface;
-        MemInterface *dcache_interface;
         int width;
 #if FULL_SYSTEM
         AlphaITB *itb;
         AlphaDTB *dtb;
-        FunctionalMemory *mem;
 #else
+        Memory *mem;
         Process *process;
 #endif
     };
@@ -162,17 +202,19 @@ class SimpleCPU : public BaseCPU
     bool interval_stats;
 #endif
 
-    // L1 instruction cache
-    MemInterface *icacheInterface;
-
-    // L1 data cache
-    MemInterface *dcacheInterface;
-
     // current instruction
     MachInst inst;
 
-    // Refcounted pointer to the one memory request.
-    MemReqPtr memReq;
+#if SIMPLE_CPU_MEM_TIMING
+    Packet *retry_pkt;
+#elif SIMPLE_CPU_MEM_ATOMIC || SIMPLE_CPU_MEM_IMMEDIATE
+    CpuRequest *ifetch_req;
+    Packet     *ifetch_pkt;
+    CpuRequest *data_read_req;
+    Packet     *data_read_pkt;
+    CpuRequest *data_write_req;
+    Packet     *data_write_pkt;
+#endif
 
     // Pointer to the sampler that is telling us to switchover.
     // Used to signal the completion of the pipe drain and schedule
@@ -180,20 +222,6 @@ class SimpleCPU : public BaseCPU
     Sampler *sampler;
 
     StaticInstPtr curStaticInst;
-
-    class CacheCompletionEvent : public Event
-    {
-      private:
-        SimpleCPU *cpu;
-
-      public:
-        CacheCompletionEvent(SimpleCPU *_cpu);
-
-        virtual void process();
-        virtual const char *description();
-    };
-
-    CacheCompletionEvent cacheCompletionEvent;
 
     Status status() const { return _status; }
 
@@ -227,15 +255,28 @@ class SimpleCPU : public BaseCPU
     Stats::Average<> notIdleFraction;
     Stats::Formula idleFraction;
 
-    // number of cycles stalled for I-cache misses
+    // number of cycles stalled for I-cache responses
     Stats::Scalar<> icacheStallCycles;
     Counter lastIcacheStall;
 
-    // number of cycles stalled for D-cache misses
+    // number of cycles stalled for I-cache retries
+    Stats::Scalar<> icacheRetryCycles;
+    Counter lastIcacheRetry;
+
+    // number of cycles stalled for D-cache responses
     Stats::Scalar<> dcacheStallCycles;
     Counter lastDcacheStall;
 
-    void processCacheCompletion();
+    // number of cycles stalled for D-cache retries
+    Stats::Scalar<> dcacheRetryCycles;
+    Counter lastDcacheRetry;
+
+    void sendIcacheRequest(Packet *pkt);
+    void sendDcacheRequest(Packet *pkt);
+    void processResponse(Packet &response);
+
+    Packet * processRetry();
+    void recvStatusChange(Port::Status status) {}
 
     virtual void serialize(std::ostream &os);
     virtual void unserialize(Checkpoint *cp, const std::string &section);
