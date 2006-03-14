@@ -26,24 +26,79 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ARCH_ALPHA_REGISTERFILE_HH__
-#define __ARCH_ALPHA_REGISTERFILE_HH__
+#ifndef __ARCH_ALPHA_REGFILE_HH__
+#define __ARCH_ALPHA_REGFILE_HH__
 
 #include "arch/alpha/types.hh"
 #include "arch/alpha/constants.hh"
 #include "sim/faults.hh"
 
 class Checkpoint;
+class ExecContext;
 
 namespace AlphaISA
 {
 
     typedef IntReg IntRegFile[NumIntRegs];
 
-    typedef union {
-        uint64_t q[NumFloatRegs];	// integer qword view
-        double d[NumFloatRegs];		// double-precision floating point view
-    } FloatRegFile;
+    class FloatRegFile
+    {
+      protected:
+
+        union {
+            uint64_t q[NumFloatRegs];	// integer qword view
+            double d[NumFloatRegs];	// double-precision floating point view
+        };
+
+      public:
+
+        FloatReg readReg(int floatReg)
+        {
+            return d[floatReg];
+        }
+
+        FloatReg readReg(int floatReg, int width)
+        {
+            return readReg(floatReg);
+        }
+
+        FloatRegBits readRegBits(int floatReg)
+        {
+            return q[floatReg];
+        }
+
+        FloatRegBits readRegBits(int floatReg, int width)
+        {
+            return readRegBits(floatReg);
+        }
+
+        Fault setReg(int floatReg, const FloatReg &val)
+        {
+            d[floatReg] = val;
+            return NoFault;
+        }
+
+        Fault setReg(int floatReg, const FloatReg &val, int width)
+        {
+            return setReg(floatReg, val);
+        }
+
+        Fault setRegBits(int floatReg, const FloatRegBits &val)
+        {
+            q[floatReg] = val;
+            return NoFault;
+        }
+
+        Fault setRegBits(int floatReg, const FloatRegBits &val, int width)
+        {
+            return setRegBits(floatReg, val);
+        }
+
+        void serialize(std::ostream &os);
+
+        void unserialize(Checkpoint *cp, const std::string &section);
+
+    };
 
     class MiscRegFile {
       protected:
@@ -67,8 +122,6 @@ namespace AlphaISA
         Fault setRegWithEffect(int misc_reg, const MiscReg &val,
                                ExecContext *xc);
 
-        void copyMiscRegs(ExecContext *xc);
-
 #if FULL_SYSTEM
       protected:
         typedef uint64_t InternalProcReg;
@@ -79,8 +132,6 @@ namespace AlphaISA
         InternalProcReg readIpr(int idx, Fault &fault, ExecContext *xc);
 
         Fault setIpr(int idx, InternalProcReg val, ExecContext *xc);
-
-        void copyIprs(ExecContext *xc);
 #endif
         friend class RegFile;
     };
@@ -105,6 +156,13 @@ namespace AlphaISA
         void unserialize(Checkpoint *cp, const std::string &section);
     };
 
+    void copyRegs(ExecContext *src, ExecContext *dest);
+
+    void copyMiscRegs(ExecContext *src, ExecContext *dest);
+
+#if FULL_SYSTEM
+    void copyIprs(ExecContext *src, ExecContext *dest);
+#endif
 } // namespace AlphaISA
 
 #endif
