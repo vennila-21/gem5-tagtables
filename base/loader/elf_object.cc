@@ -91,7 +91,7 @@ ElfObject::tryFile(const string &fname, int fd, size_t len, uint8_t *data)
             arch = ObjectFile::SPARC;
         } else if (ehdr.e_machine == EM_MIPS
                 && ehdr.e_ident[EI_CLASS] == ELFCLASS32) {
-            arch = ObjectFile::MIPS;
+            arch = ObjectFile::Mips;
         } else if (ehdr.e_ident[EI_CLASS] == ELFCLASS64) {
             arch = ObjectFile::Alpha;
         } else {
@@ -155,6 +155,7 @@ ElfObject::tryFile(const string &fname, int fd, size_t len, uint8_t *data)
             section = elf_getscn(elf, ++secIdx);
             } // while sections
         }
+
         elf_end(elf);
         return new ElfObject(fname, fd, len, data, arch, opSys);
     }
@@ -185,6 +186,7 @@ ElfObject::ElfObject(const string &_filename, int _fd,
     }
 
     entry = ehdr.e_entry;
+
 
     // initialize segment sizes to 0 in case they're not present
     text.size = data.size = bss.size = 0;
