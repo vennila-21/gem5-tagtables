@@ -52,7 +52,7 @@ MipsLiveProcess::create(const std::string &nm, System *system, int stdin_fd,
     }
 
 
-    if (objFile->getArch() != ObjectFile::MIPS)
+    if (objFile->getArch() != ObjectFile::Mips)
         fatal("Object file does not match architecture.");
     switch (objFile->getOpSys()) {
       case ObjectFile::Linux:
