@@ -11,19 +11,16 @@ decode OP default Unknown::unknown()
         {
             //Throw an illegal instruction acception
             0x0: Trap::illtrap({{fault = new IllegalInstruction;}});
-            0x1: decode CC02
+            0x1: decode BPCC
             {
-                0x0: decode CC12
-                {
-                    0x0: bpcci({{
-                        if(passesCondition(CcrIcc, COND2))
-                            ;//branchHere
-                    }});
-                    0x1: bpccx({{
+                0x0: bpcci({{
+                    if(passesCondition(CcrIcc, COND2))
+                        ;//branchHere
+                }});
+                0x2: bpccx({{
                     if(passesCondition(CcrXcc, COND2))
                         ;//branchHere
-                    }});
-                }
+                }});
             }
             0x2: bicc({{
                 if(passesCondition(CcrIcc, COND2))
@@ -318,22 +315,19 @@ decode OP default Unknown::unknown()
                     0x1F: Priv::rdprver({{Rd = Ver;}});
                 }
                 0x2B: BasicOperate::flushw({{//window toilet}}); //FLUSHW
-                0x2C: decode CC2
+                0x2C: decode MOVCC3
                 {
                     0x0: Trap::movccfcc({{fault = new FpDisabled}});
-                    0x1: decode CC04
+                    0x1: decode CC
                     {
-                        0x0: decode CC14
-                        {
-                            0x0: movcci({{
-                                if(passesCondition(CcrIcc, COND4))
-                                    Rd = (I ? SIMM11 : RS2);
-                            }});
-                            0x1: movccx({{
-                                if(passesCondition(CcrXcc, COND4))
-                                    Rd = (I ? SIMM11 : RS2);
-                            }});
-                        }
+                        0x0: movcci({{
+                            if(passesCondition(CcrIcc, COND4))
+                                Rd = (I ? SIMM11 : RS2);
+                        }});
+                        0x2: movccx({{
+                            if(passesCondition(CcrXcc, COND4))
+                                Rd = (I ? SIMM11 : RS2);
+                        }});
                     }
                 }
                 0x2D: sdivx({{
@@ -409,20 +403,30 @@ decode OP default Unknown::unknown()
 
                 0x38: Branch::jmpl({{//Stuff}}); //JMPL
                 0x39: Branch::return({{//Other Stuff}}); //RETURN
-                0x3A: decode CC04
+                0x3A: decode CC
                 {
-                    // If CC04 == 1, it's an illegal instruction
-                    0x0: decode CC14
-                    {
-                        0x0: Trap::tcci({{
-                            if(passesCondition(CcrIcc, machInst<25:28>))
-                                fault = new TrapInstruction;
-                        }});
-                        0x1: Trap::tccx({{
-                            if(passesCondition(CcrXcc, machInst<25:28>))
-                                fault = new TrapInstruction;
-                        }});
-                    }
+                    0x0: Trap::tcci({{
+#if FULL_SYSTEM
+                         fault = new TrapInstruction;
+#else
+                         if(passesCondition(CcrIcc, machInst<25:28>))
+                              // At least glibc only uses trap 0,
+                              // solaris/sunos may use others
+                              assert((I ? Rs1 + Rs2 : Rs1 + SW_TRAP) == 0);
+                              xc->syscall();
+#endif
+                    }});
+                    0x2: Trap::tccx({{
+#if FULL_SYSTEM
+                         fault = new TrapInstruction;
+#else
+                         if(passesCondition(CcrXcc, machInst<25:28>))
+                              // At least glibc only uses trap 0,
+                              // solaris/sunos may use others
+                              assert((I ? Rs1 + Rs2 : Rs1 + SW_TRAP) == 0);
+                              xc->syscall();
+#endif
+                    }});
                 }
                 0x3B: BasicOperate::flush({{//Lala}}); //FLUSH
                 0x3C: BasicOperate::save({{//leprechauns); //SAVE
