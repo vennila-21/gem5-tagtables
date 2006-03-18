@@ -28,6 +28,7 @@
 
 #include <string>
 
+#include "arch/isa_traits.hh"
 #include "cpu/base.hh"
 #include "cpu/cpu_exec_context.hh"
 #include "cpu/exec_context.hh"
@@ -45,6 +46,7 @@
 #include "arch/stacktrace.hh"
 #else
 #include "sim/process.hh"
+#include "mem/translating_port.hh"
 #endif
 
 using namespace std;
@@ -53,7 +55,7 @@ using namespace std;
 #if FULL_SYSTEM
 CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_sys,
                          AlphaITB *_itb, AlphaDTB *_dtb,
-                         FunctionalMemory *_mem)
+                         Memory *_mem)
     : _status(ExecContext::Unallocated), cpu(_cpu), thread_num(_thread_num),
       cpu_id(-1), lastActivate(0), lastSuspend(0), mem(_mem), itb(_itb),
       dtb(_dtb), system(_sys), memctrl(_sys->memctrl), physmem(_sys->physmem),
@@ -79,27 +81,19 @@ CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_sys,
 }
 #else
 CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num,
-                         Process *_process, int _asid)
+                         Process *_process, int _asid, Port *mem_port)
     : _status(ExecContext::Unallocated),
       cpu(_cpu), thread_num(_thread_num), cpu_id(-1), lastActivate(0),
-      lastSuspend(0), process(_process), mem(process->getMemory()), asid(_asid),
+      lastSuspend(0), process(_process), asid(_asid),
       func_exe_inst(0), storeCondFailures(0)
 {
-    memset(&regs, 0, sizeof(RegFile));
-    proxy = new ProxyExecContext<CPUExecContext>(this);
-}
-
-CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num,
-                         FunctionalMemory *_mem, int _asid)
-    : cpu(_cpu), thread_num(_thread_num), process(0), mem(_mem), asid(_asid),
-      func_exe_inst(0), storeCondFailures(0)
-{
+    port = new TranslatingPort(mem_port, process->pTable);
     memset(&regs, 0, sizeof(RegFile));
     proxy = new ProxyExecContext<CPUExecContext>(this);
 }
 
 CPUExecContext::CPUExecContext(RegFile *regFile)
-    : cpu(NULL), thread_num(-1), process(NULL), mem(NULL), asid(-1),
+    : cpu(NULL), thread_num(-1), process(NULL), asid(-1),
       func_exe_inst(0), storeCondFailures(0)
 {
     regs = *regFile;
@@ -158,7 +152,6 @@ void
 CPUExecContext::takeOverFrom(ExecContext *oldContext)
 {
     // some things should already be set up
-    assert(mem == oldContext->getMemPtr());
 #if FULL_SYSTEM
     assert(system == oldContext->getSystemPtr());
 #else
@@ -277,22 +270,6 @@ CPUExecContext::regStats(const string &name)
 void
 CPUExecContext::copyArchRegs(ExecContext *xc)
 {
-    // First loop through the integer registers.
-    for (int i = 0; i < AlphaISA::NumIntRegs; ++i) {
-        setIntReg(i, xc->readIntReg(i));
-    }
-
-    // Then loop through the floating point registers.
-    for (int i = 0; i < AlphaISA::NumFloatRegs; ++i) {
-        setFloatRegDouble(i, xc->readFloatRegDouble(i));
-        setFloatRegInt(i, xc->readFloatRegInt(i));
-    }
-
-    // Copy misc. registers
-    regs.miscRegs.copyMiscRegs(xc);
-
-    // Lastly copy PC/NPC
-    setPC(xc->readPC());
-    setNextPC(xc->readNextPC());
+    TheISA::copyRegs(xc, proxy);
 }
 

@@ -2,16 +2,14 @@ from m5 import *
 class BaseCPU(SimObject):
     type = 'BaseCPU'
     abstract = True
-    icache = Param.BaseMem(NULL, "L1 instruction cache object")
-    dcache = Param.BaseMem(NULL, "L1 data cache object")
 
     if build_env['FULL_SYSTEM']:
         dtb = Param.AlphaDTB("Data TLB")
         itb = Param.AlphaITB("Instruction TLB")
-        mem = Param.FunctionalMemory("memory")
         system = Param.System(Parent.any, "system object")
         cpu_id = Param.Int(-1, "CPU identifier")
     else:
+        mem = Param.Memory(Parent.any, "memory")
         workload = VectorParam.Process("processes to run")
 
     max_insts_all_threads = Param.Counter(0,

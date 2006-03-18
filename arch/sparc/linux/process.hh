@@ -29,16 +29,19 @@
 #ifndef __SPARC_LINUX_PROCESS_HH__
 #define __SPARC_LINUX_PROCESS_HH__
 
+#include "arch/sparc/process.hh"
 #include "sim/process.hh"
 
+namespace SparcISA {
 
 /// A process with emulated SPARC/Linux syscalls.
-class SparcLinuxProcess : public LiveProcess
+class SparcLinuxProcess : public SparcLiveProcess
 {
   public:
     /// Constructor.
     SparcLinuxProcess(const std::string &name,
                       ObjectFile *objFile,
+                      System * system,
                       int stdin_fd, int stdout_fd, int stderr_fd,
                       std::vector<std::string> &argv,
                       std::vector<std::string> &envp);
@@ -54,5 +57,5 @@ class SparcLinuxProcess : public LiveProcess
     const int Num_Syscall_Descs;
 };
 
-
+} // namespace SparcISA
 #endif // __ALPHA_LINUX_PROCESS_HH__

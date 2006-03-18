@@ -40,6 +40,7 @@
 class FastCPU;
 class FullCPU;
 class Checkpoint;
+class ExecContext;
 
 namespace LittleEndianGuest {};
 using namespace LittleEndianGuest;
@@ -54,50 +55,100 @@ int DTB_ASN_ASN(uint64_t reg);
 int ITB_ASN_ASN(uint64_t reg);
 };
 
+#if !FULL_SYSTEM
+class SyscallReturn {
+        public:
+           template <class T>
+           SyscallReturn(T v, bool s)
+           {
+               retval = (uint64_t)v;
+               success = s;
+           }
+
+           template <class T>
+           SyscallReturn(T v)
+           {
+               success = (v >= 0);
+               retval = (uint64_t)v;
+           }
+
+           ~SyscallReturn() {}
+
+           SyscallReturn& operator=(const SyscallReturn& s) {
+               retval = s.retval;
+               success = s.success;
+               return *this;
+           }
+
+           bool successful() { return success; }
+           uint64_t value() { return retval; }
+
+
+       private:
+           uint64_t retval;
+           bool success;
+};
+#endif
+
 namespace MipsISA
 {
     typedef uint32_t MachInst;
-//  typedef uint64_t Addr;
+    typedef uint32_t MachInst;
+    typedef uint64_t ExtMachInst;
     typedef uint8_t  RegIndex;
+//  typedef uint64_t Addr;
 
-    enum {
-        MemoryEnd = 0xffffffffffffffffULL,
+       // Constants Related to the number of registers
 
-        NumIntRegs = 32,
-        NumFloatRegs = 32,
-        NumMiscRegs = 258, //account for hi,lo regs
+    const int NumIntArchRegs = 32;
+    const int NumPALShadowRegs = 8;
+    const int NumFloatArchRegs = 32;
+    // @todo: Figure out what this number really should be.
+    const int NumMiscArchRegs = 32;
 
-        MaxRegsOfAnyType = 32,
-        // Static instruction parameters
-        MaxInstSrcRegs = 3,
-        MaxInstDestRegs = 2,
+    const int NumIntRegs = NumIntArchRegs + NumPALShadowRegs;
+    const int NumFloatRegs = NumFloatArchRegs;
+    const int NumMiscRegs = NumMiscArchRegs;
 
-        // semantically meaningful register indices
-        ZeroReg = 0,	// architecturally meaningful
-        // the rest of these depend on the ABI
-        StackPointerReg = 30,
-        GlobalPointerReg = 29,
-        ProcedureValueReg = 27,
-        ReturnAddressReg = 26,
-        ReturnValueReg = 0,
-        FramePointerReg = 15,
-        ArgumentReg0 = 16,
-        ArgumentReg1 = 17,
-        ArgumentReg2 = 18,
-        ArgumentReg3 = 19,
-        ArgumentReg4 = 20,
-        ArgumentReg5 = 21,
+    const int TotalNumRegs = NumIntRegs + NumFloatRegs +
+    NumMiscRegs + 0/*NumInternalProcRegs*/;
 
-        LogVMPageSize = 13,	// 8K bytes
-        VMPageSize = (1 << LogVMPageSize),
+    const int TotalDataRegs = NumIntRegs + NumFloatRegs;
 
-        BranchPredAddrShiftAmt = 2, // instructions are 4-byte aligned
+    // Static instruction parameters
+    const int MaxInstSrcRegs = 3;
+    const int MaxInstDestRegs = 2;
 
-        WordBytes = 4,
-        HalfwordBytes = 2,
-        ByteBytes = 1,
-        DepNA = 0,
-    };
+    // semantically meaningful register indices
+    const int ZeroReg = 0;
+    const int AssemblerReg = 1;
+    const int ReturnValueReg1 = 2;
+    const int ReturnValueReg2 = 3;
+    const int ArgumentReg0 = 4;
+    const int ArgumentReg1 = 5;
+    const int ArgumentReg2 = 6;
+    const int ArgumentReg3 = 7;
+    const int KernelReg0 = 26;
+    const int KernelReg1 = 27;
+    const int GlobalPointerReg = 28;
+    const int StackPointerReg = 29;
+    const int FramePointerReg = 30;
+    const int ReturnAddressReg = 31;
+
+    const int SyscallNumReg = ReturnValueReg1;
+    const int SyscallPseudoReturnReg = ArgumentReg3;
+    const int SyscallSuccessReg = 19;
+
+    const int LogVMPageSize = 13;	// 8K bytes
+    const int VMPageSize = (1 << LogVMPageSize);
+
+    const int BranchPredAddrShiftAmt = 2; // instructions are 4-byte aligned
+
+    const int MachineBytes = 4;
+    const int WordBytes = 4;
+    const int HalfwordBytes = 2;
+    const int ByteBytes = 1;
+
 
     // These enumerate all the registers for dependence tracking.
     enum DependenceTags {
@@ -114,23 +165,84 @@ namespace MipsISA
     typedef uint64_t IntReg;
     typedef IntReg IntRegFile[NumIntRegs];
 
-    // floating point register file entry type
+/* floating point register file entry type
     typedef union {
         uint64_t q;
         double d;
-    } FloatReg;
+    } FloatReg;*/
 
-    typedef union {
+    typedef double FloatReg;
+    typedef uint64_t FloatRegBits;
+
+/*typedef union {
         uint64_t q[NumFloatRegs];	// integer qword view
         double d[NumFloatRegs];		// double-precision floating point view
-    } FloatRegFile;
+    } FloatRegFile;*/
+
+   class FloatRegFile
+    {
+      protected:
+
+        FloatRegBits q[NumFloatRegs];	// integer qword view
+        double d[NumFloatRegs];	// double-precision floating point view
+
+      public:
+
+        FloatReg readReg(int floatReg)
+        {
+            return d[floatReg];
+        }
+
+        FloatReg readReg(int floatReg, int width)
+        {
+            return readReg(floatReg);
+        }
+
+        FloatRegBits readRegBits(int floatReg)
+        {
+            return q[floatReg];
+        }
+
+        FloatRegBits readRegBits(int floatReg, int width)
+        {
+            return readRegBits(floatReg);
+        }
+
+        Fault setReg(int floatReg, const FloatReg &val)
+        {
+            d[floatReg] = val;
+            return NoFault;
+        }
+
+        Fault setReg(int floatReg, const FloatReg &val, int width)
+        {
+            return setReg(floatReg, val);
+        }
+
+        Fault setRegBits(int floatReg, const FloatRegBits &val)
+        {
+            q[floatReg] = val;
+            return NoFault;
+        }
+
+        Fault setRegBits(int floatReg, const FloatRegBits &val, int width)
+        {
+            return setRegBits(floatReg, val);
+        }
+
+        void serialize(std::ostream &os);
+
+        void unserialize(Checkpoint *cp, const std::string &section);
+
+    };
+
+        void copyRegs(ExecContext *src, ExecContext *dest);
 
     // cop-0/cop-1 system control register file
     typedef uint64_t MiscReg;
 //typedef MiscReg MiscRegFile[NumMiscRegs];
     class MiscRegFile {
-      public:
-        MiscReg
+
       protected:
         uint64_t	fpcr;		// floating point condition codes
         uint64_t	uniq;		// process-unique register
@@ -144,6 +256,8 @@ namespace MipsISA
         //has been replaced.
         int getInstAsid();
         int getDataAsid();
+
+        void copyMiscRegs(ExecContext *xc);
 
         MiscReg readReg(int misc_reg)
         { return miscRegFile[misc_reg]; }
@@ -159,7 +273,7 @@ namespace MipsISA
         { miscRegFile[misc_reg] = val; return NoFault; }
 
 #if FULL_SYSTEM
-        void clearIprs() { };
+        void clearIprs() { }
 
       protected:
         InternalProcReg ipr[NumInternalProcRegs]; // Internal processor regs
@@ -249,7 +363,7 @@ namespace MipsISA
 
         EPC = 105,//105-112        //14-0 Program counter at last exception
 
-        PRId = 113//113-120,       //15-0 Processor identification and revision
+        PRId = 113,//113-120,       //15-0 Processor identification and revision
         EBase = 114,      //15-1 Exception vector base register
 
         Config = 121,//Bank 16: 121-128
@@ -363,15 +477,6 @@ extern const Addr PageOffset;
     };
 #endif
 
-    enum {
-        TotalNumRegs =
-        NumIntRegs + NumFloatRegs + NumMiscRegs + NumInternalProcRegs
-    };
-
-    enum {
-        TotalDataRegs = NumIntRegs + NumFloatRegs
-    };
-
     typedef union {
         IntReg  intreg;
         FloatReg   fpreg;
@@ -411,7 +516,7 @@ extern const Addr PageOffset;
         void coldReset();
     };
 
-    StaticInstPtr decodeInst(MachInst);
+    StaticInstPtr decodeInst(ExtMachInst);
 
     // return a no-op instruction... used for instruction fetch faults
     extern const MachInst NoopMachInst;
@@ -422,8 +527,20 @@ extern const Addr PageOffset;
         ITOUCH_ANNOTE = 0xffffffff,
     };
 
-   void getMiscRegIdx(int reg_name,int &idx, int &sel);
+//void getMiscRegIdx(int reg_name,int &idx, int &sel);
 
+    static inline ExtMachInst
+    makeExtMI(MachInst inst, const uint64_t &pc) {
+#if FULL_SYSTEM
+        ExtMachInst ext_inst = inst;
+        if (pc && 0x1)
+            return ext_inst|=(static_cast<ExtMachInst>(pc & 0x1) << 32);
+        else
+            return ext_inst;
+#else
+        return ExtMachInst(inst);
+#endif
+    }
 
     static inline bool isCallerSaveIntegerRegister(unsigned int reg) {
         panic("register classification not implemented");
@@ -470,6 +587,12 @@ extern const Addr PageOffset;
         return 0;
     }
 
+    static inline void setSyscallReturn(SyscallReturn return_value, RegFile *regs)
+    {
+        regs->intRegFile[ReturnValueReg1] = 1;
+        //panic("Returning from syscall\n");
+    }
+
     // Machine operations
 
     void saveMachineReg(AnyReg &savereg, const RegFile &reg_file,
@@ -498,43 +621,6 @@ extern const Addr PageOffset;
     const Addr MaxAddr = (Addr)-1;
 };
 
-#if !FULL_SYSTEM
-class SyscallReturn {
-        public:
-           template <class T>
-           SyscallReturn(T v, bool s)
-           {
-               retval = (uint64_t)v;
-               success = s;
-           }
-
-           template <class T>
-           SyscallReturn(T v)
-           {
-               success = (v >= 0);
-               retval = (uint64_t)v;
-           }
-
-           ~SyscallReturn() {}
-
-           SyscallReturn& operator=(const SyscallReturn& s) {
-               retval = s.retval;
-               success = s.success;
-               return *this;
-           }
-
-           bool successful() { return success; }
-           uint64_t value() { return retval; }
-
-
-       private:
-           uint64_t retval;
-           bool success;
-};
-
-#endif
-
-
 #if FULL_SYSTEM
 //typedef TheISA::InternalProcReg InternalProcReg;
 //const int NumInternalProcRegs  = TheISA::NumInternalProcRegs;
@@ -542,5 +628,7 @@ class SyscallReturn {
 
 #include "arch/mips/mips34k.hh"
 #endif
+
+using namespace MipsISA;
 
 #endif // __ARCH_MIPS_ISA_TRAITS_HH__

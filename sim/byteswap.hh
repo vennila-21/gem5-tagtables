@@ -79,7 +79,9 @@ static inline uint64_t swap_byte(uint64_t x) {return swap_byte64(x);}
 static inline int64_t swap_byte(int64_t x) {return swap_byte64((uint64_t)x);}
 static inline uint32_t swap_byte(uint32_t x) {return swap_byte32(x);}
 static inline int32_t swap_byte(int32_t x) {return swap_byte32((uint32_t)x);}
-#if defined(__APPLE__)
+//This is to prevent the following two functions from compiling on
+//64bit machines. It won't detect everything, so it should be changed.
+#ifndef __x86_64__
 static inline long swap_byte(long x) {return swap_byte32((long)x);}
 static inline unsigned long swap_byte(unsigned long x)
                                 { return swap_byte32((unsigned long)x);}

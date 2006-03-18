@@ -1,8 +1,9 @@
 from m5 import *
-from FunctionalMemory import FunctionalMemory
+from Memory import Memory
 
-class PhysicalMemory(FunctionalMemory):
+class PhysicalMemory(Memory):
     type = 'PhysicalMemory'
     range = Param.AddrRange("Device Address")
     file = Param.String('', "memory mapped file")
-    mmu = Param.MemoryController(Parent.any, "Memory Controller")
+    if build_env['FULL_SYSTEM']:
+        mmu = Param.MemoryController(Parent.any, "Memory Controller")

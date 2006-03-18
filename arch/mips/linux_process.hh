@@ -29,16 +29,17 @@
 #ifndef __MIPS_LINUX_PROCESS_HH__
 #define __MIPS_LINUX_PROCESS_HH__
 
-#include "sim/process.hh"
+#include "arch/mips/process.hh"
 
 
 /// A process with emulated Mips/Linux syscalls.
-class MipsLinuxProcess : public LiveProcess
+class MipsLinuxProcess : public MipsLiveProcess
 {
   public:
     /// Constructor.
     MipsLinuxProcess(const std::string &name,
                       ObjectFile *objFile,
+                      System *system,
                       int stdin_fd, int stdout_fd, int stderr_fd,
                       std::vector<std::string> &argv,
                       std::vector<std::string> &envp);
