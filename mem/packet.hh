@@ -54,7 +54,8 @@ enum Command
 enum PacketResult
 {
     Success,
-    BadAddress
+    BadAddress,
+    Unknown
 };
 
 class SenderState{};
@@ -110,6 +111,9 @@ struct Packet
 
     /** The command of the transaction. */
     Command cmd;
+
+    /** The time this request was responded to. Used to calculate latencies. */
+    Tick time;
 
     /** The result of the packet transaction. */
     PacketResult result;

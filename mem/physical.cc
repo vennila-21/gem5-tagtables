@@ -152,10 +152,13 @@ PhysicalMemory::doFunctionalAccess(Packet &pkt)
 }
 
 Port *
-PhysicalMemory::getPort(const char *if_name)
+PhysicalMemory::getPort(const std::string &if_name)
 {
-    if (if_name == NULL) {
-        return new MemoryPort(this);
+    if (if_name == "") {
+        if (port != NULL)
+           panic("PhysicalMemory::getPort: additional port requested to memory!");
+        port = new MemoryPort(this);
+        return port;
     } else {
         panic("PhysicalMemory::getPort: unknown port %s requested", if_name);
     }
@@ -181,7 +184,15 @@ void
 PhysicalMemory::MemoryPort::getDeviceAddressRanges(AddrRangeList &range_list,
                                            bool &owner)
 {
-    panic("??");
+    memory->getAddressRanges(range_list, owner);
+}
+
+void
+PhysicalMemory::getAddressRanges(AddrRangeList &range_list, bool &owner)
+{
+    owner = true;
+    range_list.clear();
+    range_list.push_back(RangeSize(base_addr, pmem_size));
 }
 
 int

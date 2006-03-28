@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * Copyright (c) 2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,27 +28,46 @@
 
 /**
  * @file
- * Base Memory Object decleration.
+ * Describes a tagged prefetcher based on template policies.
  */
 
-#ifndef __MEM_MEM_OBJECT_HH__
-#define __MEM_MEM_OBJECT_HH__
+#include "mem/cache/prefetch/tagged_prefetcher.hh"
 
-#include "sim/sim_object.hh"
-#include "mem/port.hh"
-
-/**
- * The base MemoryObject class, allows for an accesor function to a
- * simobj that returns the Port.
- */
-class MemObject : public SimObject
+template <class TagStore, class Buffering>
+TaggedPrefetcher<TagStore, Buffering>::
+TaggedPrefetcher(int size, bool pageStop, bool serialSquash,
+                 bool cacheCheckPush, bool onlyData,
+                 Tick latency, int degree)
+    :Prefetcher<TagStore, Buffering>(size, pageStop, serialSquash,
+                                     cacheCheckPush, onlyData),
+     latency(latency), degree(degree)
 {
-  public:
-    MemObject(const std::string &name);
+}
 
-  public:
-    /** Additional function to return the Port of a memory object. */
-    virtual Port *getPort(const std::string &if_name) = 0;
-};
+template <class TagStore, class Buffering>
+void
+TaggedPrefetcher<TagStore, Buffering>::
+calculatePrefetch(MemReqPtr &req, std::list<Addr> &addresses,
+                  std::list<Tick> &delays)
+{
+    Addr blkAddr = req->paddr & ~(Addr)(this->blkSize-1);
 
-#endif //__MEM_MEM_OBJECT_HH__
+    for (int d=1; d <= degree; d++) {
+        Addr newAddr = blkAddr + d*(this->blkSize);
+        if (this->pageStop &&
+            (blkAddr & ~(TheISA::VMPageSize - 1)) !=
+            (newAddr & ~(TheISA::VMPageSize - 1)))
+        {
+            //Spanned the page, so now stop
+            this->pfSpanPage += degree - d + 1;
+            return;
+        }
+        else
+        {
+            addresses.push_back(newAddr);
+            delays.push_back(latency);
+        }
+    }
+}
+
+
