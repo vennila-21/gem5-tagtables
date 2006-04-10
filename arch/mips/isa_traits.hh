@@ -60,7 +60,7 @@ class SyscallReturn {
            template <class T>
            SyscallReturn(T v, bool s)
            {
-               retval = (uint64_t)v;
+               retval = (uint32_t)v;
                success = s;
            }
 
@@ -68,7 +68,7 @@ class SyscallReturn {
            SyscallReturn(T v)
            {
                success = (v >= 0);
-               retval = (uint64_t)v;
+               retval = (uint32_t)v;
            }
 
            ~SyscallReturn() {}
@@ -138,7 +138,7 @@ namespace MipsISA
 
     const int SyscallNumReg = ReturnValueReg1;
     const int SyscallPseudoReturnReg = ReturnValueReg1;
-    const int SyscallSuccessReg = ReturnValueReg1;
+    const int SyscallSuccessReg = ArgumentReg3;
 
     const int LogVMPageSize = 13;	// 8K bytes
     const int VMPageSize = (1 << LogVMPageSize);
@@ -732,21 +732,15 @@ extern const Addr PageOffset;
 
     static inline void setSyscallReturn(SyscallReturn return_value, RegFile *regs)
     {
-        // check for error condition.  Alpha syscall convention is to
-        // indicate success/failure in reg a3 (r19) and put the
-        // return value itself in the standard return value reg (v0).
         if (return_value.successful()) {
             // no error
-            regs->setIntReg(ReturnValueReg1, 0);
-            regs->setIntReg(ReturnValueReg2, return_value.value());
+            regs->setIntReg(SyscallSuccessReg, 0);
+            regs->setIntReg(ReturnValueReg1, return_value.value());
         } else {
             // got an error, return details
-            regs->setIntReg(ReturnValueReg1, (IntReg) -1);
-            regs->setIntReg(ReturnValueReg2, -return_value.value());
+            regs->setIntReg(SyscallSuccessReg, (IntReg) -1);
+            regs->setIntReg(ReturnValueReg1, -return_value.value());
         }
-
-        //regs->intRegFile[ReturnValueReg1] = (IntReg)return_value;
-        //panic("Returning from syscall\n");
     }
 
     // Machine operations
