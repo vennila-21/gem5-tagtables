@@ -155,13 +155,8 @@ SimpleCPU::CpuPort::recvRetry()
 }
 
 SimpleCPU::SimpleCPU(Params *p)
-#if !FULL_SYSTEM
     : BaseCPU(p), mem(p->mem), icachePort(this),
       dcachePort(this), tickEvent(this, p->width), cpuXC(NULL)
-#else
-    : BaseCPU(p), icachePort(this), dcachePort(this),
-      tickEvent(this, p->width), cpuXC(NULL)
-#endif
 {
     _status = Idle;
 
@@ -667,6 +662,11 @@ SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
     if (data_write_req->getFlags() & UNCACHEABLE)
         recordEvent("Uncached Write");
 
+    // @todo this is a hack and only works on uniprocessor systems some one else
+    // can implement LL/SC.
+    if (data_write_req->getFlags() & LOCKED)
+        *res = 1;
+
     // If the write needs to have a fault on the access, consider calling
     // changeStatus() and changing it to "bad addr write" or something.
     return fault;
@@ -962,11 +962,6 @@ SimpleCPU::tick()
         // Try to fetch an instruction
 
         // set up memory request for instruction fetch
-#if FULL_SYSTEM
-#define IFETCH_FLAGS(pc)	((pc) & 1) ? PHYSICAL : 0
-#else
-#define IFETCH_FLAGS(pc)	0
-#endif
 
         DPRINTF(Fetch,"Fetch: PC:%08p NPC:%08p NNPC:%08p\n",cpuXC->readPC(),
                 cpuXC->readNextPC(),cpuXC->readNextNPC());
@@ -976,12 +971,14 @@ SimpleCPU::tick()
         ifetch_req->setSize(sizeof(MachInst));
 #endif
 
+        ifetch_req->reset(true);
         ifetch_req->setVaddr(cpuXC->readPC() & ~3);
         ifetch_req->setTime(curTick);
-
-/*	memReq->reset(xc->regs.pc & ~3, sizeof(uint32_t),
-                     IFETCH_FLAGS(xc->regs.pc));
-*/
+#if FULL_SYSTEM
+        ifetch_req->setFlags((cpuXC->readPC() & 1) ? PHYSICAL : 0);
+#else
+        ifetch_req->setFlags(0);
+#endif
 
         fault = cpuXC->translateInstReq(ifetch_req);
 
@@ -1133,6 +1130,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(SimpleCPU)
     Param<Counter> max_insts_all_threads;
     Param<Counter> max_loads_any_thread;
     Param<Counter> max_loads_all_threads;
+    SimObjectParam<MemObject *> mem;
 
 #if FULL_SYSTEM
     SimObjectParam<AlphaITB *> itb;
@@ -1141,7 +1139,6 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(SimpleCPU)
     Param<int> cpu_id;
     Param<Tick> profile;
 #else
-    SimObjectParam<MemObject *> mem;
     SimObjectParam<Process *> workload;
 #endif // FULL_SYSTEM
 
@@ -1164,6 +1161,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(SimpleCPU)
                "terminate when any thread reaches this load count"),
     INIT_PARAM(max_loads_all_threads,
                "terminate when all threads have reached this load count"),
+    INIT_PARAM(mem, "memory"),
 
 #if FULL_SYSTEM
     INIT_PARAM(itb, "Instruction TLB"),
@@ -1172,7 +1170,6 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(SimpleCPU)
     INIT_PARAM(cpu_id, "processor ID"),
     INIT_PARAM(profile, ""),
 #else
-    INIT_PARAM(mem, "memory"),
     INIT_PARAM(workload, "processes to run"),
 #endif // FULL_SYSTEM
 
@@ -1199,6 +1196,7 @@ CREATE_SIM_OBJECT(SimpleCPU)
     params->functionTrace = function_trace;
     params->functionTraceStart = function_trace_start;
     params->width = width;
+    params->mem = mem;
 
 #if FULL_SYSTEM
     params->itb = itb;
@@ -1207,7 +1205,6 @@ CREATE_SIM_OBJECT(SimpleCPU)
     params->cpu_id = cpu_id;
     params->profile = profile;
 #else
-    params->mem = mem;
     params->process = workload;
 #endif
 
