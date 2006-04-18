@@ -88,6 +88,7 @@ base_sources = Split('''
 	cpu/static_inst.cc
         cpu/sampler/sampler.cc
 
+        mem/request.cc
         mem/connector.cc
         mem/mem_object.cc
         mem/physical.cc
@@ -183,11 +184,20 @@ full_system_sources = Split('''
         cpu/profile.cc
 
 	dev/alpha_console.cc
+	dev/baddev.cc
 	dev/disk_image.cc
 	dev/io_device.cc
+	dev/isa_fake.cc
+	dev/pciconfigall.cc
 	dev/platform.cc
         dev/simconsole.cc
 	dev/simple_disk.cc
+	dev/tsunami.cc
+	dev/tsunami_cchip.cc
+	dev/tsunami_io.cc
+	dev/tsunami_fake.cc
+	dev/tsunami_pchip.cc
+
 	dev/uart.cc
 	dev/uart8250.cc
 
@@ -203,7 +213,6 @@ full_system_sources = Split('''
 	sim/pseudo_inst.cc
         ''')
 
-#	dev/baddev.cc
 #	dev/etherbus.cc
 #	dev/etherdump.cc
 #	dev/etherint.cc
@@ -213,16 +222,10 @@ full_system_sources = Split('''
 #	dev/ide_ctrl.cc
 #	dev/ide_disk.cc
 #	dev/ns_gige.cc
-#	dev/pciconfigall.cc
 #	dev/pcidev.cc
 #	dev/pcifake.cc
 #	dev/pktfifo.cc
 #	dev/sinic.cc
-#	dev/tsunami.cc
-#	dev/tsunami_cchip.cc
-#	dev/isa_fake.cc
-#	dev/tsunami_io.cc
-#	dev/tsunami_pchip.cc
 
 if env['TARGET_ISA'] == 'alpha':
     full_system_sources += Split('''
@@ -254,17 +257,16 @@ turbolaser_sources = Split('''
 
 # Syscall emulation (non-full-system) sources
 syscall_emulation_sources = Split('''
-        kern/linux/linux.cc
         mem/translating_port.cc
         mem/page_table.cc
 	sim/process.cc
 	sim/syscall_emul.cc
         ''')
 
-if env['TARGET_ISA'] == 'alpha':
-    syscall_emulation_sources += Split('''
-        kern/tru64/tru64.cc
-        ''')
+#if env['TARGET_ISA'] == 'alpha':
+#    syscall_emulation_sources += Split('''
+#        kern/tru64/tru64.cc
+#        ''')
 
 alpha_eio_sources = Split('''
 	encumbered/eio/exolex.cc

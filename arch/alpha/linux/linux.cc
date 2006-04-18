@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,65 +26,45 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/**
- * @file
- * Declaration of a non-full system Page Table.
- */
+#include "arch/alpha/linux/linux.hh"
 
-#ifndef __PAGE_TABLE__
-#define __PAGE_TABLE__
-
-#include <string>
-#include <map>
-
-#include "arch/isa_traits.hh"
-#include "base/trace.hh"
-#include "mem/request.hh"
-#include "mem/packet.hh"
-#include "sim/sim_object.hh"
-
-class System;
-
-/**
- * Page Table Decleration.
- */
-class PageTable
-{
-  protected:
-    std::map<Addr,Addr> pTable;
-
-    const Addr pageSize;
-    const Addr offsetMask;
-
-    System *system;
-
-  public:
-
-    PageTable(System *_system, Addr _pageSize = TheISA::VMPageSize);
-
-    ~PageTable();
-
-    Addr pageAlign(Addr a)  { return (a & ~offsetMask); }
-    Addr pageOffset(Addr a) { return (a &  offsetMask); }
-
-    Fault page_check(Addr addr, int size) const;
-
-    void allocate(Addr vaddr, int size);
-
-    /**
-     * Translate function
-     * @param vaddr The virtual address.
-     * @return Physical address from translation.
-     */
-    bool translate(Addr vaddr, Addr &paddr);
-
-    /**
-     * Perform a translation on the memory request, fills in paddr
-     * field of mem_req.
-     * @param req The memory request.
-     */
-    Fault translate(RequestPtr &req);
-
+// open(2) flags translation table
+OpenFlagTransTable AlphaLinux::openFlagTable[] = {
+#ifdef _MSC_VER
+  { AlphaLinux::TGT_O_RDONLY,	_O_RDONLY },
+  { AlphaLinux::TGT_O_WRONLY,	_O_WRONLY },
+  { AlphaLinux::TGT_O_RDWR,	_O_RDWR },
+  { AlphaLinux::TGT_O_APPEND,	_O_APPEND },
+  { AlphaLinux::TGT_O_CREAT,	_O_CREAT },
+  { AlphaLinux::TGT_O_TRUNC,	_O_TRUNC },
+  { AlphaLinux::TGT_O_EXCL,	_O_EXCL },
+#ifdef _O_NONBLOCK
+  { AlphaLinux::TGT_O_NONBLOCK,	_O_NONBLOCK },
+#endif
+#ifdef _O_NOCTTY
+  { AlphaLinux::TGT_O_NOCTTY,	_O_NOCTTY },
+#endif
+#ifdef _O_SYNC
+  { AlphaLinux::TGT_O_SYNC,	_O_SYNC },
+#endif
+#else /* !_MSC_VER */
+  { AlphaLinux::TGT_O_RDONLY,	O_RDONLY },
+  { AlphaLinux::TGT_O_WRONLY,	O_WRONLY },
+  { AlphaLinux::TGT_O_RDWR,	O_RDWR },
+  { AlphaLinux::TGT_O_APPEND,	O_APPEND },
+  { AlphaLinux::TGT_O_CREAT,	O_CREAT },
+  { AlphaLinux::TGT_O_TRUNC,	O_TRUNC },
+  { AlphaLinux::TGT_O_EXCL,	O_EXCL },
+  { AlphaLinux::TGT_O_NONBLOCK,	O_NONBLOCK },
+  { AlphaLinux::TGT_O_NOCTTY,	O_NOCTTY },
+#ifdef O_SYNC
+  { AlphaLinux::TGT_O_SYNC,	O_SYNC },
+#endif
+#endif /* _MSC_VER */
 };
 
-#endif
+const int AlphaLinux::NUM_OPEN_FLAGS =
+        (sizeof(AlphaLinux::openFlagTable)/sizeof(AlphaLinux::openFlagTable[0]));
+
+
+

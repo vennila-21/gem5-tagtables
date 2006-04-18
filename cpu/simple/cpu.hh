@@ -178,11 +178,11 @@ class SimpleCPU : public BaseCPU
     struct Params : public BaseCPU::Params
     {
         int width;
+        MemObject *mem;
 #if FULL_SYSTEM
         AlphaITB *itb;
         AlphaDTB *dtb;
 #else
-        MemObject *mem;
         Process *process;
 #endif
     };
@@ -210,12 +210,12 @@ class SimpleCPU : public BaseCPU
 #if SIMPLE_CPU_MEM_TIMING
     Packet *retry_pkt;
 #elif SIMPLE_CPU_MEM_ATOMIC || SIMPLE_CPU_MEM_IMMEDIATE
-    CpuRequest *ifetch_req;
-    Packet     *ifetch_pkt;
-    CpuRequest *data_read_req;
-    Packet     *data_read_pkt;
-    CpuRequest *data_write_req;
-    Packet     *data_write_pkt;
+    Request *ifetch_req;
+    Packet  *ifetch_pkt;
+    Request *data_read_req;
+    Packet  *data_read_pkt;
+    Request *data_write_req;
+    Packet  *data_write_pkt;
 #endif
 
     // Pointer to the sampler that is telling us to switchover.

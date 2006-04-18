@@ -31,7 +31,8 @@
  */
 
 
-#include "bus.hh"
+#include "base/trace.hh"
+#include "mem/bus.hh"
 #include "sim/builder.hh"
 
 /** Function called by the port when the bus is recieving a Timing
@@ -56,9 +57,13 @@ Bus::findPort(Addr addr, int id)
         if (portList[i].range == addr) {
             dest_id = portList[i].portId;
             found = true;
+            DPRINTF(Bus, "Found Addr: %llx on device %d\n", addr, dest_id);
         }
+        i++;
     }
-    assert(dest_id != -1 && "Unable to find destination");
+    if (dest_id == -1)
+        panic("Unable to find destination for addr: %llx", addr);
+
     // we shouldn't be sending this back to where it came from
     assert(dest_id != id);
 
@@ -85,8 +90,10 @@ Bus::recvFunctional(Packet &pkt, int id)
 void
 Bus::recvStatusChange(Port::Status status, int id)
 {
-    assert(status == Port:: RangeChange &&
+    assert(status == Port::RangeChange &&
            "The other statuses need to be implemented.");
+
+    assert(id < interfaces.size() && id >= 0);
     Port *port = interfaces[id];
     AddrRangeList ranges;
     AddrRangeList snoops;
@@ -97,11 +104,15 @@ Bus::recvStatusChange(Port::Status status, int id)
     assert(snoops.size() == 0);
     // or multiple ranges
     assert(ranges.size() == 1);
+
     DevMap dm;
     dm.portId = id;
     dm.range = ranges.front();
 
+    DPRINTF(MMU, "Adding range %llx - %llx for id %d\n", dm.range.start,
+            dm.range.end, id);
     portList.push_back(dm);
+    DPRINTF(MMU, "port list has %d entries\n", portList.size());
 }
 
 void

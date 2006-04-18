@@ -78,7 +78,7 @@ bool
 PioPort::recvTiming(Packet &pkt)
 {
     device->recvAtomic(pkt);
-    sendTiming(pkt, pkt.time-pkt.req->time);
+    sendTiming(pkt, pkt.time-pkt.req->getTime());
     return Success;
 }
 
@@ -86,6 +86,22 @@ PioDevice::~PioDevice()
 {
     if (pioPort)
         delete pioPort;
+}
+
+void
+PioDevice::init()
+{
+    if (!pioPort)
+        panic("Pio port not connected to anything!");
+    pioPort->sendStatusChange(Port::RangeChange);
+}
+
+void
+BasicPioDevice::addressRanges(AddrRangeList &range_list)
+{
+    assert(pioSize != 0);
+    range_list.clear();
+    range_list.push_back(RangeSize(pioAddr, pioSize));
 }
 
 
@@ -132,7 +148,7 @@ DmaPort::dmaAction(Command cmd, DmaPort port, Addr addr, int size,
 
     int prevSize = 0;
     Packet basePkt;
-    Request baseReq;
+    Request baseReq(false);
 
     basePkt.flags = 0;
     basePkt.coherence = NULL;
@@ -142,8 +158,8 @@ DmaPort::dmaAction(Command cmd, DmaPort port, Addr addr, int size,
     basePkt.cmd = cmd;
     basePkt.result = Unknown;
     basePkt.req = NULL;
-    baseReq.nicReq = true;
-    baseReq.time = curTick;
+//    baseReq.nicReq = true;
+    baseReq.setTime(curTick);
 
     completionEvent = event;
 
@@ -154,8 +170,8 @@ DmaPort::dmaAction(Command cmd, DmaPort port, Addr addr, int size,
             pkt->addr = gen.addr();
             pkt->size = gen.size();
             pkt->req = req;
-            pkt->req->paddr = pkt->addr;
-            pkt->req->size = pkt->size;
+            pkt->req->setPaddr(pkt->addr);
+            pkt->req->setSize(pkt->size);
             // Increment the data pointer on a write
             pkt->data = data ? data + prevSize : NULL ;
             prevSize += pkt->size;
@@ -178,7 +194,7 @@ DmaPort::sendDma(Packet &pkt)
            transmitList.push_back(&packet);
    } else if (state == Atomic) {*/
        sendAtomic(pkt);
-       completionEvent->schedule(pkt.time - pkt.req->time);
+       completionEvent->schedule(pkt.time - pkt.req->getTime());
        completionEvent = NULL;
 /*   } else if (state == Functional) {
        sendFunctional(pkt);

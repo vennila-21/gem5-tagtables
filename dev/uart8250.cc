@@ -111,7 +111,7 @@ Tick
 Uart8250::read(Packet &pkt)
 {
     assert(pkt.result == Unknown);
-    assert(pkt.addr > pioAddr && pkt.addr < pioAddr + pioSize);
+    assert(pkt.addr >= pioAddr && pkt.addr < pioAddr + pioSize);
     assert(pkt.size == 1);
 
     pkt.time = curTick + pioDelay;
@@ -189,7 +189,10 @@ Uart8250::read(Packet &pkt)
             panic("Tried to access a UART port that doesn't exist\n");
             break;
     }
-
+/*    uint32_t d32 = *data;
+    DPRINTF(Uart, "Register read to register %#x returned %#x\n", daddr, d32);
+*/
+    pkt.result = Success;
     return pioDelay;
 }
 
@@ -269,6 +272,7 @@ Uart8250::write(Packet &pkt)
             panic("Tried to access a UART port that doesn't exist\n");
             break;
     }
+    pkt.result = Success;
     return pioDelay;
 }
 
@@ -336,7 +340,7 @@ Uart8250::unserialize(Checkpoint *cp, const std::string &section)
 
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(Uart8250)
 
-    Param<Addr> addr;
+    Param<Addr> pio_addr;
     Param<Tick> pio_latency;
     SimObjectParam<Platform *> platform;
     SimObjectParam<SimConsole *> sim_console;
@@ -346,7 +350,7 @@ END_DECLARE_SIM_OBJECT_PARAMS(Uart8250)
 
 BEGIN_INIT_SIM_OBJECT_PARAMS(Uart8250)
 
-    INIT_PARAM(addr, "Device Address"),
+    INIT_PARAM(pio_addr, "Device Address"),
     INIT_PARAM_DFLT(pio_latency, "Programmed IO latency", 1000),
     INIT_PARAM(platform, "platform"),
     INIT_PARAM(sim_console, "The Simulator Console"),
@@ -358,7 +362,7 @@ CREATE_SIM_OBJECT(Uart8250)
 {
     Uart8250::Params *p = new Uart8250::Params;
     p->name = getInstanceName();
-    p->pio_addr = addr;
+    p->pio_addr = pio_addr;
     p->pio_delay = pio_latency;
     p->platform = platform;
     p->cons = sim_console;

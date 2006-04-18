@@ -30,7 +30,7 @@
 #define __DEV_IO_DEVICE_HH__
 
 #include "base/chunk_generator.hh"
-#include "mem/port.hh"
+#include "mem/mem_object.hh"
 #include "sim/eventq.hh"
 #include "sim/sim_object.hh"
 
@@ -172,7 +172,7 @@ class DmaPort : public Port
  * bother.
  */
 
-class PioDevice : public SimObject
+class PioDevice : public MemObject
 {
   protected:
 
@@ -192,11 +192,17 @@ class PioDevice : public SimObject
     { return pkt.cmd == Read ? this->read(pkt) : this->write(pkt); }
 
     /** Pure virtual function that the device must implement. Called when a read
-     * command is recieved by the port. */
+     * command is recieved by the port.
+     * @param pkt Packet describing this request
+     * @return number of ticks it took to complete
+     */
     virtual Tick read(Packet &pkt) = 0;
 
     /** Pure virtual function that the device must implement. Called when a
-     * write command is recieved by the port. */
+     * write command is recieved by the port.
+     * @param pkt Packet describing this request
+     * @return number of ticks it took to complete
+     */
     virtual Tick write(Packet &pkt) = 0;
 
   public:
@@ -218,10 +224,13 @@ class PioDevice : public SimObject
     const Params *params() const { return _params; }
 
     PioDevice(Params *p)
-              : SimObject(params()->name), platform(p->platform), _params(p)
+              : MemObject(p->name),  platform(p->platform), pioPort(NULL),
+                _params(p)
               {}
 
     virtual ~PioDevice();
+
+    virtual void init();
 
     virtual Port *getPort(const std::string &if_name)
     {
@@ -260,6 +269,11 @@ class BasicPioDevice : public PioDevice
     BasicPioDevice(Params *p)
         : PioDevice(p), pioAddr(p->pio_addr), pioSize(0), pioDelay(p->pio_delay)
     {}
+
+    /** return the address ranges that this device responds to.
+     * @params range_list range list to populate with ranges
+     */
+    void addressRanges(AddrRangeList &range_list);
 
 };
 
