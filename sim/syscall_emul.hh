@@ -45,12 +45,15 @@
 #endif
 #include <sys/uio.h>
 
-#include "base/intmath.hh"	// for RoundUp
-#include "mem/functional/functional.hh"
 #include "arch/isa_traits.hh"	// for Addr
-
+#include "base/chunk_generator.hh"
+#include "base/intmath.hh"	// for RoundUp
+#include "base/misc.hh"
 #include "base/trace.hh"
+#include "cpu/base.hh"
 #include "cpu/exec_context.hh"
+#include "mem/translating_port.hh"
+#include "mem/page_table.hh"
 #include "sim/process.hh"
 
 ///
@@ -106,18 +109,18 @@ class BaseBufferArg {
     //
     // copy data into simulator space (read from target memory)
     //
-    virtual bool copyIn(FunctionalMemory *mem)
+    virtual bool copyIn(TranslatingPort *memport)
     {
-        mem->access(Read, addr, bufPtr, size);
+        memport->readBlob(addr, bufPtr, size);
         return true;	// no EFAULT detection for now
     }
 
     //
     // copy data out of simulator space (write to target memory)
     //
-    virtual bool copyOut(FunctionalMemory *mem)
+    virtual bool copyOut(TranslatingPort *memport)
     {
-        mem->access(Write, addr, bufPtr, size);
+        memport->writeBlob(addr, bufPtr, size);
         return true;	// no EFAULT detection for now
     }
 
@@ -369,7 +372,7 @@ openFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
         return -EFAULT;
 
     if (path == "/dev/sysdev0") {
@@ -416,7 +419,7 @@ chmodFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
         return -EFAULT;
 
     uint32_t mode = xc->getSyscallArg(1);
@@ -469,8 +472,8 @@ statFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
-        return -EFAULT;
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
+    return -EFAULT;
 
     struct stat hostBuf;
     int result = stat(path.c_str(), &hostBuf);
@@ -478,7 +481,7 @@ statFunc(SyscallDesc *desc, int callnum, Process *process,
     if (result < 0)
         return -errno;
 
-    OS::copyOutStatBuf(xc->getMemPtr(), xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStatBuf(xc->getMemPort(), xc->getSyscallArg(1), &hostBuf);
 
     return 0;
 }
@@ -507,7 +510,7 @@ fstat64Func(SyscallDesc *desc, int callnum, Process *process,
     if (result < 0)
         return -errno;
 
-    OS::copyOutStat64Buf(xc->getMemPtr(), fd, xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStat64Buf(xc->getMemPort(), fd, xc->getSyscallArg(1), &hostBuf);
 
     return 0;
 }
@@ -521,8 +524,8 @@ lstatFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
-        return -EFAULT;
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
+      return -EFAULT;
 
     struct stat hostBuf;
     int result = lstat(path.c_str(), &hostBuf);
@@ -530,7 +533,7 @@ lstatFunc(SyscallDesc *desc, int callnum, Process *process,
     if (result < 0)
         return -errno;
 
-    OS::copyOutStatBuf(xc->getMemPtr(), xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStatBuf(xc->getMemPort(), xc->getSyscallArg(1), &hostBuf);
 
     return 0;
 }
@@ -543,8 +546,8 @@ lstat64Func(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
-        return -EFAULT;
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
+      return -EFAULT;
 
 #if BSD_HOST
     struct stat hostBuf;
@@ -557,7 +560,7 @@ lstat64Func(SyscallDesc *desc, int callnum, Process *process,
     if (result < 0)
         return -errno;
 
-    OS::copyOutStat64Buf(xc->getMemPtr(), -1, xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStat64Buf(xc->getMemPort(), -1, xc->getSyscallArg(1), &hostBuf);
 
     return 0;
 }
@@ -581,7 +584,8 @@ fstatFunc(SyscallDesc *desc, int callnum, Process *process,
     if (result < 0)
         return -errno;
 
-    OS::copyOutStatBuf(xc->getMemPtr(), xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStatBuf(xc->getMemPort(), xc->getSyscallArg(1), &hostBuf);
+
     return 0;
 }
 
@@ -594,8 +598,8 @@ statfsFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
-        return -EFAULT;
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
+      return -EFAULT;
 
     struct statfs hostBuf;
     int result = statfs(path.c_str(), &hostBuf);
@@ -603,7 +607,7 @@ statfsFunc(SyscallDesc *desc, int callnum, Process *process,
     if (result < 0)
         return -errno;
 
-    OS::copyOutStatfsBuf(xc->getMemPtr(), xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStatfsBuf(xc->getMemPort(), xc->getSyscallArg(1), &hostBuf);
 
     return 0;
 }
@@ -626,7 +630,7 @@ fstatfsFunc(SyscallDesc *desc, int callnum, Process *process,
     if (result < 0)
         return -errno;
 
-    OS::copyOutStatfsBuf(xc->getMemPtr(), xc->getSyscallArg(1), &hostBuf);
+    OS::copyOutStatfsBuf(xc->getMemPort(), xc->getSyscallArg(1), &hostBuf);
 
     return 0;
 }
@@ -644,18 +648,20 @@ writevFunc(SyscallDesc *desc, int callnum, Process *process,
         return -EBADF;
     }
 
+    TranslatingPort *p = xc->getMemPort();
     uint64_t tiov_base = xc->getSyscallArg(1);
     size_t count = xc->getSyscallArg(2);
     struct iovec hiov[count];
     for (int i = 0; i < count; ++i)
     {
         typename OS::tgt_iovec tiov;
-        xc->getMemPtr()->access(Read, tiov_base + i*sizeof(typename OS::tgt_iovec),
-                        &tiov, sizeof(typename OS::tgt_iovec));
+
+        p->readBlob(tiov_base + i*sizeof(typename OS::tgt_iovec),
+                    (uint8_t*)&tiov, sizeof(typename OS::tgt_iovec));
         hiov[i].iov_len = gtoh(tiov.iov_len);
         hiov[i].iov_base = new char [hiov[i].iov_len];
-        xc->getMemPtr()->access(Read, gtoh(tiov.iov_base),
-                        hiov[i].iov_base, hiov[i].iov_len);
+        p->readBlob(gtoh(tiov.iov_base), (uint8_t *)hiov[i].iov_base,
+                    hiov[i].iov_len);
     }
 
     int result = writev(process->sim_fd(fd), hiov, count);
@@ -695,15 +701,23 @@ mmapFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
     // int fd = p->sim_fd(xc->getSyscallArg(4));
     // int offset = xc->getSyscallArg(5);
 
-    if (start == 0) {
-        // user didn't give an address... pick one from our "mmap region"
-        start = p->mmap_end;
-        p->mmap_end += roundUp(length, TheISA::VMPageSize);
-        if (p->nxm_start != 0) {
-            //If we have an nxm space, make sure we haven't colided
-            assert(p->mmap_end < p->nxm_start);
-        }
+    if ((start  % TheISA::VMPageSize) != 0 ||
+        (length % TheISA::VMPageSize) != 0) {
+        warn("mmap failing: arguments not page-aligned: "
+             "start 0x%x length 0x%x",
+             start, length);
+        return -EINVAL;
     }
+
+    if (start != 0) {
+        warn("mmap: ignoring suggested map address 0x%x, using 0x%x",
+             start, p->mmap_end);
+    }
+
+    // pick next address from our "mmap region"
+    start = p->mmap_end;
+    p->pTable->allocate(start, length);
+    p->mmap_end += length;
 
     if (!(flags & OS::TGT_MAP_ANONYMOUS)) {
         warn("allowing mmap of file @ fd %d. "
@@ -737,7 +751,7 @@ getrlimitFunc(SyscallDesc *desc, int callnum, Process *process,
             break;
     }
 
-    rlp.copyOut(xc->getMemPtr());
+    rlp.copyOut(xc->getMemPort());
     return 0;
 }
 
@@ -754,7 +768,7 @@ gettimeofdayFunc(SyscallDesc *desc, int callnum, Process *process,
     tp->tv_sec = htog(tp->tv_sec);
     tp->tv_usec = htog(tp->tv_usec);
 
-    tp.copyOut(xc->getMemPtr());
+    tp.copyOut(xc->getMemPort());
 
     return 0;
 }
@@ -768,11 +782,11 @@ utimesFunc(SyscallDesc *desc, int callnum, Process *process,
 {
     std::string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
-        return -EFAULT;
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
+      return -EFAULT;
 
     TypedBufferArg<typename OS::timeval [2]> tp(xc->getSyscallArg(1));
-    tp.copyIn(xc->getMemPtr());
+    tp.copyIn(xc->getMemPort());
 
     struct timeval hostTimeval[2];
     for (int i = 0; i < 2; ++i)
@@ -824,9 +838,12 @@ getrusageFunc(SyscallDesc *desc, int callnum, Process *process,
     rup->ru_nvcsw = 0;
     rup->ru_nivcsw = 0;
 
-    rup.copyOut(xc->getMemPtr());
+    rup.copyOut(xc->getMemPort());
 
     return 0;
 }
+
+
+
 
 #endif // __SIM_SYSCALL_EMUL_HH__

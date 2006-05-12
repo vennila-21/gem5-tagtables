@@ -31,10 +31,11 @@
 
 #include <map>
 
+#include "arch/alpha/ev5.hh"
 #include "arch/alpha/isa_traits.hh"
 #include "arch/alpha/faults.hh"
 #include "base/statistics.hh"
-#include "mem/mem_req.hh"
+#include "mem/request.hh"
 #include "sim/sim_object.hh"
 
 class ExecContext;
@@ -72,7 +73,7 @@ class AlphaTLB : public SimObject
         return (unimplBits == 0) || (unimplBits == EV5::VAddrUnImplMask);
     }
 
-    static void checkCacheability(MemReqPtr &req);
+    static Fault checkCacheability(RequestPtr &req);
 
     // Checkpointing
     virtual void serialize(std::ostream &os);
@@ -87,14 +88,11 @@ class AlphaITB : public AlphaTLB
     mutable Stats::Scalar<> acv;
     mutable Stats::Formula accesses;
 
-  protected:
-    void fault(Addr pc, ExecContext *xc) const;
-
   public:
     AlphaITB(const std::string &name, int size);
     virtual void regStats();
 
-    Fault translate(MemReqPtr &req) const;
+    Fault translate(RequestPtr &req, ExecContext *xc) const;
 };
 
 class AlphaDTB : public AlphaTLB
@@ -113,14 +111,11 @@ class AlphaDTB : public AlphaTLB
     Stats::Formula acv;
     Stats::Formula accesses;
 
-  protected:
-    void fault(MemReqPtr &req, uint64_t flags) const;
-
   public:
     AlphaDTB(const std::string &name, int size);
     virtual void regStats();
 
-    Fault translate(MemReqPtr &req, bool write) const;
+    Fault translate(RequestPtr &req, ExecContext *xc, bool write) const;
 };
 
 #endif // __ALPHA_MEMORY_HH__

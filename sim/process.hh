@@ -40,22 +40,27 @@
 
 #include <vector>
 
-#include "arch/isa_traits.hh"
-#include "sim/sim_object.hh"
-#include "sim/stats.hh"
 #include "base/statistics.hh"
-#include "base/trace.hh"
+#include "sim/sim_object.hh"
 
 class CPUExecContext;
 class ExecContext;
-class FunctionalMemory;
 class SyscallDesc;
+class PageTable;
+class TranslatingPort;
+class System;
+
+void
+copyStringArray(std::vector<std::string> &strings, Addr array_ptr,
+        Addr data_ptr, TranslatingPort* memPort);
+
 class Process : public SimObject
 {
-  protected:
-    typedef TheISA::RegFile RegFile;
-    typedef TheISA::MachInst MachInst;
   public:
+
+    /// Pointer to object representing the system this process is
+    /// running on.
+    System *system;
 
     // have we initialized an execution context from this process?  If
     // yes, subsequent contexts are assumed to be for dynamically
@@ -76,21 +81,11 @@ class Process : public SimObject
 
         WaitRec(Addr chan, ExecContext *ctx)
             : waitChan(chan), waitingContext(ctx)
-        {
-        }
+        {	}
     };
 
     // list of all blocked contexts
     std::list<WaitRec> waitList;
-
-    RegFile *init_regs;		// initial register contents
-    CPUExecContext *cpuXC;      // XC to hold the init_regs
-
-    Addr text_base;		// text (code) segment base
-    unsigned text_size;		// text (code) size in bytes
-
-    Addr data_base;		// initialized data segment base
-    unsigned data_size;		// initialized data + bss size in bytes
 
     Addr brk_point;		// top of the data segment
 
@@ -110,7 +105,6 @@ class Process : public SimObject
     Addr nxm_end;
 
     std::string prog_fname;	// file name
-    Addr prog_entry;		// entry point (initial PC)
 
     Stats::Scalar<> num_syscalls;	// number of syscalls executed
 
@@ -118,6 +112,7 @@ class Process : public SimObject
   protected:
     // constructor
     Process(const std::string &nm,
+            System *_system,
             int stdin_fd, 	// initial I/O descriptors
             int stdout_fd,
             int stderr_fd);
@@ -126,7 +121,11 @@ class Process : public SimObject
     virtual void startup();
 
   protected:
-    FunctionalMemory *memory;
+    /// Memory object for initialization (image loading)
+    TranslatingPort *initVirtMem;
+
+  public:
+    PageTable *pTable;
 
   private:
     // file descriptor remapping support
@@ -160,29 +159,7 @@ class Process : public SimObject
     // look up simulator fd for given target fd
     int sim_fd(int tgt_fd);
 
-    // is this a valid instruction fetch address?
-    bool validInstAddr(Addr addr)
-    {
-        return (text_base <= addr &&
-                addr < text_base + text_size &&
-                !(addr & (sizeof(MachInst)-1)));
-    }
-
-    // is this a valid address? (used to filter data fetches)
-    // note that we just assume stack size <= 16MB
-    // this may be alpha-specific
-    bool validDataAddr(Addr addr)
-    {
-        return ((data_base <= addr && addr < brk_point) ||
-                (next_thread_stack_base <= addr && addr < stack_base) ||
-                (text_base <= addr && addr < (text_base + text_size)) ||
-                (mmap_start <= addr && addr < mmap_end) ||
-                (nxm_start <= addr && addr < nxm_end));
-    }
-
-    virtual void syscall(ExecContext *xc) = 0;
-
-    virtual FunctionalMemory *getMemory() { return memory; }
+    virtual void syscall(int64_t callnum, ExecContext *xc) = 0;
 };
 
 //
@@ -192,25 +169,21 @@ class ObjectFile;
 class LiveProcess : public Process
 {
   protected:
+    ObjectFile *objFile;
+    std::vector<std::string> argv;
+    std::vector<std::string> envp;
+
     LiveProcess(const std::string &nm, ObjectFile *objFile,
-                int stdin_fd, int stdout_fd, int stderr_fd,
+                System *_system, int stdin_fd, int stdout_fd, int stderr_fd,
                 std::vector<std::string> &argv,
                 std::vector<std::string> &envp);
 
+    virtual void argsInit(int intSize, int pageSize);
+
   public:
-    // this function is used to create the LiveProcess object, since
-    // we can't tell which subclass of LiveProcess to use until we
-    // open and look at the object file.
-    static LiveProcess *create(const std::string &nm,
-                               int stdin_fd, int stdout_fd, int stderr_fd,
-                               std::string executable,
-                               std::vector<std::string> &argv,
-                               std::vector<std::string> &envp);
+    virtual void syscall(int64_t callnum, ExecContext *xc);
 
-    virtual void syscall(ExecContext *xc);
-
-    virtual SyscallDesc* getDesc(int callnum) { panic("Must be implemented."); }
-
+    virtual SyscallDesc* getDesc(int callnum) = 0;
 };
 
 

@@ -33,8 +33,9 @@
 #include <string>
 
 #include "base/hashmap.hh"
+#include "base/misc.hh"
 #include "base/refcnt.hh"
-#include "encumbered/cpu/full/op_class.hh"
+#include "cpu/op_class.hh"
 #include "sim/host.hh"
 #include "arch/isa_traits.hh"
 
@@ -390,6 +391,18 @@ class StaticInst : public StaticInstBase
     /// @retval A pointer to the corresponding StaticInst object.
     //This is defined as inline below.
     static StaticInstPtr decode(ExtMachInst mach_inst);
+
+    //MIPS Decoder Debug Functions
+    int getOpcode() { return (machInst & 0xFC000000) >> 26 ; }//31..26
+    int getRs() {     return (machInst & 0x03E00000) >> 21; }    //25...21
+    int getRt() {     return (machInst & 0x001F0000) >> 16;  }    //20...16
+    int getRd() {     return (machInst & 0x0000F800) >> 11; }    //15...11
+    int getImm() {  return (machInst & 0x0000FFFF); }    //15...0
+    int getFunction(){  return (machInst & 0x0000003F); }//5...0
+    int getBranch(){  return (machInst & 0x0000FFFF); }//15...0
+    int getJump(){    return (machInst & 0x03FFFFFF); }//5...0
+    int getHint(){    return (machInst & 0x000007C0) >> 6; }  //10...6
+    std::string getName() { return mnemonic; }
 };
 
 typedef RefCountingPtr<StaticInstBase> StaticInstBasePtr;

@@ -32,30 +32,34 @@
 #include <string>
 #include <vector>
 
-#include "base/statistics.hh"
 #include "base/loader/symtab.hh"
+#include "base/misc.hh"
+#include "base/statistics.hh"
 #include "cpu/pc_event.hh"
-#include "kern/system_events.hh"
+#include "mem/port.hh"
 #include "sim/sim_object.hh"
+#if FULL_SYSTEM
+#include "kern/system_events.hh"
+#include "mem/vport.hh"
+#endif
 
 class BaseCPU;
 class ExecContext;
-class GDBListener;
-class MemoryController;
 class ObjectFile;
 class PhysicalMemory;
+
+#if FULL_SYSTEM
 class Platform;
+class GDBListener;
 class RemoteGDB;
 namespace Kernel { class Binning; }
+#endif
 
 class System : public SimObject
 {
   public:
-    MemoryController *memctrl;
     PhysicalMemory *physmem;
-    Platform *platform;
     PCEventQueue pcEventQueue;
-    uint64_t init_param;
 
     std::vector<ExecContext *> execContexts;
     int numcpus;
@@ -67,6 +71,15 @@ class System : public SimObject
 
         return numcpus;
     }
+
+#if FULL_SYSTEM
+    Platform *platform;
+    uint64_t init_param;
+
+    /** Port to physical memory used for writing object files into ram at
+     * boot.*/
+    FunctionalPort functionalPort;
+    VirtualPort virtPort;
 
     /** kernel symbol table */
     SymbolTable *kernelSymtab;
@@ -85,8 +98,16 @@ class System : public SimObject
 
     Kernel::Binning *kernelBinning;
 
+#else
+
+    int page_ptr;
+
+
+#endif // FULL_SYSTEM
+
   protected:
 
+#if FULL_SYSTEM
     /**
      * Fix up an address used to match PCs for hooking simulator
      * events on to target function executions.  See comment in
@@ -118,18 +139,23 @@ class System : public SimObject
         return addFuncEvent<T>(kernelSymtab, lbl);
     }
 
+#endif
   public:
+#if FULL_SYSTEM
     std::vector<RemoteGDB *> remoteGDB;
     std::vector<GDBListener *> gdbListen;
     virtual bool breakpoint() = 0;
+#endif // FULL_SYSTEM
 
   public:
     struct Params
     {
         std::string name;
-        Tick boot_cpu_frequency;
-        MemoryController *memctrl;
         PhysicalMemory *physmem;
+
+#if FULL_SYSTEM
+        Tick boot_cpu_frequency;
+        std::string boot_osflags;
         uint64_t init_param;
         bool bin;
         std::vector<std::string> binned_fns;
@@ -137,6 +163,7 @@ class System : public SimObject
 
         std::string kernel_path;
         std::string readfile;
+#endif
     };
 
   protected:
@@ -151,6 +178,8 @@ class System : public SimObject
     const Params *params() const { return (const Params *)_params; }
 
   public:
+
+#if FULL_SYSTEM
     /**
      * Returns the addess the kernel starts at.
      * @return address the kernel starts at
@@ -168,6 +197,12 @@ class System : public SimObject
      * @return entry point of the kernel code
      */
     Addr getKernelEntry() const { return kernelEntry; }
+
+#else
+
+    Addr new_page();
+
+#endif // FULL_SYSTEM
 
     int registerExecContext(ExecContext *xc, int xcIndex);
     void replaceExecContext(ExecContext *xc, int xcIndex);

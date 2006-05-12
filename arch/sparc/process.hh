@@ -29,17 +29,51 @@
 #ifndef __SPARC_PROCESS_HH__
 #define __SPARC_PROCESS_HH__
 
-#include "arch/sparc/linux/process.hh"
-#include "base/loader/object_file.hh"
+#include <string>
+#include <vector>
+#include "sim/process.hh"
 
-namespace SparcISA
+class ObjectFile;
+class System;
+
+typedef struct
 {
+    int64_t a_type;
+    union {
+        int64_t a_val;
+        Addr    a_ptr;
+        Addr    a_fcn;
+    };
+} m5_auxv_t;
 
-LiveProcess *
-createProcess(const string &nm, ObjectFile * objFile,
-        int stdin_fd, int stdout_fd, int stderr_fd,
-        vector<string> &argv, vector<string> &envp);
+class SparcLiveProcess : public LiveProcess
+{
+  protected:
 
-} // namespace SparcISA
+    static const Addr StackBias = 2047;
+
+    std::vector<m5_auxv_t> auxv;
+
+    SparcLiveProcess(const std::string &nm, ObjectFile *objFile,
+                System *_system, int stdin_fd, int stdout_fd, int stderr_fd,
+                std::vector<std::string> &argv,
+                std::vector<std::string> &envp);
+
+    void startup();
+
+  public:
+    // this function is used to create the LiveProcess object, since
+    // we can't tell which subclass of LiveProcess to use until we
+    // open and look at the object file.
+    static SparcLiveProcess *create(const std::string &nm,
+                               System *_system,
+                               int stdin_fd, int stdout_fd, int stderr_fd,
+                               std::string executable,
+                               std::vector<std::string> &argv,
+                               std::vector<std::string> &envp);
+
+    void argsInit(int intSize, int pageSize);
+
+};
 
 #endif // __SPARC_PROCESS_HH__

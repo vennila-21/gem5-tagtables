@@ -216,7 +216,7 @@ class IllegalInstruction : public SparcFault
     FaultStat & countStat() {return _count;}
 };
 
-class PrivelegedOpcode : public SparcFault
+class PrivilegedOpcode : public SparcFault
 {
   private:
     static FaultName _name;
@@ -412,7 +412,7 @@ class STDFMemAddressNotAligned : public SparcFault
     FaultStat & countStat() {return _count;}
 };
 
-class PrivelegedAction : public SparcFault
+class PrivilegedAction : public SparcFault
 {
   private:
     static FaultName _name;
@@ -468,6 +468,20 @@ class AsyncDataError : public SparcFault
     FaultStat & countStat() {return _count;}
 };
 
+class CleanWindow : public SparcFault
+{
+  private:
+    static FaultName _name;
+    static TrapType _trapType;
+    static FaultPriority _priority;
+    static FaultStat _count;
+  public:
+    FaultName name() {return _name;}
+    TrapType trapType() {return _trapType;}
+    FaultPriority priority() {return _priority;}
+    FaultStat & countStat() {return _count;}
+};
+
 class EnumeratedFault : public SparcFault
 {
   protected:
@@ -476,21 +490,6 @@ class EnumeratedFault : public SparcFault
   public:
     EnumeratedFault(uint32_t n) : SparcFault() {_n = n;}
     TrapType trapType() {return baseTrapType() + _n;}
-};
-
-class CleanWindow : public EnumeratedFault
-{
-  private:
-    static FaultName _name;
-    static TrapType _baseTrapType;
-    static FaultPriority _priority;
-    static FaultStat _count;
-    TrapType baseTrapType() {return _baseTrapType;}
-  public:
-    CleanWindow(uint32_t n) : EnumeratedFault(n) {;}
-    FaultName name() {return _name;}
-    FaultPriority priority() {return _priority;}
-    FaultStat & countStat() {return _count;}
 };
 
 class InterruptLevelN : public EnumeratedFault
@@ -581,6 +580,29 @@ class TrapInstruction : public EnumeratedFault
     FaultPriority priority() {return _priority;}
     FaultStat & countStat() {return _count;}
 };
+
+class UnimpFault : public SparcFault
+{
+  private:
+    static FaultName _name;
+    static TrapType _trapType;
+    static FaultPriority _priority;
+    static FaultStat _count;
+    std::string panicStr;
+  public:
+    UnimpFault(std::string _str)
+        : panicStr(_str)
+    { }
+
+    FaultName name() {return _name;}
+    TrapType trapType() {return _trapType;}
+    FaultPriority priority() {return _priority;}
+    FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ExecContext * xc);
+#endif
+};
+
 
 } // SparcISA namespace
 

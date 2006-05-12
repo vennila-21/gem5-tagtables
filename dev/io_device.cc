@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2005 The Regents of The University of Michigan
+ * Copyright (c) 2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,31 +27,213 @@
  */
 
 #include "dev/io_device.hh"
-#include "mem/bus/base_interface.hh"
-#include "mem/bus/dma_interface.hh"
 #include "sim/builder.hh"
 
-PioDevice::PioDevice(const std::string &name, Platform *p)
-    : FunctionalMemory(name), platform(p), pioInterface(NULL), pioLatency(0)
-{}
+
+PioPort::PioPort(PioDevice *dev, Platform *p)
+        : device(dev), platform(p)
+{ }
+
+
+Tick
+PioPort::recvAtomic(Packet &pkt)
+{
+    return device->recvAtomic(pkt);
+}
+
+void
+PioPort::recvFunctional(Packet &pkt)
+{
+    device->recvAtomic(pkt);
+}
+
+void
+PioPort::getDeviceAddressRanges(AddrRangeList &resp, AddrRangeList &snoop)
+{
+    snoop.clear();
+    device->addressRanges(resp);
+}
+
+
+Packet *
+PioPort::recvRetry()
+{
+    Packet* pkt = transmitList.front();
+    transmitList.pop_front();
+    return pkt;
+}
+
+
+void
+PioPort::SendEvent::process()
+{
+    if (port->Port::sendTiming(packet) == Success)
+        return;
+
+    port->transmitList.push_back(&packet);
+}
+
+
+bool
+PioPort::recvTiming(Packet &pkt)
+{
+    device->recvAtomic(pkt);
+    sendTiming(pkt, pkt.time-pkt.req->getTime());
+    return Success;
+}
 
 PioDevice::~PioDevice()
 {
-    if (pioInterface)
-        delete pioInterface;
+    if (pioPort)
+        delete pioPort;
 }
 
-DEFINE_SIM_OBJECT_CLASS_NAME("PioDevice", PioDevice)
+void
+PioDevice::init()
+{
+    if (!pioPort)
+        panic("Pio port not connected to anything!");
+    pioPort->sendStatusChange(Port::RangeChange);
+}
 
-DmaDevice::DmaDevice(const std::string &name, Platform *p)
-    : PioDevice(name, p), dmaInterface(NULL)
-{}
+void
+BasicPioDevice::addressRanges(AddrRangeList &range_list)
+{
+    assert(pioSize != 0);
+    range_list.clear();
+    range_list.push_back(RangeSize(pioAddr, pioSize));
+}
+
+
+DmaPort::DmaPort(DmaDevice *dev, Platform *p)
+        : device(dev), platform(p), pendingCount(0)
+{ }
+
+bool
+DmaPort::recvTiming(Packet &pkt)
+{
+    if (pkt.senderState) {
+        DmaReqState *state;
+        state = (DmaReqState*)pkt.senderState;
+        state->completionEvent->schedule(pkt.time - pkt.req->getTime());
+        delete pkt.req;
+        delete &pkt;
+    }  else {
+        delete pkt.req;
+        delete &pkt;
+    }
+
+    return Success;
+}
+
+DmaDevice::DmaDevice(Params *p)
+    : PioDevice(p), dmaPort(NULL)
+{ }
+
+void
+DmaPort::SendEvent::process()
+{
+    if (port->Port::sendTiming(packet) == Success)
+        return;
+
+    port->transmitList.push_back(&packet);
+}
+
+Packet *
+DmaPort::recvRetry()
+{
+    Packet* pkt = transmitList.front();
+    transmitList.pop_front();
+    return pkt;
+}
+void
+DmaPort::dmaAction(Command cmd, Addr addr, int size, Event *event,
+        uint8_t *data)
+{
+
+    assert(event);
+
+    int prevSize = 0;
+    Packet basePkt;
+    Request baseReq(false);
+
+    basePkt.flags = 0;
+    basePkt.coherence = NULL;
+    basePkt.senderState = NULL;
+    basePkt.src = 0;
+    basePkt.dest = 0;
+    basePkt.cmd = cmd;
+    basePkt.result = Unknown;
+    basePkt.req = NULL;
+//    baseReq.nicReq = true;
+    baseReq.setTime(curTick);
+
+    for (ChunkGenerator gen(addr, size, peerBlockSize());
+         !gen.done(); gen.next()) {
+            Packet *pkt = new Packet(basePkt);
+            Request *req = new Request(baseReq);
+            pkt->addr = gen.addr();
+            pkt->size = gen.size();
+            pkt->req = req;
+            pkt->req->setPaddr(pkt->addr);
+            pkt->req->setSize(pkt->size);
+            // Increment the data pointer on a write
+            if (data)
+                pkt->dataStatic(data + prevSize) ;
+            prevSize += pkt->size;
+            // Set the last bit of the dma as the final packet for this dma
+            // and set it's completion event.
+            if (prevSize == size) {
+                DmaReqState *state = new DmaReqState(event, true);
+
+                pkt->senderState = (void*)state;
+            }
+            assert(pendingCount >= 0);
+            pendingCount++;
+            sendDma(pkt);
+    }
+    // since this isn't getting used and we want a check to make sure that all
+    // packets had data in them at some point.
+    basePkt.dataStatic((uint8_t*)NULL);
+}
+
+
+void
+DmaPort::sendDma(Packet *pkt)
+{
+   // some kind of selction between access methods
+   // more work is going to have to be done to make
+   // switching actually work
+  /* MemState state = device->platform->system->memState;
+
+   if (state == Timing) {
+       if (sendTiming(pkt) == Failure)
+           transmitList.push_back(&packet);
+    } else if (state == Atomic) {*/
+       sendAtomic(*pkt);
+       if (pkt->senderState) {
+           DmaReqState *state = (DmaReqState*)pkt->senderState;
+           state->completionEvent->schedule(curTick + (pkt->time - pkt->req->getTime()) +1);
+       }
+       pendingCount--;
+       assert(pendingCount >= 0);
+       delete pkt->req;
+       delete pkt;
+
+/*   } else if (state == Functional) {
+       sendFunctional(pkt);
+       // Is this correct???
+       completionEvent->schedule(pkt.req->responseTime - pkt.req->requestTime);
+       completionEvent == NULL;
+   } else
+       panic("Unknown memory command state.");
+  */
+}
 
 DmaDevice::~DmaDevice()
 {
-    if (dmaInterface)
-        delete dmaInterface;
+    if (dmaPort)
+        delete dmaPort;
 }
 
-DEFINE_SIM_OBJECT_CLASS_NAME("DmaDevice", DmaDevice)
 

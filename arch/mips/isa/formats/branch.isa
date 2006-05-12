@@ -179,13 +179,19 @@ output decoder {{
             ss << ",";
         }
 
-        Addr target = pc + 8 + disp;
+        Addr target = pc + 4 + disp;
 
         std::string str;
         if (symtab && symtab->findSymbol(target, str))
             ss << str;
         else
             ccprintf(ss, "0x%x", target);
+
+        string inst_name = mnemonic;
+
+        if (inst_name.substr(inst_name.length()-2,inst_name.length()) == "al"){
+            ccprintf(ss, " (r31=0x%x)",pc+8);
+        }
 
         return ss.str();
     }
@@ -255,7 +261,7 @@ def format Branch(code,*flags) {{
     #Add Link Code if Link instruction
     strlen = len(name)
     if name[strlen-2:] == 'al':
-        code += 'r31 = NNPC;\n'
+        code += 'R31 = NNPC;\n'
 
     #Condition code
     code = 'bool cond;\n' + code
@@ -264,8 +270,6 @@ def format Branch(code,*flags) {{
     code += '} else {\n'
     code += '  NNPC = NNPC;\n'
     code += '} \n'
-
-    code += 'cout << hex << "NPC: " << NPC << " + " << disp << " = " << NNPC << endl;'
 
     iop = InstObjParams(name, Name, 'Branch', CodeBlock(code),
                         ('IsDirectControl', 'IsCondControl'))
@@ -281,7 +285,7 @@ def format BranchLikely(code,*flags) {{
     #Add Link Code if Link instruction
     strlen = len(name)
     if name[strlen-3:] == 'all':
-        code += 'r31 = NNPC;\n'
+        code += 'R31 = NNPC;\n'
 
     #Condition code
     code = 'bool cond;\n' + code
@@ -303,10 +307,8 @@ def format Jump(code,*flags) {{
     #Add Link Code if Link instruction
     strlen = len(name)
     if strlen > 1 and name[1:] == 'al':
-            code = 'r31 = NNPC;\n' + code
+            code = 'R31 = NNPC;\n' + code
 
-    #code += 'if(NNPC == 0x80000638) { NNPC = r31; cout << "SKIPPING JUMP TO SIM_GET_MEM_CONF" << endl;}'
-    #code += 'target = NNPC;'
 
     iop = InstObjParams(name, Name, 'Jump', CodeBlock(code),\
                         ('IsIndirectControl', 'IsUncondControl'))

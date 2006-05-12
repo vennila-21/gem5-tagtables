@@ -34,6 +34,7 @@
 #include "base/misc.hh"
 #include "base/trace.hh"
 #include "base/stats/events.hh"
+#include "base/serializer.hh"
 #include "sim/configfile.hh"
 #include "sim/host.hh"
 #include "sim/sim_object.hh"
@@ -85,6 +86,11 @@ SimObject::SimObject(const string &_name)
 
     doRecordEvent = !Stats::event_ignore.match(name());
     simObjectList.push_back(this);
+}
+
+void
+SimObject::connect()
+{
 }
 
 void
@@ -148,6 +154,21 @@ SimObject::regAllStats()
     }
 
     Stats::registerResetCallback(&StatResetCB);
+}
+
+//
+// static function: call connect() on all SimObjects.
+//
+void
+SimObject::connectAll()
+{
+    SimObjectList::iterator i = simObjectList.begin();
+    SimObjectList::iterator end = simObjectList.end();
+
+    for (; i != end; ++i) {
+        SimObject *obj = *i;
+        obj->connect();
+    }
 }
 
 //
@@ -226,6 +247,12 @@ SimObject::recordEvent(const std::string &stat)
 {
     if (doRecordEvent)
         Stats::recordEvent(stat);
+}
+
+void
+SimObject::drain(Serializer *serializer)
+{
+    serializer->signalDrained();
 }
 
 DEFINE_SIM_OBJECT_CLASS_NAME("SimObject", SimObject)

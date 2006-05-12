@@ -8,10 +8,6 @@
 //Outputs to decoder.hh
 output header {{
 
-#define R31 31
-#include "arch/mips/faults.hh"
-#include "arch/mips/isa_traits.hh"
-
     using namespace MipsISA;
 
 
@@ -66,27 +62,23 @@ output decoder {{
 
         ccprintf(ss, "%-10s ", mnemonic);
 
-        // just print the first two source regs... if there's
-        // a third one, it's a read-modify-write dest (Rc),
-        // e.g. for CMOVxx
-        if(_numSrcRegs > 0)
-        {
+        if(_numDestRegs > 0){
+            printReg(ss, _destRegIdx[0]);
+        }
+
+        if(_numSrcRegs > 0) {
+            ss << ",";
             printReg(ss, _srcRegIdx[0]);
         }
 
-        if(_numSrcRegs > 1)
-        {
+        if(_numSrcRegs > 1) {
             ss << ",";
             printReg(ss, _srcRegIdx[1]);
         }
 
-        // just print the first dest... if there's a second one,
-        // it's generally implicit
-        if(_numDestRegs > 0)
-        {
-            if(_numSrcRegs > 0)
-                ss << ",";
-            printReg(ss, _destRegIdx[0]);
+
+        if(mnemonic == "sll" || mnemonic == "sra"){
+            ccprintf(ss,", %d",SA);
         }
 
         return ss.str();

@@ -26,39 +26,36 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ENCUMBERED_CPU_FULL_OP_CLASS_HH__
-#define __ENCUMBERED_CPU_FULL_OP_CLASS_HH__
+#ifndef __MIPS_MIPS_LINUX_HH
+#define __MIPS_MIPS_LINUX_HH
 
-/**
- * @file
- * Definition of operation classes.
- */
+#include "kern/linux/linux.hh"
 
-/**
- * Instruction operation classes.  These classes are used for
- * assigning instructions to functional units.
- */
-enum OpClass {
-    No_OpClass = 0,	/* inst does not use a functional unit */
-    IntAluOp,		/* integer ALU */
-    IntMultOp,		/* integer multiplier */
-    IntDivOp,		/* integer divider */
-    FloatAddOp,		/* floating point adder/subtractor */
-    FloatCmpOp,		/* floating point comparator */
-    FloatCvtOp,		/* floating point<->integer converter */
-    FloatMultOp,	/* floating point multiplier */
-    FloatDivOp,		/* floating point divider */
-    FloatSqrtOp,	/* floating point square root */
-    MemReadOp,		/* memory read port */
-    MemWriteOp,		/* memory write port */
-    IprAccessOp,	/* Internal Processor Register read/write port */
-    InstPrefetchOp,	/* instruction prefetch port (on I-cache) */
-    Num_OpClasses	/* total functional unit classes */
+class SparcLinux : public Linux
+{
+  public:
+
+    static OpenFlagTransTable openFlagTable[];
+
+    static const int TGT_O_RDONLY	= 0x00000000;	//!< O_RDONLY
+    static const int TGT_O_WRONLY	= 0x00000001;	//!< O_WRONLY
+    static const int TGT_O_RDWR	        = 0x00000002;	//!< O_RDWR
+    static const int TGT_O_NONBLOCK     = 0x00004000;	//!< O_NONBLOCK
+    static const int TGT_O_APPEND	= 0x00000008;	//!< O_APPEND
+    static const int TGT_O_CREAT	= 0x00000200;	//!< O_CREAT
+    static const int TGT_O_TRUNC	= 0x00000400;	//!< O_TRUNC
+    static const int TGT_O_EXCL	        = 0x00000800;	//!< O_EXCL
+    static const int TGT_O_NOCTTY	= 0x00008000;	//!< O_NOCTTY
+    static const int TGT_O_SYNC	        = 0x00002000;	//!< O_SYNC
+//    static const int TGT_O_DRD	        = 0x00010000;	//!< O_DRD
+//    static const int TGT_O_DIRECTIO     = 0x00020000;	//!< O_DIRECTIO
+//    static const int TGT_O_CACHE	= 0x00002000;	//!< O_CACHE
+//    static const int TGT_O_DSYNC	= 0x00008000;	//!< O_DSYNC
+//    static const int TGT_O_RSYNC	= 0x00040000;	//!< O_RSYNC
+
+    static const int NUM_OPEN_FLAGS;
+
+    static const unsigned TGT_MAP_ANONYMOUS = 0x20;
 };
 
-/**
- * Array mapping OpClass enum values to strings.  Defined in fu_pool.cc.
- */
-extern const char *opClassStrings[];
-
-#endif // __ENCUMBERED_CPU_FULL_OP_CLASS_HH__
+#endif

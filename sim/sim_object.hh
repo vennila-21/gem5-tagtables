@@ -41,6 +41,8 @@
 #include "sim/serialize.hh"
 #include "sim/startup.hh"
 
+class Serializer;
+
 /*
  * Abstract superclass for simulation objects.  Represents things that
  * correspond to physical components and can be specified via the
@@ -78,7 +80,9 @@ class SimObject : public Serializable, protected StartupCallback
     // initialization pass of all objects.
     // Gets invoked after construction, before unserialize.
     virtual void init();
+    virtual void connect();
     static void initAll();
+    static void connectAll();
 
     // register statistics for this object
     virtual void regStats();
@@ -93,6 +97,13 @@ class SimObject : public Serializable, protected StartupCallback
 
     // static: call nameOut() & serialize() on all SimObjects
     static void serializeAll(std::ostream &);
+
+    // Methods to drain objects in order to take checkpoints
+    // Or switch from timing -> atomic memory model
+    virtual void drain(Serializer *serializer);
+    virtual void resume() { return;} ;
+    virtual void serializationComplete()
+    { assert(0 && "Unimplemented"); };
 
 #ifdef DEBUG
   public:

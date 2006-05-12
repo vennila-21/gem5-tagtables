@@ -41,6 +41,7 @@ class PciConfigAll;
 class IntrControl;
 class SimConsole;
 class Uart;
+class System;
 
 class Platform : public SimObject
 {
@@ -54,9 +55,13 @@ class Platform : public SimObject
     /** Pointer to the UART, set by the uart */
     Uart *uart;
 
+    /** Pointer to the system for info about the memory system. */
+    System *system;
+
   public:
-    Platform(const std::string &name, IntrControl *intctrl, PciConfigAll *pci);
+    Platform(const std::string &name, IntrControl *intctrl);
     virtual ~Platform();
+    virtual void init() { if (pciconfig == NULL) panic("PCI Config not set"); }
     virtual void postConsoleInt() = 0;
     virtual void clearConsoleInt() = 0;
     virtual Tick intrFrequency() = 0;

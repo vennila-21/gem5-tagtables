@@ -44,7 +44,10 @@ class Linux {};
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "arch/isa_traits.hh"
 #include "sim/syscall_emul.hh"
+
+class TranslatingPort;
 
 ///
 /// This class encapsulates the types, structures, constants,
@@ -71,33 +74,6 @@ class Linux {
     typedef struct stat hst_stat ;
     typedef struct stat64 hst_stat64;
 #endif
-
-
-    //@{
-    /// open(2) flag values.
-    static const int TGT_O_RDONLY	= 00000000;	//!< O_RDONLY
-    static const int TGT_O_WRONLY	= 00000001;	//!< O_WRONLY
-    static const int TGT_O_RDWR	 	= 00000002;	//!< O_RDWR
-    static const int TGT_O_NONBLOCK  	= 00000004;	//!< O_NONBLOCK
-    static const int TGT_O_APPEND	= 00000010;	//!< O_APPEND
-    static const int TGT_O_CREAT	= 00001000;	//!< O_CREAT
-    static const int TGT_O_TRUNC	= 00002000;	//!< O_TRUNC
-    static const int TGT_O_EXCL	 	= 00004000;	//!< O_EXCL
-    static const int TGT_O_NOCTTY	= 00010000;	//!< O_NOCTTY
-    static const int TGT_O_SYNC	 	= 00040000;	//!< O_SYNC
-    static const int TGT_O_DRD	 	= 00100000;	//!< O_DRD
-    static const int TGT_O_DIRECTIO  	= 00200000;	//!< O_DIRECTIO
-    static const int TGT_O_CACHE	= 00400000;	//!< O_CACHE
-    static const int TGT_O_DSYNC	= 02000000;	//!< O_DSYNC
-    static const int TGT_O_RSYNC	= 04000000;	//!< O_RSYNC
-    //@}
-
-    /// This table maps the target open() flags to the corresponding
-    /// host open() flags.
-    static OpenFlagTransTable openFlagTable[];
-
-    /// Number of entries in openFlagTable[].
-    static const int NUM_OPEN_FLAGS;
 
     /// Stat buffer.  Note that we can't call it 'stat' since that
     /// gets #defined to something else on some systems.
@@ -156,45 +132,11 @@ class Linux {
         char machine[_SYS_NMLN];	//!< Machine type.
     };
 
-
-    //@{
-    /// ioctl() command codes.
-    static const unsigned TIOCGETP   = 0x40067408;
-    static const unsigned TIOCSETP   = 0x80067409;
-    static const unsigned TIOCSETN   = 0x8006740a;
-    static const unsigned TIOCSETC   = 0x80067411;
-    static const unsigned TIOCGETC   = 0x40067412;
-    static const unsigned FIONREAD   = 0x4004667f;
-    static const unsigned TIOCISATTY = 0x2000745e;
-    static const unsigned TIOCGETS   = 0x402c7413;
-    static const unsigned TIOCGETA   = 0x40127417;
-    //@}
-
-    /// Resource enumeration for getrlimit().
-    enum rlimit_resources {
-        TGT_RLIMIT_CPU = 0,
-        TGT_RLIMIT_FSIZE = 1,
-        TGT_RLIMIT_DATA = 2,
-        TGT_RLIMIT_STACK = 3,
-        TGT_RLIMIT_CORE = 4,
-        TGT_RLIMIT_RSS = 5,
-        TGT_RLIMIT_NOFILE = 6,
-        TGT_RLIMIT_AS = 7,
-        TGT_RLIMIT_VMEM = 7,
-        TGT_RLIMIT_NPROC = 8,
-        TGT_RLIMIT_MEMLOCK = 9,
-        TGT_RLIMIT_LOCKS = 10
-    };
-
     /// Limit struct for getrlimit/setrlimit.
     struct rlimit {
         uint64_t  rlim_cur;	//!< soft limit
         uint64_t  rlim_max;	//!< hard limit
     };
-
-
-    /// For mmap().
-    static const unsigned TGT_MAP_ANONYMOUS = 0x10;
 
     /// For gettimeofday().
     struct timeval {
@@ -208,12 +150,6 @@ class Linux {
         uint64_t iov_len;
     };
 
-    //@{
-    /// For getrusage().
-    static const int TGT_RUSAGE_SELF = 0;
-    static const int TGT_RUSAGE_CHILDREN = -1;
-    static const int TGT_RUSAGE_BOTH = -2;
-    //@}
 
     /// For getrusage().
     struct rusage {
@@ -240,8 +176,10 @@ class Linux {
     /// memory space.  Used by stat(), fstat(), and lstat().
 #if !BSD_HOST
     static void
-    copyOutStatBuf(FunctionalMemory *mem, Addr addr, hst_stat *host)
+    copyOutStatBuf(TranslatingPort *mem, Addr addr, hst_stat *host)
     {
+        using namespace TheISA;
+
         TypedBufferArg<Linux::tgt_stat> tgt(addr);
 
         tgt->st_dev = htog(host->st_dev);
@@ -264,8 +202,10 @@ class Linux {
     // Third version for bsd systems which no longer have any support for
     // the old stat() call and stat() is actually a stat64()
     static void
-    copyOutStatBuf(FunctionalMemory *mem, Addr addr, hst_stat64 *host)
+    copyOutStatBuf(TranslatingPort *mem, Addr addr, hst_stat64 *host)
     {
+        using namespace TheISA;
+
         TypedBufferArg<Linux::tgt_stat> tgt(addr);
 
         tgt->st_dev = htog(host->st_dev);
@@ -289,8 +229,10 @@ class Linux {
 
     // Same for stat64
     static void
-    copyOutStat64Buf(FunctionalMemory *mem, int fd, Addr addr, hst_stat64 *host)
+    copyOutStat64Buf(TranslatingPort *mem, int fd, Addr addr, hst_stat64 *host)
     {
+        using namespace TheISA;
+
         TypedBufferArg<Linux::tgt_stat64> tgt(addr);
 
         // fd == 1 checks are because libc does some checks

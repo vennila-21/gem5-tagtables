@@ -33,9 +33,11 @@
 #include <iostream>
 
 #include "sim/syscall_emul.hh"
+#include "base/chunk_generator.hh"
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/base.hh"
+#include "mem/page_table.hh"
 #include "sim/process.hh"
 
 #include "sim/sim_events.hh"
@@ -46,13 +48,15 @@ using namespace TheISA;
 void
 SyscallDesc::doSyscall(int callnum, Process *process, ExecContext *xc)
 {
-    DPRINTFR(SyscallVerbose, "%s: syscall %s called\n",
-             xc->getCpuPtr()->name(), name);
+    DPRINTFR(SyscallVerbose, "%d: %s: syscall %s called w/arguments %d,%d,%d,%d\n",
+             curTick,xc->getCpuPtr()->name(), name,
+             xc->getSyscallArg(0),xc->getSyscallArg(1),
+             xc->getSyscallArg(2),xc->getSyscallArg(3));
 
     SyscallReturn retval = (*funcPtr)(this, callnum, process, xc);
 
-    DPRINTFR(SyscallVerbose, "%s: syscall %s returns %d\n",
-             xc->getCpuPtr()->name(), name, retval.value());
+    DPRINTFR(SyscallVerbose, "%d: %s: syscall %s returns %d\n",
+             curTick,xc->getCpuPtr()->name(), name, retval.value());
 
     if (!(flags & SyscallDesc::SuppressReturnValue))
         xc->setSyscallReturn(retval);
@@ -64,6 +68,8 @@ unimplementedFunc(SyscallDesc *desc, int callnum, Process *process,
                   ExecContext *xc)
 {
     fatal("syscall %s (#%d) unimplemented.", desc->name, callnum);
+
+    return 1;
 }
 
 
@@ -82,7 +88,7 @@ SyscallReturn
 exitFunc(SyscallDesc *desc, int callnum, Process *process,
          ExecContext *xc)
 {
-    new SimExitEvent("syscall caused exit", xc->getSyscallArg(0) & 0xff);
+    new SimExitEvent("target called exit()", xc->getSyscallArg(0) & 0xff);
 
     return 1;
 }
@@ -98,11 +104,18 @@ getpagesizeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 SyscallReturn
 obreakFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
+    Addr junk;
+
     // change brk addr to first arg
     Addr new_brk = xc->getSyscallArg(0);
-    if (new_brk != 0)
-    {
-        p->brk_point = xc->getSyscallArg(0);
+    if (new_brk != 0) {
+        for (ChunkGenerator gen(p->brk_point, new_brk - p->brk_point,
+                                VMPageSize); !gen.done(); gen.next()) {
+            if (!p->pTable->translate(gen.addr(), junk))
+                p->pTable->allocate(roundDown(gen.addr(), VMPageSize),
+                                    VMPageSize);
+        }
+        p->brk_point = new_brk;
     }
     DPRINTF(SyscallVerbose, "Break Point changed to: %#X\n", p->brk_point);
     return p->brk_point;
@@ -130,7 +143,7 @@ readFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
     int bytes_read = read(fd, bufArg.bufferPtr(), nbytes);
 
     if (bytes_read != -1)
-        bufArg.copyOut(xc->getMemPtr());
+        bufArg.copyOut(xc->getMemPort());
 
     return bytes_read;
 }
@@ -142,7 +155,7 @@ writeFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
     int nbytes = xc->getSyscallArg(2);
     BufferArg bufArg(xc->getSyscallArg(1), nbytes);
 
-    bufArg.copyIn(xc->getMemPtr());
+    bufArg.copyIn(xc->getMemPort());
 
     int bytes_written = write(fd, bufArg.bufferPtr(), nbytes);
 
@@ -183,7 +196,7 @@ gethostnameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 
     strncpy((char *)name.bufferPtr(), hostname, name_len);
 
-    name.copyOut(xc->getMemPtr());
+    name.copyOut(xc->getMemPort());
 
     return 0;
 }
@@ -193,7 +206,7 @@ unlinkFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
         return (TheISA::IntReg)-EFAULT;
 
     int result = unlink(path.c_str());
@@ -205,12 +218,12 @@ renameFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     string old_name;
 
-    if (xc->getMemPtr()->readString(old_name, xc->getSyscallArg(0)) != NoFault)
+    if (!xc->getMemPort()->tryReadString(old_name, xc->getSyscallArg(0)))
         return -EFAULT;
 
     string new_name;
 
-    if (xc->getMemPtr()->readString(new_name, xc->getSyscallArg(1)) != NoFault)
+    if (!xc->getMemPort()->tryReadString(new_name, xc->getSyscallArg(1)))
         return -EFAULT;
 
     int64_t result = rename(old_name.c_str(), new_name.c_str());
@@ -222,7 +235,7 @@ truncateFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
         return -EFAULT;
 
     off_t length = xc->getSyscallArg(1);
@@ -250,7 +263,7 @@ chownFunc(SyscallDesc *desc, int num, Process *p, ExecContext *xc)
 {
     string path;
 
-    if (xc->getMemPtr()->readString(path, xc->getSyscallArg(0)) != NoFault)
+    if (!xc->getMemPort()->tryReadString(path, xc->getSyscallArg(0)))
         return -EFAULT;
 
     /* XXX endianess */

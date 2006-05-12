@@ -89,10 +89,10 @@ TrapType      IllegalInstruction::_trapType = 0x010;
 FaultPriority IllegalInstruction::_priority = 7;
 FaultStat     IllegalInstruction::_count;
 
-FaultName     PrivelegedOpcode::_name = "priv_opcode";
-TrapType      PrivelegedOpcode::_trapType = 0x011;
-FaultPriority PrivelegedOpcode::_priority = 6;
-FaultStat     PrivelegedOpcode::_count;
+FaultName     PrivilegedOpcode::_name = "priv_opcode";
+TrapType      PrivilegedOpcode::_trapType = 0x011;
+FaultPriority PrivilegedOpcode::_priority = 6;
+FaultStat     PrivilegedOpcode::_count;
 
 FaultName     UnimplementedLDD::_name = "unimp_ldd";
 TrapType      UnimplementedLDD::_trapType = 0x012;
@@ -159,10 +159,10 @@ TrapType      STDFMemAddressNotAligned::_trapType = 0x036;
 FaultPriority STDFMemAddressNotAligned::_priority = 10;
 FaultStat     STDFMemAddressNotAligned::_count;
 
-FaultName     PrivelegedAction::_name = "priv_action";
-TrapType      PrivelegedAction::_trapType = 0x037;
-FaultPriority PrivelegedAction::_priority = 11;
-FaultStat     PrivelegedAction::_count;
+FaultName     PrivilegedAction::_name = "priv_action";
+TrapType      PrivilegedAction::_trapType = 0x037;
+FaultPriority PrivilegedAction::_priority = 11;
+FaultStat     PrivilegedAction::_count;
 
 FaultName     LDQFMemAddressNotAligned::_name = "unalign_ldqf";
 TrapType      LDQFMemAddressNotAligned::_trapType = 0x038;
@@ -179,12 +179,12 @@ TrapType      AsyncDataError::_trapType = 0x040;
 FaultPriority AsyncDataError::_priority = 2;
 FaultStat     AsyncDataError::_count;
 
-//The enumerated faults
-
 FaultName     CleanWindow::_name = "clean_win";
-TrapType      CleanWindow::_baseTrapType = 0x024;
+TrapType      CleanWindow::_trapType = 0x024;
 FaultPriority CleanWindow::_priority = 10;
 FaultStat     CleanWindow::_count;
+
+//The enumerated faults
 
 FaultName     InterruptLevelN::_name = "interrupt_n";
 TrapType      InterruptLevelN::_baseTrapType = 0x041;
@@ -215,7 +215,10 @@ TrapType      TrapInstruction::_baseTrapType = 0x100;
 FaultPriority TrapInstruction::_priority = 16;
 FaultStat     TrapInstruction::_count;
 
-
+FaultName     UnimpFault::_name = "Unimplemented Simulator feature";
+TrapType      UnimpFault::_trapType = 0x000;
+FaultPriority UnimpFault::_priority = 0;
+FaultStat     UnimpFault::_count;
 
 #if FULL_SYSTEM
 
@@ -241,6 +244,12 @@ void SparcFault::invoke(ExecContext * xc)
     xc->regs.pc = xc->readMiscReg(AlphaISA::IPR_PAL_BASE) + vect();
     xc->regs.npc = xc->regs.pc + sizeof(MachInst);*/
 }
+
+void UnimpFault::invoke(ExecContext * xc)
+{
+    panic("Unimpfault: %s\n", panicStr.c_str());
+}
+
 
 #endif
 

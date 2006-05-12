@@ -32,16 +32,13 @@
 #include "arch/isa_traits.hh"
 #include "config/full_system.hh"
 #include "cpu/exec_context.hh"
-#include "mem/functional/functional.hh"
-#include "mem/mem_req.hh"
+#include "mem/physical.hh"
+#include "mem/request.hh"
 #include "sim/byteswap.hh"
 #include "sim/eventq.hh"
 #include "sim/host.hh"
 #include "sim/serialize.hh"
 
-// forward declaration: see functional_memory.hh
-class FunctionalMemory;
-class PhysicalMemory;
 class BaseCPU;
 
 #if FULL_SYSTEM
@@ -51,11 +48,16 @@ class BaseCPU;
 
 class FunctionProfile;
 class ProfileNode;
-class MemoryController;
+class FunctionalPort;
+class PhysicalPort;
+
 
 #else // !FULL_SYSTEM
 
 #include "sim/process.hh"
+#include "mem/page_table.hh"
+class TranslatingPort;
+
 
 #endif // FULL_SYSTEM
 
@@ -72,6 +74,8 @@ class CPUExecContext
     typedef TheISA::MachInst MachInst;
     typedef TheISA::MiscRegFile MiscRegFile;
     typedef TheISA::MiscReg MiscReg;
+    typedef TheISA::FloatReg FloatReg;
+    typedef TheISA::FloatRegBits FloatRegBits;
   public:
     typedef ExecContext::Status Status;
 
@@ -118,17 +122,20 @@ class CPUExecContext
     Tick lastActivate;
     Tick lastSuspend;
 
-#if FULL_SYSTEM
-    FunctionalMemory *mem;
-    AlphaITB *itb;
-    AlphaDTB *dtb;
     System *system;
 
-    // the following two fields are redundant, since we can always
-    // look them up through the system pointer, but we'll leave them
-    // here for now for convenience
-    MemoryController *memctrl;
-    PhysicalMemory *physmem;
+
+#if FULL_SYSTEM
+    AlphaITB *itb;
+    AlphaDTB *dtb;
+
+    /** A functional port outgoing only for functional accesses to physical
+     * addresses.*/
+    FunctionalPort *physPort;
+
+    /** A functional port, outgoing only, for functional accesse to virtual
+     * addresses. That doen't require execution context information */
+    VirtualPort *virtPort;
 
     FunctionProfile *profile;
     ProfileNode *profileNode;
@@ -162,9 +169,10 @@ class CPUExecContext
     void profileSample();
 
 #else
-    Process *process;
+    /// Port that syscalls can use to access memory (provides translation step).
+    TranslatingPort *port;
 
-    FunctionalMemory *mem;	// functional storage for process address space
+    Process *process;
 
     // Address space ID.  Note that this is used for TIMING cache
     // simulation only; all functional memory accesses should use
@@ -200,11 +208,10 @@ class CPUExecContext
     // constructor: initialize context from given process structure
 #if FULL_SYSTEM
     CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_system,
-                   AlphaITB *_itb, AlphaDTB *_dtb, FunctionalMemory *_dem);
+                   AlphaITB *_itb, AlphaDTB *_dtb);
 #else
-    CPUExecContext(BaseCPU *_cpu, int _thread_num, Process *_process, int _asid);
-    CPUExecContext(BaseCPU *_cpu, int _thread_num, FunctionalMemory *_mem,
-                   int _asid);
+    CPUExecContext(BaseCPU *_cpu, int _thread_num, Process *_process, int _asid,
+            MemObject *memobj);
     // Constructor to use XC to pass reg file around.  Not used for anything
     // else.
     CPUExecContext(RegFile *regFile);
@@ -227,74 +234,67 @@ class CPUExecContext
 #if FULL_SYSTEM
     System *getSystemPtr() { return system; }
 
-    PhysicalMemory *getPhysMemPtr() { return physmem; }
-
     AlphaITB *getITBPtr() { return itb; }
 
     AlphaDTB *getDTBPtr() { return dtb; }
 
-    bool validInstAddr(Addr addr) { return true; }
-    bool validDataAddr(Addr addr) { return true; }
     int getInstAsid() { return regs.instAsid(); }
     int getDataAsid() { return regs.dataAsid(); }
 
-    Fault translateInstReq(MemReqPtr &req)
+    Fault translateInstReq(RequestPtr &req)
     {
-        return itb->translate(req);
+        return itb->translate(req, proxy);
     }
 
-    Fault translateDataReadReq(MemReqPtr &req)
+    Fault translateDataReadReq(RequestPtr &req)
     {
-        return dtb->translate(req, false);
+        return dtb->translate(req, proxy, false);
     }
 
-    Fault translateDataWriteReq(MemReqPtr &req)
+    Fault translateDataWriteReq(RequestPtr &req)
     {
-        return dtb->translate(req, true);
+        return dtb->translate(req, proxy, true);
     }
+
+    FunctionalPort *getPhysPort() { return physPort; }
+
+    /** Return a virtual port. If no exec context is specified then a static
+     * port is returned. Otherwise a port is created and returned. It must be
+     * deleted by deleteVirtPort(). */
+    VirtualPort *getVirtPort(ExecContext *xc);
+
+    void delVirtPort(VirtualPort *vp);
 
 #else
+    TranslatingPort *getMemPort() { return port; }
+
     Process *getProcessPtr() { return process; }
-
-    bool validInstAddr(Addr addr)
-    { return process->validInstAddr(addr); }
-
-    bool validDataAddr(Addr addr)
-    { return process->validDataAddr(addr); }
 
     int getInstAsid() { return asid; }
     int getDataAsid() { return asid; }
 
-    Fault dummyTranslation(MemReqPtr &req)
+    Fault translateInstReq(RequestPtr &req)
     {
-#if 0
-        assert((req->vaddr >> 48 & 0xffff) == 0);
-#endif
+        return process->pTable->translate(req);
+    }
 
-        // put the asid in the upper 16 bits of the paddr
-        req->paddr = req->vaddr & ~((Addr)0xffff << sizeof(Addr) * 8 - 16);
-        req->paddr = req->paddr | (Addr)req->asid << sizeof(Addr) * 8 - 16;
-        return NoFault;
-    }
-    Fault translateInstReq(MemReqPtr &req)
+    Fault translateDataReadReq(RequestPtr &req)
     {
-        return dummyTranslation(req);
+        return process->pTable->translate(req);
     }
-    Fault translateDataReadReq(MemReqPtr &req)
+
+    Fault translateDataWriteReq(RequestPtr &req)
     {
-        return dummyTranslation(req);
-    }
-    Fault translateDataWriteReq(MemReqPtr &req)
-    {
-        return dummyTranslation(req);
+        return process->pTable->translate(req);
     }
 
 #endif
 
+/*
     template <class T>
-    Fault read(MemReqPtr &req, T &data)
+    Fault read(RequestPtr &req, T &data)
     {
-#if FULL_SYSTEM && defined(TARGET_ALPHA)
+#if FULL_SYSTEM && THE_ISA == ALPHA_ISA
         if (req->flags & LOCKED) {
             req->xc->setMiscReg(TheISA::Lock_Addr_DepTag, req->paddr);
             req->xc->setMiscReg(TheISA::Lock_Flag_DepTag, true);
@@ -302,15 +302,15 @@ class CPUExecContext
 #endif
 
         Fault error;
-        error = mem->read(req, data);
+        error = mem->prot_read(req->paddr, data, req->size);
         data = LittleEndianGuest::gtoh(data);
         return error;
     }
 
     template <class T>
-    Fault write(MemReqPtr &req, T &data)
+    Fault write(RequestPtr &req, T &data)
     {
-#if FULL_SYSTEM && defined(TARGET_ALPHA)
+#if FULL_SYSTEM && THE_ISA == ALPHA_ISA
         ExecContext *xc;
 
         // If this is a store conditional, act appropriately
@@ -356,9 +356,9 @@ class CPUExecContext
         }
 
 #endif
-        return mem->write(req, (T)LittleEndianGuest::htog(data));
+        return mem->prot_write(req->paddr, (T)htog(data), req->size);
     }
-
+*/
     virtual bool misspeculating();
 
 
@@ -369,16 +369,16 @@ class CPUExecContext
         inst = new_inst;
     }
 
-    Fault instRead(MemReqPtr &req)
+    Fault instRead(RequestPtr &req)
     {
-        return mem->read(req, inst);
+        panic("instRead not implemented");
+        // return funcPhysMem->read(req, inst);
+        return NoFault;
     }
 
     void setCpuId(int id) { cpu_id = id; }
 
     int readCpuId() { return cpu_id; }
-
-    FunctionalMemory *getMemPtr() { return mem; }
 
     void copyArchRegs(ExecContext *xc);
 
@@ -387,93 +387,103 @@ class CPUExecContext
     //
     uint64_t readIntReg(int reg_idx)
     {
-        return regs.intRegFile[reg_idx];
+        return regs.readIntReg(reg_idx);
     }
 
-    float readFloatRegSingle(int reg_idx)
+    FloatReg readFloatReg(int reg_idx, int width)
     {
-        return (float)regs.floatRegFile.d[reg_idx];
+        return regs.readFloatReg(reg_idx, width);
     }
 
-    double readFloatRegDouble(int reg_idx)
+    FloatReg readFloatReg(int reg_idx)
     {
-        return regs.floatRegFile.d[reg_idx];
+        return regs.readFloatReg(reg_idx);
     }
 
-    uint64_t readFloatRegInt(int reg_idx)
+    FloatRegBits readFloatRegBits(int reg_idx, int width)
     {
-        return regs.floatRegFile.q[reg_idx];
+        return regs.readFloatRegBits(reg_idx, width);
+    }
+
+    FloatRegBits readFloatRegBits(int reg_idx)
+    {
+        return regs.readFloatRegBits(reg_idx);
     }
 
     void setIntReg(int reg_idx, uint64_t val)
     {
-        regs.intRegFile[reg_idx] = val;
+        regs.setIntReg(reg_idx, val);
     }
 
-    void setFloatRegSingle(int reg_idx, float val)
+    void setFloatReg(int reg_idx, FloatReg val, int width)
     {
-        regs.floatRegFile.d[reg_idx] = (double)val;
+        regs.setFloatReg(reg_idx, val, width);
     }
 
-    void setFloatRegDouble(int reg_idx, double val)
+    void setFloatReg(int reg_idx, FloatReg val)
     {
-        regs.floatRegFile.d[reg_idx] = val;
+        regs.setFloatReg(reg_idx, val);
     }
 
-    void setFloatRegInt(int reg_idx, uint64_t val)
+    void setFloatRegBits(int reg_idx, FloatRegBits val, int width)
     {
-        regs.floatRegFile.q[reg_idx] = val;
+        regs.setFloatRegBits(reg_idx, val, width);
+    }
+
+    void setFloatRegBits(int reg_idx, FloatRegBits val)
+    {
+        regs.setFloatRegBits(reg_idx, val);
     }
 
     uint64_t readPC()
     {
-        return regs.pc;
+        return regs.readPC();
     }
 
     void setPC(uint64_t val)
     {
-        regs.pc = val;
+        regs.setPC(val);
     }
 
     uint64_t readNextPC()
     {
-        return regs.npc;
+        return regs.readNextPC();
     }
 
     void setNextPC(uint64_t val)
     {
-        regs.npc = val;
+        regs.setNextPC(val);
     }
 
     uint64_t readNextNPC()
     {
-        return regs.nnpc;
+        return regs.readNextNPC();
     }
 
     void setNextNPC(uint64_t val)
     {
-        regs.nnpc = val;
+        regs.setNextNPC(val);
     }
 
 
     MiscReg readMiscReg(int misc_reg)
     {
-        return regs.miscRegs.readReg(misc_reg);
+        return regs.readMiscReg(misc_reg);
     }
 
     MiscReg readMiscRegWithEffect(int misc_reg, Fault &fault)
     {
-        return regs.miscRegs.readRegWithEffect(misc_reg, fault, proxy);
+        return regs.readMiscRegWithEffect(misc_reg, fault, proxy);
     }
 
     Fault setMiscReg(int misc_reg, const MiscReg &val)
     {
-        return regs.miscRegs.setReg(misc_reg, val);
+        return regs.setMiscReg(misc_reg, val);
     }
 
     Fault setMiscRegWithEffect(int misc_reg, const MiscReg &val)
     {
-        return regs.miscRegs.setRegWithEffect(misc_reg, val, proxy);
+        return regs.setMiscRegWithEffect(misc_reg, val, proxy);
     }
 
     unsigned readStCondFailures() { return storeCondFailures; }
@@ -481,26 +491,26 @@ class CPUExecContext
     void setStCondFailures(unsigned sc_failures)
     { storeCondFailures = sc_failures; }
 
-    void clearArchRegs() { memset(&regs, 0, sizeof(regs)); }
+    void clearArchRegs() { regs.clear(); }
 
 #if FULL_SYSTEM
     int readIntrFlag() { return regs.intrflag; }
     void setIntrFlag(int val) { regs.intrflag = val; }
     Fault hwrei();
-    bool inPalMode() { return AlphaISA::PcPAL(regs.pc); }
+    bool inPalMode() { return AlphaISA::PcPAL(regs.readPC()); }
     bool simPalCheck(int palFunc);
 #endif
 
 #if !FULL_SYSTEM
     TheISA::IntReg getSyscallArg(int i)
     {
-        return regs.intRegFile[TheISA::ArgumentReg0 + i];
+        return regs.readIntReg(TheISA::ArgumentReg0 + i);
     }
 
     // used to shift args for indirect syscall
     void setSyscallArg(int i, TheISA::IntReg val)
     {
-        regs.intRegFile[TheISA::ArgumentReg0 + i] = val;
+        regs.setIntReg(TheISA::ArgumentReg0 + i, val);
     }
 
     void setSyscallReturn(SyscallReturn return_value)
@@ -508,15 +518,21 @@ class CPUExecContext
         TheISA::setSyscallReturn(return_value, &regs);
     }
 
-    void syscall()
+    void syscall(int64_t callnum)
     {
-        process->syscall(proxy);
+        process->syscall(callnum, proxy);
     }
 
     Counter readFuncExeInst() { return func_exe_inst; }
 
     void setFuncExeInst(Counter new_val) { func_exe_inst = new_val; }
 #endif
+
+    void changeRegFileContext(RegFile::ContextParam param,
+            RegFile::ContextVal val)
+    {
+        regs.changeContext(param, val);
+    }
 };
 
 

@@ -30,7 +30,7 @@ output decoder {{
 }};
 
 
-// Primary format for integer operate instructions:
+// Primary format for float operate instructions:
 def format FloatOp(code, *flags) {{
         iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
         header_output = BasicDeclare.subst(iop)
@@ -39,8 +39,68 @@ def format FloatOp(code, *flags) {{
         exec_output = BasicExecute.subst(iop)
 }};
 
-// Primary format for integer operate instructions:
+def format FloatCompareOp(code, *flags) {{
+        code = 'bool cond;\n' + code
+        code += 'FCSR = makeCCVector(FCSR, CC,cond);\n'
+        iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
+        header_output = BasicDeclare.subst(iop)
+        decoder_output = BasicConstructor.subst(iop)
+        decode_block = BasicDecode.subst(iop)
+        exec_output = BasicExecute.subst(iop)
+}};
+
+def format FloatCompareWithXcptOp(code, *flags) {{
+        code = 'bool cond;\n' + code
+        code += 'FCSR = makeCCVector(FCSR, CC,cond);\n'
+        iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
+        header_output = BasicDeclare.subst(iop)
+        decoder_output = BasicConstructor.subst(iop)
+        decode_block = BasicDecode.subst(iop)
+        exec_output = BasicExecute.subst(iop)
+}};
+
+def format FloatConvertOp(code, *flags) {{
+        iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
+        header_output = BasicDeclare.subst(iop)
+        decoder_output = BasicConstructor.subst(iop)
+        decode_block = BasicDecode.subst(iop)
+        exec_output = BasicExecute.subst(iop)
+}};
+
+// Primary format for float64 operate instructions:
 def format Float64Op(code, *flags) {{
+        iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
+        header_output = BasicDeclare.subst(iop)
+        decoder_output = BasicConstructor.subst(iop)
+        decode_block = BasicDecode.subst(iop)
+        exec_output = BasicExecute.subst(iop)
+}};
+
+def format Float64ConvertOp(code, *flags) {{
+        code = 'bool cond;\n' + code
+        code += 'FCSR = makeCCVector(FCSR, CC,cond);\n'
+        iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
+        header_output = BasicDeclare.subst(iop)
+        decoder_output = BasicConstructor.subst(iop)
+        decode_block = BasicDecode.subst(iop)
+        exec_output = BasicExecute.subst(iop)
+}};
+
+def format FloatPSCompareOp(code, *flags) {{
+        code = 'bool cond1;\nbool cond2;\n' + code
+        code += 'FCSR = makeCCVector(FCSR, CC+1, cond1);\n'
+        code += 'FCSR = makeCCVector(FCSR, CC, cond2);\n'
+        iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
+        header_output = BasicDeclare.subst(iop)
+        decoder_output = BasicConstructor.subst(iop)
+        decode_block = BasicDecode.subst(iop)
+        exec_output = BasicExecute.subst(iop)
+}};
+
+def format FloatPSCompareWithXcptOp(code, *flags) {{
+        code = 'bool cond1;\nbool cond2;\n' + code
+        code += 'FCSR = makeCCVector(FCSR, CC+1, cond1);\n'
+        code += 'FCSR = makeCCVector(FCSR, CC, cond2);\n'
         iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
         header_output = BasicDeclare.subst(iop)
         decoder_output = BasicConstructor.subst(iop)

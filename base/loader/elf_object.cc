@@ -42,11 +42,13 @@
 #include "libelf/gelf.h"
 
 #include "base/loader/elf_object.hh"
+#include "base/misc.hh"
 
-#include "mem/functional/functional.hh"
 #include "base/loader/symtab.hh"
 
 #include "base/trace.hh"	// for DPRINTF
+
+#include "sim/byteswap.hh"
 
 
 using namespace std;
@@ -73,14 +75,8 @@ ElfObject::tryFile(const string &fname, int fd, size_t len, uint8_t *data)
         DPRINTFR(Loader, "Not ELF\n");
         elf_end(elf);
         return NULL;
-    }
-    else {
+    } else {
         //Detect the architecture
-        //Versioning issues in libelf need to be resolved to get the correct
-        //SPARC constants.
-        //If MIPS supports 32 bit executables, this may need to be changed.
-        //Also, there are other MIPS constants which may be used, like
-        //EM_MIPS_RS3_LE and EM_MIPS_X
         //Since we don't know how to check for alpha right now, we'll
         //just assume if it wasn't something else and it's 64 bit, that's
         //what it must be.
@@ -90,7 +86,7 @@ ElfObject::tryFile(const string &fname, int fd, size_t len, uint8_t *data)
             arch = ObjectFile::SPARC;
         } else if (ehdr.e_machine == EM_MIPS
                 && ehdr.e_ident[EI_CLASS] == ELFCLASS32) {
-            arch = ObjectFile::MIPS;
+            arch = ObjectFile::Mips;
         } else if (ehdr.e_ident[EI_CLASS] == ELFCLASS64) {
             arch = ObjectFile::Alpha;
         } else {
@@ -154,6 +150,7 @@ ElfObject::tryFile(const string &fname, int fd, size_t len, uint8_t *data)
             section = elf_getscn(elf, ++secIdx);
             } // while sections
         }
+
         elf_end(elf);
         return new ElfObject(fname, fd, len, data, arch, opSys);
     }
@@ -185,6 +182,7 @@ ElfObject::ElfObject(const string &_filename, int _fd,
 
     entry = ehdr.e_entry;
 
+
     // initialize segment sizes to 0 in case they're not present
     text.size = data.size = bss.size = 0;
 
@@ -203,20 +201,18 @@ ElfObject::ElfObject(const string &_filename, int _fd,
         if (text.size == 0) {  // haven't seen text segment yet
             text.baseAddr = phdr.p_vaddr;
             text.size = phdr.p_filesz;
-            // remember where the data is for loadSections()
-            fileTextBits = fileData + phdr.p_offset;
+            text.fileImage = fileData + phdr.p_offset;
             // if there's any padding at the end that's not in the
             // file, call it the bss.  This happens in the "text"
             // segment if there's only one loadable segment (as for
             // kernel images).
             bss.size = phdr.p_memsz - phdr.p_filesz;
             bss.baseAddr = phdr.p_vaddr + phdr.p_filesz;
-        }
-        else if (data.size == 0) { // have text, this must be data
+            bss.fileImage = NULL;
+        } else if (data.size == 0) { // have text, this must be data
             data.baseAddr = phdr.p_vaddr;
             data.size = phdr.p_filesz;
-            // remember where the data is for loadSections()
-            fileDataBits = fileData + phdr.p_offset;
+            data.fileImage = fileData + phdr.p_offset;
             // if there's any padding at the end that's not in the
             // file, call it the bss.  Warn if this happens for both
             // the text & data segments (should only have one bss).
@@ -225,6 +221,11 @@ ElfObject::ElfObject(const string &_filename, int _fd,
             }
             bss.size = phdr.p_memsz - phdr.p_filesz;
             bss.baseAddr = phdr.p_vaddr + phdr.p_filesz;
+            bss.fileImage = NULL;
+        } else {
+            warn("More than two loadable segments in ELF object.");
+            warn("Ignoring segment @ 0x%x length 0x%x.",
+                 phdr.p_vaddr, phdr.p_filesz);
         }
     }
 
@@ -238,28 +239,6 @@ ElfObject::ElfObject(const string &_filename, int _fd,
     elf_end(elf);
 
     // We will actually read the sections when we need to load them
-}
-
-
-bool
-ElfObject::loadSections(FunctionalMemory *mem, bool loadPhys)
-{
-    Addr textAddr = text.baseAddr;
-    Addr dataAddr = data.baseAddr;
-
-    if (loadPhys) {
-        textAddr &= (ULL(1) << 40) - 1;
-        dataAddr &= (ULL(1) << 40) - 1;
-    }
-
-    // Since we don't really have an MMU and all memory is
-    // zero-filled, there's no need to set up the BSS segment.
-    if (text.size != 0)
-        mem->prot_write(textAddr, fileTextBits, text.size);
-    if (data.size != 0)
-        mem->prot_write(dataAddr, fileDataBits, data.size);
-
-    return true;
 }
 
 

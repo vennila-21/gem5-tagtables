@@ -1,8 +1,8 @@
 from m5 import *
-from FunctionalMemory import FunctionalMemory
+from MemObject import *
 
-class PhysicalMemory(FunctionalMemory):
+class PhysicalMemory(MemObject):
     type = 'PhysicalMemory'
     range = Param.AddrRange("Device Address")
     file = Param.String('', "memory mapped file")
-    mmu = Param.MemoryController(Parent.any, "Memory Controller")
+    latency = Param.Latency('10ns', "latency of an access")

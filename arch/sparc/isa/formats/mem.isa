@@ -5,14 +5,14 @@
 
 output header {{
         /**
-         * Base class for integer operations.
+         * Base class for memory operations.
          */
         class Mem : public SparcStaticInst
         {
           protected:
 
             // Constructor
-            Mem(const char *mnem, MachInst _machInst, OpClass __opClass) :
+            Mem(const char *mnem, ExtMachInst _machInst, OpClass __opClass) :
                 SparcStaticInst(mnem, _machInst, __opClass)
             {
             }
@@ -20,12 +20,82 @@ output header {{
             std::string generateDisassembly(Addr pc,
                     const SymbolTable *symtab) const;
         };
+
+        /**
+         * Class for memory operations which use an immediate offset.
+         */
+        class MemImm : public Mem
+        {
+          protected:
+
+            // Constructor
+            MemImm(const char *mnem, ExtMachInst _machInst, OpClass __opClass) :
+                Mem(mnem, _machInst, __opClass)
+            {
+                imm = sign_ext(SIMM13, 13);
+            }
+
+            std::string generateDisassembly(Addr pc,
+                    const SymbolTable *symtab) const;
+
+            int32_t imm;
+        };
 }};
 
 output decoder {{
-        std::string Mem::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+        std::string Mem::generateDisassembly(Addr pc,
+                const SymbolTable *symtab) const
         {
-            return "Memory instruction\n";
+            std::stringstream response;
+            bool load = flags[IsLoad];
+            bool save = flags[IsStore];
+
+            printMnemonic(response, mnemonic);
+            if(save)
+            {
+                printReg(response, _srcRegIdx[0]);
+                ccprintf(response, ", ");
+            }
+            ccprintf(response, "[ ");
+            printReg(response, _srcRegIdx[!save ? 0 : 1]);
+            ccprintf(response, " + ");
+            printReg(response, _srcRegIdx[!save ? 1 : 2]);
+            ccprintf(response, " ]");
+            if(load)
+            {
+                ccprintf(response, ", ");
+                printReg(response, _destRegIdx[0]);
+            }
+
+            return response.str();
+        }
+
+        std::string MemImm::generateDisassembly(Addr pc,
+                const SymbolTable *symtab) const
+        {
+            std::stringstream response;
+            bool load = flags[IsLoad];
+            bool save = flags[IsStore];
+
+            printMnemonic(response, mnemonic);
+            if(save)
+            {
+                printReg(response, _srcRegIdx[0]);
+                ccprintf(response, ", ");
+            }
+            ccprintf(response, "[ ");
+            printReg(response, _srcRegIdx[!save ? 0 : 1]);
+            if(imm >= 0)
+                ccprintf(response, " + 0x%x ]", imm);
+            else
+                ccprintf(response, " + -0x%x ]", -imm);
+            if(load)
+            {
+                ccprintf(response, ", ");
+                printReg(response, _destRegIdx[0]);
+            }
+
+            return response.str();
         }
 }};
 
@@ -34,10 +104,14 @@ def template MemExecute {{
                 Trace::InstRecord *traceData) const
         {
             Fault fault = NoFault;
+            Addr EA;
             %(op_decl)s;
             %(op_rd)s;
-            ea_code
+            %(ea_code)s;
+            DPRINTF(Sparc, "The address is 0x%x\n", EA);
+            %(load)s;
             %(code)s;
+            %(store)s;
 
             if(fault == NoFault)
             {
@@ -49,25 +123,49 @@ def template MemExecute {{
         }
 }};
 
-// Primary format for integer operate instructions:
-def format Mem(code, *opt_flags) {{
-        orig_code = code
-        cblk = CodeBlock(code)
-        iop = InstObjParams(name, Name, 'SparcStaticInst', cblk, opt_flags)
-        header_output = BasicDeclare.subst(iop)
-        decoder_output = BasicConstructor.subst(iop)
-        decode_block = BasicDecodeWithMnemonic.subst(iop)
-        exec_output = MemExecute.subst(iop)
-        exec_output.replace('ea_code', 'EA = I ? (R1 + SIMM13) : R1 + R2;');
+let {{
+    # Leave memAccessFlags at 0 for now
+    loadString = "xc->read(EA, (uint%(width)s_t&)Mem, 0);"
+    storeString = "uint64_t write_result = 0; \
+    xc->write((uint%(width)s_t)Mem, EA, 0, &write_result);"
+
+    def doMemFormat(code, load, store, name, Name, opt_flags):
+        addrCalcReg = 'EA = Rs1 + Rs2;'
+        addrCalcImm = 'EA = Rs1 + imm;'
+        iop = InstObjParams(name, Name, 'Mem', code,
+                opt_flags, ("ea_code", addrCalcReg),
+                ("load", load), ("store", store))
+        iop_imm = InstObjParams(name, Name + 'Imm', 'MemImm', code,
+                opt_flags, ("ea_code", addrCalcImm),
+                ("load", load), ("store", store))
+        header_output = BasicDeclare.subst(iop) + BasicDeclare.subst(iop_imm)
+        decoder_output = BasicConstructor.subst(iop) + BasicConstructor.subst(iop_imm)
+        decode_block = ROrImmDecode.subst(iop)
+        exec_output = MemExecute.subst(iop) + MemExecute.subst(iop_imm)
+        return (header_output, decoder_output, exec_output, decode_block)
 }};
 
-def format Cas(code, *opt_flags) {{
-        orig_code = code
-        cblk = CodeBlock(code)
-        iop = InstObjParams(name, Name, 'SparcStaticInst', cblk, opt_flags)
-        header_output = BasicDeclare.subst(iop)
-        decoder_output = BasicConstructor.subst(iop)
-        decode_block = BasicDecodeWithMnemonic.subst(iop)
-        exec_output = MemExecute.subst(iop)
-        exec_output.replace('ea_code', 'EA = R1;');
+def format Load(code, width, *opt_flags) {{
+        (header_output,
+         decoder_output,
+         exec_output,
+         decode_block) = doMemFormat(code,
+             loadString % {"width":width}, '', name, Name, opt_flags)
+}};
+
+def format Store(code, width, *opt_flags) {{
+        (header_output,
+         decoder_output,
+         exec_output,
+         decode_block) = doMemFormat(code, '',
+             storeString % {"width":width}, name, Name, opt_flags)
+}};
+
+def format LoadStore(code, width, *opt_flags) {{
+        (header_output,
+         decoder_output,
+         exec_output,
+         decode_block) = doMemFormat(code,
+             loadString % {"width":width}, storeString % {"width":width},
+             name, Name, opt_flags)
 }};

@@ -36,7 +36,6 @@
 #include "cpu/base.hh"
 #include "cpu/cpu_exec_context.hh"
 #include "cpu/exec_context.hh"
-#include "cpu/fast/cpu.hh"
 #include "kern/kernel_stats.hh"
 #include "sim/debug.hh"
 #include "sim/sim_events.hh"
@@ -134,7 +133,7 @@ AlphaISA::zeroRegisters(CPU *cpu)
     // (no longer very clean due to the change in setIntReg() in the
     // cpu model.  Consider changing later.)
     cpu->cpuXC->setIntReg(ZeroReg, 0);
-    cpu->cpuXC->setFloatRegDouble(ZeroReg, 0.0);
+    cpu->cpuXC->setFloatReg(ZeroReg, 0.0);
 }
 
 Fault
@@ -542,10 +541,10 @@ AlphaISA::MiscRegFile::setIpr(int idx, uint64_t val, ExecContext *xc)
 }
 
 void
-AlphaISA::MiscRegFile::copyIprs(ExecContext *xc)
+AlphaISA::copyIprs(ExecContext *src, ExecContext *dest)
 {
     for (int i = IPR_Base_DepTag; i < NumInternalProcRegs; ++i) {
-        ipr[i] = xc->readMiscReg(i);
+        dest->setMiscReg(i, src->readMiscReg(i));
     }
 }
 
@@ -574,13 +573,5 @@ CPUExecContext::simPalCheck(int palFunc)
 
     return true;
 }
-
-//Forward instantiation for FastCPU object
-template
-void AlphaISA::processInterrupts(FastCPU *xc);
-
-//Forward instantiation for FastCPU object
-template
-void AlphaISA::zeroRegisters(FastCPU *xc);
 
 #endif // FULL_SYSTEM

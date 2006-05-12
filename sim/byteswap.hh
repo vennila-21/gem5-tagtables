@@ -38,6 +38,10 @@
 // This lets us figure out what the byte order of the host system is
 #if defined(linux)
 #include <endian.h>
+// If this is a linux system, lets used the optimized definitions if they exist.
+// If one doesn't exist, we pretty much get what is listed below, so it all
+// works out
+#include <byteswap.h>
 #else
 #include <machine/endian.h>
 #endif
@@ -47,6 +51,9 @@
 static inline uint64_t
 swap_byte64(uint64_t x)
 {
+#if defined(linux)
+    return bswap_64(x);
+#else
     return  (uint64_t)((((uint64_t)(x) & 0xff) << 56) |
             ((uint64_t)(x) & 0xff00ULL) << 40 |
             ((uint64_t)(x) & 0xff0000ULL) << 24 |
@@ -55,22 +62,30 @@ swap_byte64(uint64_t x)
             ((uint64_t)(x) & 0xff0000000000ULL) >> 24 |
             ((uint64_t)(x) & 0xff000000000000ULL) >> 40 |
             ((uint64_t)(x) & 0xff00000000000000ULL) >> 56) ;
+#endif
 }
 
 static inline uint32_t
 swap_byte32(uint32_t x)
 {
+#if defined(linux)
+    return bswap_32(x);
+#else
     return  (uint32_t)(((uint32_t)(x) & 0xff) << 24 |
             ((uint32_t)(x) & 0xff00) << 8 | ((uint32_t)(x) & 0xff0000) >> 8 |
             ((uint32_t)(x) & 0xff000000) >> 24);
-
+#endif
 }
 
 static inline uint16_t
 swap_byte16(uint16_t x)
 {
+#if defined(linux)
+    return bswap_16(x);
+#else
     return (uint16_t)(((uint16_t)(x) & 0xff) << 8 |
                       ((uint16_t)(x) & 0xff00) >> 8);
+#endif
 }
 
 //This lets the compiler figure out how to call the swap_byte functions above
@@ -79,7 +94,9 @@ static inline uint64_t swap_byte(uint64_t x) {return swap_byte64(x);}
 static inline int64_t swap_byte(int64_t x) {return swap_byte64((uint64_t)x);}
 static inline uint32_t swap_byte(uint32_t x) {return swap_byte32(x);}
 static inline int32_t swap_byte(int32_t x) {return swap_byte32((uint32_t)x);}
-#if defined(__APPLE__)
+//This is to prevent the following two functions from compiling on
+//64bit machines. It won't detect everything, so it should be changed.
+#ifndef __x86_64__
 static inline long swap_byte(long x) {return swap_byte32((long)x);}
 static inline unsigned long swap_byte(unsigned long x)
                                 { return swap_byte32((unsigned long)x);}

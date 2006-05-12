@@ -1,5 +1,3 @@
-#! /usr/bin/env python
-
 # Copyright (c) 2003-2005 The Regents of The University of Michigan
 # All rights reserved.
 #
@@ -162,13 +160,12 @@ def t_CPPDIRECTIVE(t):
 
 def t_NEWFILE(t):
     r'^\#\#newfile\s+"[\w/.-]*"'
-    global fileNameStack
-    fileNameStack.append((t.value[11:-1], t.lineno))
+    fileNameStack.push((t.value[11:-1], t.lineno))
     t.lineno = 0
 
 def t_ENDFILE(t):
     r'^\#\#endfile'
-    (filename, t.lineno) = fileNameStack.pop()
+    (old_filename, t.lineno) = fileNameStack.pop()
 
 #
 # The functions t_NEWLINE, t_ignore, and t_error are
@@ -698,7 +695,7 @@ def p_error(t):
     if t:
         error(t.lineno, "syntax error at '%s'" % t.value)
     else:
-        error_bt(0, "unknown syntax error")
+        error(0, "unknown syntax error", True)
 
 # END OF GRAMMAR RULES
 #
@@ -896,6 +893,12 @@ formatStack = Stack(NoFormat())
 # The global default case stack.
 defaultStack = Stack( None )
 
+# Global stack that tracks current file and line number.
+# Each element is a tuple (filename, lineno) that records the
+# *current* filename and the line number in the *previous* file where
+# it was included.
+fileNameStack = Stack()
+
 ###################
 # Utility functions
 
@@ -932,25 +935,22 @@ def fixPythonIndentation(s):
     return s
 
 # Error handler.  Just call exit.  Output formatted to work under
-# Emacs compile-mode.  This function should be called when errors due
-# to user input are detected (as opposed to parser bugs).
-def error(lineno, string):
+# Emacs compile-mode.  Optional 'print_traceback' arg, if set to True,
+# prints a Python stack backtrace too (can be handy when trying to
+# debug the parser itself).
+def error(lineno, string, print_traceback = False):
     spaces = ""
     for (filename, line) in fileNameStack[0:-1]:
-        print spaces + "In file included from " + filename
+        print spaces + "In file included from " + filename + ":"
         spaces += "  "
-    # Uncomment the following line to get a Python stack backtrace for
-    # these errors too.  Can be handy when trying to debug the parser.
-    # traceback.print_exc()
-    sys.exit(spaces + "%s:%d: %s" % (fileNameStack[-1][0], lineno, string))
-
-# Like error(), but include a Python stack backtrace (for processing
-# Python exceptions).  This function should be called for errors that
-# appear to be bugs in the parser itself.
-def error_bt(lineno, string):
-    traceback.print_exc()
-    print >> sys.stderr, "%s:%d: %s" % (input_filename, lineno, string)
-    sys.exit(1)
+    # Print a Python stack backtrace if requested.
+    if (print_traceback):
+        traceback.print_exc()
+    if lineno != 0:
+        line_str = "%d:" % lineno
+    else:
+        line_str = ""
+    sys.exit(spaces + "%s:%s %s" % (fileNameStack[-1][0], line_str, string))
 
 
 #####################################################################
@@ -1070,7 +1070,7 @@ def buildOperandTypeMap(userDict, lineno):
             elif size == 64:
                 ctype = 'double'
         if ctype == '':
-            error(0, 'Unrecognized type description "%s" in userDict')
+            error(lineno, 'Unrecognized type description "%s" in userDict')
         operandTypeMap[ext] = (size, ctype, is_signed)
 
 #
@@ -1217,16 +1217,27 @@ class FloatRegOperand(Operand):
 
     def makeRead(self):
         bit_select = 0
+        width = 0;
         if (self.ctype == 'float'):
-            func = 'readFloatRegSingle'
+            func = 'readFloatReg'
+            width = 32;
         elif (self.ctype == 'double'):
-            func = 'readFloatRegDouble'
+            func = 'readFloatReg'
+            width = 64;
         else:
-            func = 'readFloatRegInt'
+            func = 'readFloatRegBits'
+            if (self.ctype == 'uint32_t'):
+                width = 32;
+            elif (self.ctype == 'uint64_t'):
+                width = 64;
             if (self.size != self.dflt_size):
                 bit_select = 1
-        base = 'xc->%s(this, %d)' % \
-               (func, self.src_reg_idx)
+        if width:
+            base = 'xc->%s(this, %d, %d)' % \
+                   (func, self.src_reg_idx, width)
+        else:
+            base = 'xc->%s(this, %d)' % \
+                   (func, self.src_reg_idx)
         if bit_select:
             return '%s = bits(%s, %d, 0);\n' % \
                    (self.base_name, base, self.size-1)
@@ -1236,21 +1247,34 @@ class FloatRegOperand(Operand):
     def makeWrite(self):
         final_val = self.base_name
         final_ctype = self.ctype
+        widthSpecifier = ''
+        width = 0
         if (self.ctype == 'float'):
-            func = 'setFloatRegSingle'
+            width = 32
+            func = 'setFloatReg'
         elif (self.ctype == 'double'):
-            func = 'setFloatRegDouble'
+            width = 64
+            func = 'setFloatReg'
+        elif (self.ctype == 'uint32_t'):
+            func = 'setFloatRegBits'
+            width = 32
+        elif (self.ctype == 'uint64_t'):
+            func = 'setFloatRegBits'
+            width = 64
         else:
-            func = 'setFloatRegInt'
+            func = 'setFloatRegBits'
             final_ctype = 'uint%d_t' % self.dflt_size
             if (self.size != self.dflt_size and self.is_signed):
                 final_val = 'sext<%d>(%s)' % (self.size, self.base_name)
+        if width:
+            widthSpecifier = ', %d' % width
         wb = '''
         {
             %s final_val = %s;
-            xc->%s(this, %d, final_val);\n
+            xc->%s(this, %d, final_val%s);\n
             if (traceData) { traceData->setData(final_val); }
-        }''' % (final_ctype, final_val, func, self.dest_reg_idx)
+        }''' % (final_ctype, final_val, func, self.dest_reg_idx,
+                widthSpecifier)
         return wb
 
 class ControlRegOperand(Operand):
@@ -1320,7 +1344,7 @@ class NPCOperand(Operand):
         return ''
 
     def makeRead(self):
-        return '%s = xc->readPC() + 4;\n' % self.base_name
+        return '%s = xc->readNextPC();\n' % self.base_name
 
     def makeWrite(self):
         return 'xc->setNextPC(%s);\n' % self.base_name
@@ -1330,7 +1354,7 @@ class NNPCOperand(Operand):
         return ''
 
     def makeRead(self):
-        return '%s = xc->readPC() + 8;\n' % self.base_name
+        return '%s = xc->readNextNPC();\n' % self.base_name
 
     def makeWrite(self):
         return 'xc->setNextNPC(%s);\n' % self.base_name
@@ -1604,13 +1628,27 @@ opClassRE = re.compile(r'.*Op|No_OpClass')
 
 class InstObjParams:
     def __init__(self, mnem, class_name, base_class = '',
-                 code_block = None, opt_args = []):
+                 code = None, opt_args = [], *extras):
         self.mnemonic = mnem
         self.class_name = class_name
         self.base_class = base_class
-        if code_block:
-            for code_attr in code_block.__dict__.keys():
-                setattr(self, code_attr, getattr(code_block, code_attr))
+        if code:
+            #If the user already made a CodeBlock, pick the parts from it
+            if isinstance(code, CodeBlock):
+                origCode = code.orig_code
+                codeBlock = code
+            else:
+                origCode = code
+                codeBlock = CodeBlock(code)
+            compositeCode = '\n'.join([origCode] +
+                    [pair[1] for pair in extras])
+            compositeBlock = CodeBlock(compositeCode)
+            for code_attr in compositeBlock.__dict__.keys():
+                setattr(self, code_attr, getattr(compositeBlock, code_attr))
+            for (key, snippet) in extras:
+                setattr(self, key, CodeBlock(snippet).code)
+            self.code = codeBlock.code
+            self.orig_code = origCode
         else:
             self.constructor = ''
             self.flags = []
@@ -1687,47 +1725,47 @@ def update_if_needed(file, contents):
         f.write(contents)
         f.close()
 
-# This regular expression matches include directives
+# This regular expression matches '##include' directives
 includeRE = re.compile(r'^\s*##include\s+"(?P<filename>[\w/.-]*)".*$',
                        re.MULTILINE)
 
-def preprocess_isa_desc(isa_desc):
+# Function to replace a matched '##include' directive with the
+# contents of the specified file (with nested ##includes replaced
+# recursively).  'matchobj' is an re match object (from a match of
+# includeRE) and 'dirname' is the directory relative to which the file
+# path should be resolved.
+def replace_include(matchobj, dirname):
+    fname = matchobj.group('filename')
+    full_fname = os.path.normpath(os.path.join(dirname, fname))
+    contents = '##newfile "%s"\n%s\n##endfile\n' % \
+               (full_fname, read_and_flatten(full_fname))
+    return contents
+
+# Read a file and recursively flatten nested '##include' files.
+def read_and_flatten(filename):
+    current_dir = os.path.dirname(filename)
+    try:
+        contents = open(filename).read()
+    except IOError:
+        error(0, 'Error including file "%s"' % filename)
+    fileNameStack.push((filename, 0))
     # Find any includes and include them
-    pos = 0
-    while 1:
-        m = includeRE.search(isa_desc, pos)
-        if not m:
-            break
-        filename = m.group('filename')
-        print 'Including file "%s"' % filename
-        try:
-            isa_desc = isa_desc[:m.start()] + \
-                       '##newfile "' + filename + '"\n' + \
-                       open(filename).read() + \
-                       '##endfile\n' + \
-                       isa_desc[m.end():]
-        except IOError:
-            error(0, 'Error including file "%s"' % (filename))
-        pos = m.start()
-    return isa_desc
+    contents = includeRE.sub(lambda m: replace_include(m, current_dir),
+                             contents)
+    fileNameStack.pop()
+    return contents
 
 #
 # Read in and parse the ISA description.
 #
 def parse_isa_desc(isa_desc_file, output_dir):
-    # set a global var for the input filename... used in error messages
-    global input_filename
-    input_filename = isa_desc_file
-    global fileNameStack
-    fileNameStack = [(input_filename, 1)]
+    # Read file and (recursively) all included files into a string.
+    # PLY requires that the input be in a single string so we have to
+    # do this up front.
+    isa_desc = read_and_flatten(isa_desc_file)
 
-    # Suck the ISA description file in.
-    input = open(isa_desc_file)
-    isa_desc = input.read()
-    input.close()
-
-    # Perform Preprocessing
-    isa_desc = preprocess_isa_desc(isa_desc)
+    # Initialize filename stack with outer file.
+    fileNameStack.push((isa_desc_file, 0))
 
     # Parse it.
     (isa_name, namespace, global_code, namespace_code) = yacc.parse(isa_desc)

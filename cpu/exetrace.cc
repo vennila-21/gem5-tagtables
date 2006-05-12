@@ -29,14 +29,12 @@
 #include <fstream>
 #include <iomanip>
 
-#include "sim/param.hh"
-#include "encumbered/cpu/full/dyn_inst.hh"
-#include "encumbered/cpu/full/spec_state.hh"
-#include "encumbered/cpu/full/issue.hh"
-#include "cpu/exetrace.hh"
 #include "base/loader/symtab.hh"
 #include "cpu/base.hh"
+#include "cpu/exetrace.hh"
 #include "cpu/static_inst.hh"
+#include "sim/param.hh"
+#include "sim/system.hh"
 
 using namespace std;
 
@@ -130,10 +128,11 @@ Trace::InstRecord::dump(ostream &outs)
             outs << " A=0x" << hex << addr;
 
         if (flags[PRINT_INT_REGS] && regs_valid) {
-            for (int i = 0; i < 32;)
+            for (int i = 0; i < TheISA::NumIntRegs;)
                 for (int j = i + 1; i <= j; i++)
-                    ccprintf(outs, "r%02d = %#018x%s", i, iregs->regs[i],
-                             ((i == j) ? "\n" : "    "));
+                    ccprintf(outs, "r%02d = %#018x%s", i,
+                            iregs->regs.readReg(i),
+                            ((i == j) ? "\n" : "    "));
             outs << "\n";
         }
 

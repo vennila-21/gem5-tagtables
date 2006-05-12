@@ -2,13 +2,11 @@ from m5 import *
 class BaseCPU(SimObject):
     type = 'BaseCPU'
     abstract = True
-    icache = Param.BaseMem(NULL, "L1 instruction cache object")
-    dcache = Param.BaseMem(NULL, "L1 data cache object")
+    mem = Param.MemObject("memory")
 
     if build_env['FULL_SYSTEM']:
         dtb = Param.AlphaDTB("Data TLB")
         itb = Param.AlphaITB("Instruction TLB")
-        mem = Param.FunctionalMemory("memory")
         system = Param.System(Parent.any, "system object")
         cpu_id = Param.Int(-1, "CPU identifier")
     else:

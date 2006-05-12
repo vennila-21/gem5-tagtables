@@ -191,12 +191,8 @@ class IdeDisk : public SimObject
   protected:
     /** The IDE controller for this disk. */
     IdeController *ctrl;
-    /** The DMA interface to use for transfers */
-    DMAInterface<Bus> *dmaInterface;
     /** The image that contains the data of this disk. */
     DiskImage *image;
-    /** Pointer to physical memory for DMA transfers */
-    PhysicalMemory *physmem;
 
   protected:
     /** The disk delay in microseconds. */
@@ -231,8 +227,6 @@ class IdeDisk : public SimObject
     uint32_t curPrdAddr;
     /** PRD entry */
     PrdTableEntry curPrd;
-    /** Number of bytes transfered by DMA interface for current transfer */
-    uint32_t dmaInterfaceBytes;
     /** Device ID (master=0/slave=1) */
     int devID;
     /** Interrupt pending */
@@ -250,12 +244,10 @@ class IdeDisk : public SimObject
      * Create and initialize this Disk.
      * @param name The name of this disk.
      * @param img The disk image of this disk.
-     * @param phys Pointer to physical memory
      * @param id The disk ID (master=0/slave=1)
      * @param disk_delay The disk delay in milliseconds
      */
-    IdeDisk(const std::string &name, DiskImage *img, PhysicalMemory *phys,
-            int id, Tick disk_delay);
+    IdeDisk(const std::string &name, DiskImage *img, int id, Tick disk_delay);
 
     /**
      * Delete the data buffer.
@@ -277,10 +269,9 @@ class IdeDisk : public SimObject
      * Set the controller for this device
      * @param c The IDE controller
      */
-    void setController(IdeController *c, DMAInterface<Bus> *dmaIntr) {
+    void setController(IdeController *c) {
         if (ctrl) panic("Cannot change the controller once set!\n");
         ctrl = c;
-        dmaInterface = dmaIntr;
     }
 
     // Device register read/write
@@ -303,11 +294,17 @@ class IdeDisk : public SimObject
     friend class EventWrapper<IdeDisk, &IdeDisk::doDmaTransfer>;
     EventWrapper<IdeDisk, &IdeDisk::doDmaTransfer> dmaTransferEvent;
 
+    void doDmaDataRead();
+
     void doDmaRead();
+    ChunkGenerator *dmaReadCG;
     friend class EventWrapper<IdeDisk, &IdeDisk::doDmaRead>;
     EventWrapper<IdeDisk, &IdeDisk::doDmaRead> dmaReadWaitEvent;
 
+    void doDmaDataWrite();
+
     void doDmaWrite();
+    ChunkGenerator *dmaWriteCG;
     friend class EventWrapper<IdeDisk, &IdeDisk::doDmaWrite>;
     EventWrapper<IdeDisk, &IdeDisk::doDmaWrite> dmaWriteWaitEvent;
 
@@ -352,8 +349,6 @@ class IdeDisk : public SimObject
     }
 
     inline Addr pciToDma(Addr pciAddr);
-
-    uint32_t bytesInDmaPage(Addr curAddr, uint32_t bytesLeft);
 
     /**
      * Serialize this object to the given output stream.

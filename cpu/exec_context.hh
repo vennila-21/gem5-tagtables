@@ -30,21 +30,21 @@
 #define __CPU_EXEC_CONTEXT_HH__
 
 #include "config/full_system.hh"
-#include "mem/mem_req.hh"
+#include "mem/request.hh"
 #include "sim/faults.hh"
 #include "sim/host.hh"
 #include "sim/serialize.hh"
 #include "sim/byteswap.hh"
 
-// forward declaration: see functional_memory.hh
 // @todo: Figure out a more architecture independent way to obtain the ITB and
 // DTB pointers.
 class AlphaDTB;
 class AlphaITB;
 class BaseCPU;
 class Event;
-class FunctionalMemory;
-class PhysicalMemory;
+class TranslatingPort;
+class FunctionalPort;
+class VirtualPort;
 class Process;
 class System;
 
@@ -54,6 +54,8 @@ class ExecContext
     typedef TheISA::RegFile RegFile;
     typedef TheISA::MachInst MachInst;
     typedef TheISA::IntReg IntReg;
+    typedef TheISA::FloatReg FloatReg;
+    typedef TheISA::FloatRegBits FloatRegBits;
     typedef TheISA::MiscRegFile MiscRegFile;
     typedef TheISA::MiscReg MiscReg;
   public:
@@ -87,17 +89,21 @@ class ExecContext
 
     virtual int readCpuId() = 0;
 
-    virtual FunctionalMemory *getMemPtr() = 0;
-
 #if FULL_SYSTEM
     virtual System *getSystemPtr() = 0;
-
-    virtual PhysicalMemory *getPhysMemPtr() = 0;
 
     virtual AlphaITB *getITBPtr() = 0;
 
     virtual AlphaDTB * getDTBPtr() = 0;
+
+    virtual FunctionalPort *getPhysPort() = 0;
+
+    virtual VirtualPort *getVirtPort(ExecContext *xc = NULL) = 0;
+
+    virtual void delVirtPort(VirtualPort *vp) = 0;
 #else
+    virtual TranslatingPort *getMemPort() = 0;
+
     virtual Process *getProcessPtr() = 0;
 #endif
 
@@ -143,16 +149,14 @@ class ExecContext
 
     virtual int getThreadNum() = 0;
 
-    virtual bool validInstAddr(Addr addr) = 0;
-    virtual bool validDataAddr(Addr addr) = 0;
     virtual int getInstAsid() = 0;
     virtual int getDataAsid() = 0;
 
-    virtual Fault translateInstReq(MemReqPtr &req) = 0;
+    virtual Fault translateInstReq(RequestPtr &req) = 0;
 
-    virtual Fault translateDataReadReq(MemReqPtr &req) = 0;
+    virtual Fault translateDataReadReq(RequestPtr &req) = 0;
 
-    virtual Fault translateDataWriteReq(MemReqPtr &req) = 0;
+    virtual Fault translateDataWriteReq(RequestPtr &req) = 0;
 
     // Also somewhat obnoxious.  Really only used for the TLB fault.
     // However, may be quite useful in SPARC.
@@ -167,19 +171,23 @@ class ExecContext
     //
     virtual uint64_t readIntReg(int reg_idx) = 0;
 
-    virtual float readFloatRegSingle(int reg_idx) = 0;
+    virtual FloatReg readFloatReg(int reg_idx, int width) = 0;
 
-    virtual double readFloatRegDouble(int reg_idx) = 0;
+    virtual FloatReg readFloatReg(int reg_idx) = 0;
 
-    virtual uint64_t readFloatRegInt(int reg_idx) = 0;
+    virtual FloatRegBits readFloatRegBits(int reg_idx, int width) = 0;
+
+    virtual FloatRegBits readFloatRegBits(int reg_idx) = 0;
 
     virtual void setIntReg(int reg_idx, uint64_t val) = 0;
 
-    virtual void setFloatRegSingle(int reg_idx, float val) = 0;
+    virtual void setFloatReg(int reg_idx, FloatReg val, int width) = 0;
 
-    virtual void setFloatRegDouble(int reg_idx, double val) = 0;
+    virtual void setFloatReg(int reg_idx, FloatReg val) = 0;
 
-    virtual void setFloatRegInt(int reg_idx, uint64_t val) = 0;
+    virtual void setFloatRegBits(int reg_idx, FloatRegBits val) = 0;
+
+    virtual void setFloatRegBits(int reg_idx, FloatRegBits val, int width) = 0;
 
     virtual uint64_t readPC() = 0;
 
@@ -188,6 +196,10 @@ class ExecContext
     virtual uint64_t readNextPC() = 0;
 
     virtual void setNextPC(uint64_t val) = 0;
+
+    virtual uint64_t readNextNPC() = 0;
+
+    virtual void setNextNPC(uint64_t val) = 0;
 
     virtual MiscReg readMiscReg(int misc_reg) = 0;
 
@@ -222,13 +234,16 @@ class ExecContext
 
     virtual void setSyscallReturn(SyscallReturn return_value) = 0;
 
-    virtual void syscall() = 0;
+    virtual void syscall(int64_t callnum) = 0;
 
     // Same with st cond failures.
     virtual Counter readFuncExeInst() = 0;
 
     virtual void setFuncExeInst(Counter new_val) = 0;
 #endif
+
+    virtual void changeRegFileContext(RegFile::ContextParam param,
+            RegFile::ContextVal val) = 0;
 };
 
 template <class XC>
@@ -249,17 +264,21 @@ class ProxyExecContext : public ExecContext
 
     int readCpuId() { return actualXC->readCpuId(); }
 
-    FunctionalMemory *getMemPtr() { return actualXC->getMemPtr(); }
-
 #if FULL_SYSTEM
     System *getSystemPtr() { return actualXC->getSystemPtr(); }
-
-    PhysicalMemory *getPhysMemPtr() { return actualXC->getPhysMemPtr(); }
 
     AlphaITB *getITBPtr() { return actualXC->getITBPtr(); }
 
     AlphaDTB *getDTBPtr() { return actualXC->getDTBPtr(); }
+
+    FunctionalPort *getPhysPort() { return actualXC->getPhysPort(); }
+
+    VirtualPort *getVirtPort(ExecContext *xc = NULL) { return actualXC->getVirtPort(xc); }
+
+    void delVirtPort(VirtualPort *vp) { return actualXC->delVirtPort(vp); }
 #else
+    TranslatingPort *getMemPort() { return actualXC->getMemPort(); }
+
     Process *getProcessPtr() { return actualXC->getProcessPtr(); }
 #endif
 
@@ -305,18 +324,16 @@ class ProxyExecContext : public ExecContext
 
     int getThreadNum() { return actualXC->getThreadNum(); }
 
-    bool validInstAddr(Addr addr) { return actualXC->validInstAddr(addr); }
-    bool validDataAddr(Addr addr) { return actualXC->validDataAddr(addr); }
     int getInstAsid() { return actualXC->getInstAsid(); }
     int getDataAsid() { return actualXC->getDataAsid(); }
 
-    Fault translateInstReq(MemReqPtr &req)
+    Fault translateInstReq(RequestPtr &req)
     { return actualXC->translateInstReq(req); }
 
-    Fault translateDataReadReq(MemReqPtr &req)
+    Fault translateDataReadReq(RequestPtr &req)
     { return actualXC->translateDataReadReq(req); }
 
-    Fault translateDataWriteReq(MemReqPtr &req)
+    Fault translateDataWriteReq(RequestPtr &req)
     { return actualXC->translateDataWriteReq(req); }
 
     // @todo: Do I need this?
@@ -333,26 +350,32 @@ class ProxyExecContext : public ExecContext
     uint64_t readIntReg(int reg_idx)
     { return actualXC->readIntReg(reg_idx); }
 
-    float readFloatRegSingle(int reg_idx)
-    { return actualXC->readFloatRegSingle(reg_idx); }
+    FloatReg readFloatReg(int reg_idx, int width)
+    { return actualXC->readFloatReg(reg_idx, width); }
 
-    double readFloatRegDouble(int reg_idx)
-    { return actualXC->readFloatRegDouble(reg_idx); }
+    FloatReg readFloatReg(int reg_idx)
+    { return actualXC->readFloatReg(reg_idx); }
 
-    uint64_t readFloatRegInt(int reg_idx)
-    { return actualXC->readFloatRegInt(reg_idx); }
+    FloatRegBits readFloatRegBits(int reg_idx, int width)
+    { return actualXC->readFloatRegBits(reg_idx, width); }
+
+    FloatRegBits readFloatRegBits(int reg_idx)
+    { return actualXC->readFloatRegBits(reg_idx); }
 
     void setIntReg(int reg_idx, uint64_t val)
     { actualXC->setIntReg(reg_idx, val); }
 
-    void setFloatRegSingle(int reg_idx, float val)
-    { actualXC->setFloatRegSingle(reg_idx, val); }
+    void setFloatReg(int reg_idx, FloatReg val, int width)
+    { actualXC->setFloatReg(reg_idx, val, width); }
 
-    void setFloatRegDouble(int reg_idx, double val)
-    { actualXC->setFloatRegDouble(reg_idx, val); }
+    void setFloatReg(int reg_idx, FloatReg val)
+    { actualXC->setFloatReg(reg_idx, val); }
 
-    void setFloatRegInt(int reg_idx, uint64_t val)
-    { actualXC->setFloatRegInt(reg_idx, val); }
+    void setFloatRegBits(int reg_idx, FloatRegBits val, int width)
+    { actualXC->setFloatRegBits(reg_idx, val, width); }
+
+    void setFloatRegBits(int reg_idx, FloatRegBits val)
+    { actualXC->setFloatRegBits(reg_idx, val); }
 
     uint64_t readPC() { return actualXC->readPC(); }
 
@@ -361,6 +384,10 @@ class ProxyExecContext : public ExecContext
     uint64_t readNextPC() { return actualXC->readNextPC(); }
 
     void setNextPC(uint64_t val) { actualXC->setNextPC(val); }
+
+    uint64_t readNextNPC() { return actualXC->readNextNPC(); }
+
+    void setNextNPC(uint64_t val) { actualXC->setNextNPC(val); }
 
     MiscReg readMiscReg(int misc_reg)
     { return actualXC->readMiscReg(misc_reg); }
@@ -405,13 +432,19 @@ class ProxyExecContext : public ExecContext
     void setSyscallReturn(SyscallReturn return_value)
     { actualXC->setSyscallReturn(return_value); }
 
-    void syscall() { actualXC->syscall(); }
+    void syscall(int64_t callnum) { actualXC->syscall(callnum); }
 
     Counter readFuncExeInst() { return actualXC->readFuncExeInst(); }
 
     void setFuncExeInst(Counter new_val)
     { return actualXC->setFuncExeInst(new_val); }
 #endif
+
+    void changeRegFileContext(RegFile::ContextParam param,
+            RegFile::ContextVal val)
+    {
+        actualXC->changeRegFileContext(param, val);
+    }
 };
 
 #endif

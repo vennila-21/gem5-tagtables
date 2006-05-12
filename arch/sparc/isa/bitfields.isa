@@ -7,13 +7,11 @@
 // simply defined alphabetically
 
 def bitfield A		<29>;
-def bitfield CC02	<20>;
-def bitfield CC03	<25>;
-def bitfield CC04	<11>;
-def bitfield CC12	<21>;
-def bitfield CC13	<26>;
-def bitfield CC14	<12>;
-def bitfield CC2	<18>;
+def bitfield BPCC       <21:20>; // for BPcc & FBPcc
+def bitfield FCMPCC     <26:56>; // for FCMP & FCMPEa
+def bitfield FMOVCC     <13:11>; // for FMOVcc
+def bitfield CC         <12:11>; // for MOVcc & Tcc
+def bitfield MOVCC3     <18>; // also for MOVcc
 def bitfield CMASK	<6:4>;
 def bitfield COND2	<28:25>;
 def bitfield COND4	<17:14>;
@@ -46,5 +44,5 @@ def bitfield SHCNT64	<5:0>;
 def bitfield SIMM10	<9:0>;
 def bitfield SIMM11	<10:0>;
 def bitfield SIMM13	<12:0>;
-def bitfield SW_TRAP	<6:0>;
+def bitfield SW_TRAP	<7:0>;
 def bitfield X		<12>;

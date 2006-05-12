@@ -35,6 +35,7 @@
 #include <sstream>
 #include <string>
 
+#include "arch/utility.hh"
 #include "base/cprintf.hh"
 #include "base/inifile.hh"
 #include "base/loader/symtab.hh"
@@ -53,8 +54,7 @@
 #include "cpu/smt.hh"
 #include "cpu/static_inst.hh"
 #include "kern/kernel_stats.hh"
-#include "mem/base_mem.hh"
-#include "mem/mem_interface.hh"
+#include "mem/packet_impl.hh"
 #include "sim/byteswap.hh"
 #include "sim/builder.hh"
 #include "sim/debug.hh"
@@ -65,20 +65,18 @@
 
 #if FULL_SYSTEM
 #include "base/remote_gdb.hh"
-#include "mem/functional/memory_control.hh"
-#include "mem/functional/physical.hh"
+//#include "mem/functional/memory_control.hh"
+//#include "mem/functional/physical.hh"
 #include "sim/system.hh"
 #include "arch/tlb.hh"
 #include "arch/stacktrace.hh"
 #include "arch/vtophys.hh"
 #else // !FULL_SYSTEM
-#include "mem/functional/functional.hh"
+#include "mem/mem_object.hh"
 #endif // FULL_SYSTEM
 
 using namespace std;
-//The SimpleCPU does alpha only
-using namespace AlphaISA;
-
+using namespace TheISA;
 
 SimpleCPU::TickEvent::TickEvent(SimpleCPU *c, int w)
     : Event(&mainEventQueue, CPU_Tick_Pri), cpu(c), width(w)
@@ -89,6 +87,15 @@ SimpleCPU::TickEvent::TickEvent(SimpleCPU *c, int w)
 void
 SimpleCPU::init()
 {
+    //Create Memory Ports (conect them up)
+    Port *mem_dport = mem->getPort("");
+    dcachePort.setPeer(mem_dport);
+    mem_dport->setPeer(&dcachePort);
+
+    Port *mem_iport = mem->getPort("");
+    icachePort.setPeer(mem_iport);
+    mem_iport->setPeer(&icachePort);
+
     BaseCPU::init();
 #if FULL_SYSTEM
     for (int i = 0; i < execContexts.size(); ++i) {
@@ -116,43 +123,82 @@ SimpleCPU::TickEvent::description()
 }
 
 
-SimpleCPU::CacheCompletionEvent::CacheCompletionEvent(SimpleCPU *_cpu)
-    : Event(&mainEventQueue), cpu(_cpu)
+bool
+SimpleCPU::CpuPort::recvTiming(Packet &pkt)
 {
+    cpu->processResponse(pkt);
+    return true;
 }
 
-void SimpleCPU::CacheCompletionEvent::process()
+Tick
+SimpleCPU::CpuPort::recvAtomic(Packet &pkt)
 {
-    cpu->processCacheCompletion();
+    panic("CPU doesn't expect callback!");
+    return curTick;
 }
 
-const char *
-SimpleCPU::CacheCompletionEvent::description()
+void
+SimpleCPU::CpuPort::recvFunctional(Packet &pkt)
 {
-    return "SimpleCPU cache completion event";
+    panic("CPU doesn't expect callback!");
+}
+
+void
+SimpleCPU::CpuPort::recvStatusChange(Status status)
+{
+    cpu->recvStatusChange(status);
+}
+
+Packet *
+SimpleCPU::CpuPort::recvRetry()
+{
+    return cpu->processRetry();
 }
 
 SimpleCPU::SimpleCPU(Params *p)
-    : BaseCPU(p), tickEvent(this, p->width), cpuXC(NULL),
-      cacheCompletionEvent(this)
+    : BaseCPU(p), mem(p->mem), icachePort(this),
+      dcachePort(this), tickEvent(this, p->width), cpuXC(NULL)
 {
     _status = Idle;
-#if FULL_SYSTEM
-    cpuXC = new CPUExecContext(this, 0, p->system, p->itb, p->dtb, p->mem);
 
+#if FULL_SYSTEM
+    cpuXC = new CPUExecContext(this, 0, p->system, p->itb, p->dtb);
 #else
     cpuXC = new CPUExecContext(this, /* thread_num */ 0, p->process,
-                               /* asid */ 0);
+            /* asid */ 0, mem);
 #endif // !FULL_SYSTEM
+
     xcProxy = cpuXC->getProxy();
 
-    icacheInterface = p->icache_interface;
-    dcacheInterface = p->dcache_interface;
+#if SIMPLE_CPU_MEM_ATOMIC || SIMPLE_CPU_MEM_IMMEDIATE
+    ifetch_req = new Request(true);
+    ifetch_req->setAsid(0);
+    // @todo fix me and get the real cpu iD!!!
+    ifetch_req->setCpuNum(0);
+    ifetch_req->setSize(sizeof(MachInst));
+    ifetch_pkt = new Packet;
+    ifetch_pkt->cmd = Read;
+    ifetch_pkt->dataStatic(&inst);
+    ifetch_pkt->req = ifetch_req;
+    ifetch_pkt->size = sizeof(MachInst);
 
-    memReq = new MemReq();
-    memReq->xc = xcProxy;
-    memReq->asid = 0;
-    memReq->data = new uint8_t[64];
+    data_read_req = new Request(true);
+    // @todo fix me and get the real cpu iD!!!
+    data_read_req->setCpuNum(0);
+    data_read_req->setAsid(0);
+    data_read_pkt = new Packet;
+    data_read_pkt->cmd = Read;
+    data_read_pkt->dataStatic(&dataReg);
+    data_read_pkt->req = data_read_req;
+
+    data_write_req = new Request(true);
+    // @todo fix me and get the real cpu iD!!!
+    data_write_req->setCpuNum(0);
+    data_write_req->setAsid(0);
+    data_write_pkt = new Packet;
+    data_write_pkt->cmd = Write;
+    data_write_pkt->req = data_write_req;
+#endif
 
     numInst = 0;
     startNumInst = 0;
@@ -172,9 +218,9 @@ void
 SimpleCPU::switchOut(Sampler *s)
 {
     sampler = s;
-    if (status() == DcacheMissStall) {
+    if (status() == DcacheWaitResponse) {
         DPRINTF(Sampler,"Outstanding dcache access, waiting for completion\n");
-        _status = DcacheMissSwitch;
+        _status = DcacheWaitSwitch;
     }
     else {
         _status = SwitchedOut;
@@ -287,6 +333,18 @@ SimpleCPU::regStats()
         .prereq(dcacheStallCycles)
         ;
 
+    icacheRetryCycles
+        .name(name() + ".icache_retry_cycles")
+        .desc("ICache total retry cycles")
+        .prereq(icacheRetryCycles)
+        ;
+
+    dcacheRetryCycles
+        .name(name() + ".dcache_retry_cycles")
+        .desc("DCache total retry cycles")
+        .prereq(dcacheRetryCycles)
+        ;
+
     idleFraction = constant(1.0) - notIdleFraction;
 }
 
@@ -308,7 +366,6 @@ SimpleCPU::serialize(ostream &os)
     nameOut(os, csprintf("%s.tickEvent", name()));
     tickEvent.serialize(os);
     nameOut(os, csprintf("%s.cacheCompletionEvent", name()));
-    cacheCompletionEvent.serialize(os);
 }
 
 void
@@ -319,8 +376,6 @@ SimpleCPU::unserialize(Checkpoint *cp, const string &section)
     UNSERIALIZE_SCALAR(inst);
     cpuXC->unserialize(cp, csprintf("%s.xc", section));
     tickEvent.unserialize(cp, csprintf("%s.tickEvent", section));
-    cacheCompletionEvent
-        .unserialize(cp, csprintf("%s.cacheCompletionEvent", section));
 }
 
 void
@@ -331,6 +386,7 @@ change_thread_state(int thread_number, int activate, int priority)
 Fault
 SimpleCPU::copySrcTranslate(Addr src)
 {
+#if 0
     static bool no_warn = true;
     int blk_size = (dcacheInterface) ? dcacheInterface->getBlockSize() : 64;
     // Only support block sizes of 64 atm.
@@ -347,8 +403,7 @@ SimpleCPU::copySrcTranslate(Addr src)
 
     memReq->reset(src & ~(blk_size - 1), blk_size);
 
-    // translate to physical address
-    Fault fault = cpuXC->translateDataReadReq(memReq);
+    // translate to physical address    Fault fault = cpuXC->translateDataReadReq(req);
 
     if (fault == NoFault) {
         cpuXC->copySrcAddr = src;
@@ -360,11 +415,15 @@ SimpleCPU::copySrcTranslate(Addr src)
         cpuXC->copySrcPhysAddr = 0;
     }
     return fault;
+#else
+    return NoFault;
+#endif
 }
 
 Fault
 SimpleCPU::copy(Addr dest)
 {
+#if 0
     static bool no_warn = true;
     int blk_size = (dcacheInterface) ? dcacheInterface->getBlockSize() : 64;
     // Only support block sizes of 64 atm.
@@ -383,7 +442,7 @@ SimpleCPU::copy(Addr dest)
 
     memReq->reset(dest & ~(blk_size -1), blk_size);
     // translate to physical address
-    Fault fault = cpuXC->translateDataWriteReq(memReq);
+    Fault fault = cpuXC->translateDataWriteReq(req);
 
     if (fault == NoFault) {
         Addr dest_addr = memReq->paddr + offset;
@@ -407,6 +466,10 @@ SimpleCPU::copy(Addr dest)
         assert(!fault->isAlignmentFault());
 
     return fault;
+#else
+    panic("copy not implemented");
+    return NoFault;
+#endif
 }
 
 // precise architected memory state accessor macros
@@ -414,22 +477,65 @@ template <class T>
 Fault
 SimpleCPU::read(Addr addr, T &data, unsigned flags)
 {
-    if (status() == DcacheMissStall || status() == DcacheMissSwitch) {
-        Fault fault = cpuXC->read(memReq,data);
+    if (status() == DcacheWaitResponse || status() == DcacheWaitSwitch) {
+//	Fault fault = xc->read(memReq,data);
+        // Not sure what to check for no fault...
+        if (data_read_pkt->result == Success) {
+            data = data_read_pkt->get<T>();
+        }
+
+        if (traceData) {
+            traceData->setAddr(data_read_req->getVaddr());
+        }
+
+        // @todo: Figure out a way to create a Fault from the packet result.
+        return NoFault;
+    }
+
+//    memReq->reset(addr, sizeof(T), flags);
+
+#if SIMPLE_CPU_MEM_TIMING
+    CpuRequest *data_read_req = new Request(true);
+#endif
+
+    data_read_req->setVaddr(addr);
+    data_read_req->setSize(sizeof(T));
+    data_read_req->setFlags(flags);
+    data_read_req->setTime(curTick);
+
+    // translate to physical address
+    Fault fault = cpuXC->translateDataReadReq(data_read_req);
+
+    // Now do the access.
+    if (fault == NoFault) {
+#if SIMPLE_CPU_MEM_TIMING
+        data_read_pkt = new Packet;
+        data_read_pkt->cmd = Read;
+        data_read_pkt->req = data_read_req;
+        data_read_pkt->data = new uint8_t[8];
+#endif
+        data_read_pkt->reset();
+        data_read_pkt->addr = data_read_req->getPaddr();
+        data_read_pkt->size = sizeof(T);
+
+        sendDcacheRequest(data_read_pkt);
+
+#if SIMPLE_CPU_MEM_IMMEDIATE
+        // Need to find a way to not duplicate code above.
+
+        if (data_read_pkt->result == Success) {
+            data = data_read_pkt->get<T>();
+        }
 
         if (traceData) {
             traceData->setAddr(addr);
         }
-        return fault;
+
+        // @todo: Figure out a way to create a Fault from the packet result.
+        return NoFault;
+#endif
     }
-
-    memReq->reset(addr, sizeof(T), flags);
-
-    // translate to physical address
-    Fault fault = cpuXC->translateDataReadReq(memReq);
-
-    // if we have a cache, do cache access too
-    if (fault == NoFault && dcacheInterface) {
+/*
         memReq->cmd = Read;
         memReq->completionEvent = NULL;
         memReq->time = curTick;
@@ -454,8 +560,9 @@ SimpleCPU::read(Addr addr, T &data, unsigned flags)
         fault = cpuXC->read(memReq, data);
 
     }
-
-    if (!dcacheInterface && (memReq->flags & UNCACHEABLE))
+*/
+    // This will need a new way to tell if it has a dcache attached.
+    if (data_read_req->getFlags() & UNCACHEABLE)
         recordEvent("Uncached Read");
 
     return fault;
@@ -508,11 +615,33 @@ template <class T>
 Fault
 SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 {
-    memReq->reset(addr, sizeof(T), flags);
+    data_write_req->setVaddr(addr);
+    data_write_req->setTime(curTick);
+    data_write_req->setSize(sizeof(T));
+    data_write_req->setFlags(flags);
 
     // translate to physical address
-    Fault fault = cpuXC->translateDataWriteReq(memReq);
+    Fault fault = cpuXC->translateDataWriteReq(data_write_req);
+    // Now do the access.
+    if (fault == NoFault) {
+#if SIMPLE_CPU_MEM_TIMING
+        data_write_pkt = new Packet;
+        data_write_pkt->cmd = Write;
+        data_write_pkt->req = data_write_req;
+        data_write_pkt->allocate();
+        data_write_pkt->set(data);
+#else
+        data_write_pkt->reset();
+        data = htog(data);
+        data_write_pkt->dataStatic(&data);
+#endif
+        data_write_pkt->addr = data_write_req->getPaddr();
+        data_write_pkt->size = sizeof(T);
 
+        sendDcacheRequest(data_write_pkt);
+    }
+
+/*
     // do functional access
     if (fault == NoFault)
         fault = cpuXC->write(memReq, data);
@@ -535,13 +664,21 @@ SimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
             _status = DcacheMissStall;
         }
     }
-
+*/
     if (res && (fault == NoFault))
-        *res = memReq->result;
+        *res = data_write_pkt->result;
 
-    if (!dcacheInterface && (memReq->flags & UNCACHEABLE))
+    // This will need a new way to tell if it's hooked up to a cache or not.
+    if (data_write_req->getFlags() & UNCACHEABLE)
         recordEvent("Uncached Write");
 
+    // @todo this is a hack and only works on uniprocessor systems some one else
+    // can implement LL/SC.
+    if (data_write_req->getFlags() & LOCKED)
+        *res = 1;
+
+    // If the write needs to have a fault on the access, consider calling
+    // changeStatus() and changing it to "bad addr write" or something.
     return fault;
 }
 
@@ -597,41 +734,157 @@ SimpleCPU::dbg_vtophys(Addr addr)
 #endif // FULL_SYSTEM
 
 void
-SimpleCPU::processCacheCompletion()
+SimpleCPU::sendIcacheRequest(Packet *pkt)
 {
+    assert(!tickEvent.scheduled());
+#if SIMPLE_CPU_MEM_TIMING
+    retry_pkt = pkt;
+    bool success = icachePort.sendTiming(*pkt);
+
+    unscheduleTickEvent();
+
+    lastIcacheStall = curTick;
+
+    if (!success) {
+        // Need to wait for retry
+        _status = IcacheRetry;
+    } else {
+        // Need to wait for cache to respond
+        _status = IcacheWaitResponse;
+    }
+#elif SIMPLE_CPU_MEM_ATOMIC
+    Tick latency = icachePort.sendAtomic(*pkt);
+
+    unscheduleTickEvent();
+    scheduleTickEvent(latency);
+
+    // Note that Icache miss cycles will be incorrect.  Unless
+    // we check the status of the packet sent (is this valid?),
+    // we won't know if the latency is a hit or a miss.
+    icacheStallCycles += latency;
+
+    _status = IcacheAccessComplete;
+#elif SIMPLE_CPU_MEM_IMMEDIATE
+    icachePort.sendAtomic(*pkt);
+#else
+#error "SimpleCPU has no mem model set"
+#endif
+}
+
+void
+SimpleCPU::sendDcacheRequest(Packet *pkt)
+{
+    assert(!tickEvent.scheduled());
+#if SIMPLE_CPU_MEM_TIMING
+    unscheduleTickEvent();
+
+    retry_pkt = pkt;
+    bool success = dcachePort.sendTiming(*pkt);
+
+    lastDcacheStall = curTick;
+
+    if (!success) {
+        _status = DcacheRetry;
+    } else {
+        _status = DcacheWaitResponse;
+    }
+#elif SIMPLE_CPU_MEM_ATOMIC
+    unscheduleTickEvent();
+
+    Tick latency = dcachePort.sendAtomic(*pkt);
+
+    scheduleTickEvent(latency);
+
+    // Note that Dcache miss cycles will be incorrect.  Unless
+    // we check the status of the packet sent (is this valid?),
+    // we won't know if the latency is a hit or a miss.
+    dcacheStallCycles += latency;
+#elif SIMPLE_CPU_MEM_IMMEDIATE
+    dcachePort.sendAtomic(*pkt);
+#else
+#error "SimpleCPU has no mem model set"
+#endif
+}
+
+void
+SimpleCPU::processResponse(Packet &response)
+{
+    assert(SIMPLE_CPU_MEM_TIMING);
+
+    // For what things is the CPU the consumer of the packet it sent
+    // out?  This may create a memory leak if that's the case and it's
+    // expected of the SimpleCPU to delete its own packet.
+    Packet *pkt = &response;
+
     switch (status()) {
-      case IcacheMissStall:
+      case IcacheWaitResponse:
         icacheStallCycles += curTick - lastIcacheStall;
-        _status = IcacheMissComplete;
+
+        _status = IcacheAccessComplete;
         scheduleTickEvent(1);
+
+        // Copy the icache data into the instruction itself.
+        inst = pkt->get<MachInst>();
+
+        delete pkt;
         break;
-      case DcacheMissStall:
-        if (memReq->cmd.isRead()) {
+      case DcacheWaitResponse:
+        if (pkt->cmd == Read) {
             curStaticInst->execute(this,traceData);
             if (traceData)
                 traceData->finalize();
         }
+
+        delete pkt;
+
         dcacheStallCycles += curTick - lastDcacheStall;
         _status = Running;
         scheduleTickEvent(1);
         break;
-      case DcacheMissSwitch:
-        if (memReq->cmd.isRead()) {
+      case DcacheWaitSwitch:
+        if (pkt->cmd == Read) {
             curStaticInst->execute(this,traceData);
             if (traceData)
                 traceData->finalize();
         }
+
+        delete pkt;
+
         _status = SwitchedOut;
         sampler->signalSwitched();
       case SwitchedOut:
         // If this CPU has been switched out due to sampling/warm-up,
         // ignore any further status changes (e.g., due to cache
         // misses outstanding at the time of the switch).
+        delete pkt;
+
         return;
       default:
         panic("SimpleCPU::processCacheCompletion: bad state");
         break;
     }
+}
+
+Packet *
+SimpleCPU::processRetry()
+{
+#if SIMPLE_CPU_MEM_TIMING
+    switch(status()) {
+      case IcacheRetry:
+        icacheRetryCycles += curTick - lastIcacheStall;
+        return retry_pkt;
+        break;
+      case DcacheRetry:
+        dcacheRetryCycles += curTick - lastDcacheStall;
+        return retry_pkt;
+        break;
+      default:
+        panic("SimpleCPU::processRetry: bad state");
+        break;
+    }
+#else
+    panic("shouldn't be here");
+#endif
 }
 
 #if FULL_SYSTEM
@@ -651,6 +904,8 @@ SimpleCPU::post_interrupt(int int_num, int index)
 void
 SimpleCPU::tick()
 {
+    DPRINTF(SimpleCPU,"\n\n");
+
     numCycles++;
 
     traceData = NULL;
@@ -659,7 +914,7 @@ SimpleCPU::tick()
 
 #if FULL_SYSTEM
     if (checkInterrupts && check_interrupts() && !cpuXC->inPalMode() &&
-        status() != IcacheMissComplete) {
+        status() != IcacheAccessComplete) {
         int ipl = 0;
         int summary = 0;
         checkInterrupts = false;
@@ -702,37 +957,57 @@ SimpleCPU::tick()
 
     // maintain $r0 semantics
     cpuXC->setIntReg(ZeroReg, 0);
-#ifdef TARGET_ALPHA
-    cpuXC->setFloatRegDouble(ZeroReg, 0.0);
-#endif // TARGET_ALPHA
+#if THE_ISA == ALPHA_ISA
+    cpuXC->setFloatReg(ZeroReg, 0.0);
+#endif // ALPHA_ISA
 
-    if (status() == IcacheMissComplete) {
+    if (status() == IcacheAccessComplete) {
         // We've already fetched an instruction and were stalled on an
         // I-cache miss.  No need to fetch it again.
 
         // Set status to running; tick event will get rescheduled if
         // necessary at end of tick() function.
         _status = Running;
-    }
-    else {
+    } else {
         // Try to fetch an instruction
 
         // set up memory request for instruction fetch
-#if FULL_SYSTEM
-#define IFETCH_FLAGS(pc)	((pc) & 1) ? PHYSICAL : 0
-#else
-#define IFETCH_FLAGS(pc)	0
+
+        DPRINTF(Fetch,"Fetch: PC:%08p NPC:%08p NNPC:%08p\n",cpuXC->readPC(),
+                cpuXC->readNextPC(),cpuXC->readNextNPC());
+
+#if SIMPLE_CPU_MEM_TIMING
+        CpuRequest *ifetch_req = new CpuRequest();
+        ifetch_req->setSize(sizeof(MachInst));
 #endif
 
-        memReq->cmd = Read;
-        memReq->reset(cpuXC->readPC() & ~3, sizeof(uint32_t),
-                     IFETCH_FLAGS(cpuXC->readPC()));
+        ifetch_req->resetMin();
+        ifetch_req->setVaddr(cpuXC->readPC() & ~3);
+        ifetch_req->setTime(curTick);
+#if FULL_SYSTEM
+        ifetch_req->setFlags((cpuXC->readPC() & 1) ? PHYSICAL : 0);
+#else
+        ifetch_req->setFlags(0);
+#endif
 
-        fault = cpuXC->translateInstReq(memReq);
+        fault = cpuXC->translateInstReq(ifetch_req);
 
-        if (fault == NoFault)
-            fault = cpuXC->mem->read(memReq, inst);
+        if (fault == NoFault) {
+#if SIMPLE_CPU_MEM_TIMING
+            Packet *ifetch_pkt = new Packet;
+            ifetch_pkt->cmd = Read;
+            ifetch_pkt->data = (uint8_t *)&inst;
+            ifetch_pkt->req = ifetch_req;
+            ifetch_pkt->size = sizeof(MachInst);
+#endif
+            ifetch_pkt->reset();
+            ifetch_pkt->addr = ifetch_req->getPaddr();
 
+            sendIcacheRequest(ifetch_pkt);
+#if SIMPLE_CPU_MEM_TIMING || SIMPLE_CPU_MEM_ATOMIC
+            return;
+#endif
+/*
         if (icacheInterface && fault == NoFault) {
             memReq->completionEvent = NULL;
 
@@ -743,13 +1018,15 @@ SimpleCPU::tick()
             // Ugly hack to get an event scheduled *only* if the access is
             // a miss.  We really should add first-class support for this
             // at some point.
-            if (result != MA_HIT && icacheInterface->doEvents()) {
+                if (result != MA_HIT && icacheInterface->doEvents()) {
                 memReq->completionEvent = &cacheCompletionEvent;
                 lastIcacheStall = curTick;
                 unscheduleTickEvent();
                 _status = IcacheMissStall;
                 return;
             }
+        }
+*/
         }
     }
 
@@ -770,6 +1047,9 @@ SimpleCPU::tick()
 
         traceData = Trace::getInstRecord(curTick, xcProxy, this, curStaticInst,
                                          cpuXC->readPC());
+
+        DPRINTF(Decode,"Decode: Decoded %s instruction (opcode: 0x%x): 0x%x\n",
+                curStaticInst->getName(),curStaticInst->getOpcode(), curStaticInst->machInst);
 
 #if FULL_SYSTEM
         cpuXC->setInst(inst);
@@ -806,8 +1086,7 @@ SimpleCPU::tick()
 
         // If we have a dcache miss, then we can't finialize the instruction
         // trace yet because we want to populate it with the data later
-        if (traceData &&
-                !(status() == DcacheMissStall && memReq->cmd.isRead())) {
+        if (traceData && (status() != DcacheWaitResponse)) {
             traceData->finalize();
         }
 
@@ -819,11 +1098,11 @@ SimpleCPU::tick()
 #if FULL_SYSTEM
         fault->invoke(xcProxy);
 #else // !FULL_SYSTEM
-        fatal("fault (%d) detected @ PC 0x%08p", fault, cpuXC->readPC());
+        fatal("fault (%s) detected @ PC %08p", fault->name(), cpuXC->readPC());
 #endif // FULL_SYSTEM
     }
     else {
-#if THE_ISA != MIPS_ISA
+#if THE_ISA == ALPHA_ISA
         // go to the next instruction
         cpuXC->setPC(cpuXC->readNextPC());
         cpuXC->setNextPC(cpuXC->readNextPC() + sizeof(MachInst));
@@ -846,7 +1125,7 @@ SimpleCPU::tick()
 
     assert(status() == Running ||
            status() == Idle ||
-           status() == DcacheMissStall);
+           status() == DcacheWaitResponse);
 
     if (status() == Running && !tickEvent.scheduled())
         tickEvent.schedule(curTick + cycles(1));
@@ -862,11 +1141,11 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(SimpleCPU)
     Param<Counter> max_insts_all_threads;
     Param<Counter> max_loads_any_thread;
     Param<Counter> max_loads_all_threads;
+    SimObjectParam<MemObject *> mem;
 
 #if FULL_SYSTEM
     SimObjectParam<AlphaITB *> itb;
     SimObjectParam<AlphaDTB *> dtb;
-    SimObjectParam<FunctionalMemory *> mem;
     SimObjectParam<System *> system;
     Param<int> cpu_id;
     Param<Tick> profile;
@@ -875,8 +1154,6 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(SimpleCPU)
 #endif // FULL_SYSTEM
 
     Param<int> clock;
-    SimObjectParam<BaseMem *> icache;
-    SimObjectParam<BaseMem *> dcache;
 
     Param<bool> defer_registration;
     Param<int> width;
@@ -895,11 +1172,11 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(SimpleCPU)
                "terminate when any thread reaches this load count"),
     INIT_PARAM(max_loads_all_threads,
                "terminate when all threads have reached this load count"),
+    INIT_PARAM(mem, "memory"),
 
 #if FULL_SYSTEM
     INIT_PARAM(itb, "Instruction TLB"),
     INIT_PARAM(dtb, "Data TLB"),
-    INIT_PARAM(mem, "memory"),
     INIT_PARAM(system, "system object"),
     INIT_PARAM(cpu_id, "processor ID"),
     INIT_PARAM(profile, ""),
@@ -908,8 +1185,6 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(SimpleCPU)
 #endif // FULL_SYSTEM
 
     INIT_PARAM(clock, "clock speed"),
-    INIT_PARAM(icache, "L1 instruction cache object"),
-    INIT_PARAM(dcache, "L1 data cache object"),
     INIT_PARAM(defer_registration, "defer system registration (for sampling)"),
     INIT_PARAM(width, "cpu width"),
     INIT_PARAM(function_trace, "Enable function trace"),
@@ -931,14 +1206,12 @@ CREATE_SIM_OBJECT(SimpleCPU)
     params->clock = clock;
     params->functionTrace = function_trace;
     params->functionTraceStart = function_trace_start;
-    params->icache_interface = (icache) ? icache->getInterface() : NULL;
-    params->dcache_interface = (dcache) ? dcache->getInterface() : NULL;
     params->width = width;
+    params->mem = mem;
 
 #if FULL_SYSTEM
     params->itb = itb;
     params->dtb = dtb;
-    params->mem = mem;
     params->system = system;
     params->cpu_id = cpu_id;
     params->profile = profile;

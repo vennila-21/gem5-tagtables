@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2004 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,33 +26,25 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __MIPS_LINUX_PROCESS_HH__
-#define __MIPS_LINUX_PROCESS_HH__
+#include "cpu/op_class.hh"
 
-#include "sim/process.hh"
-
-
-/// A process with emulated Mips/Linux syscalls.
-class MipsLinuxProcess : public LiveProcess
+/** OpClass enum -> description string */
+const char *
+opClassStrings[Num_OpClasses] =
 {
-  public:
-    /// Constructor.
-    MipsLinuxProcess(const std::string &name,
-                      ObjectFile *objFile,
-                      int stdin_fd, int stdout_fd, int stderr_fd,
-                      std::vector<std::string> &argv,
-                      std::vector<std::string> &envp);
-
-    virtual SyscallDesc* getDesc(int callnum);
-
-    /// The target system's hostname.
-    static const char *hostname;
-
-     /// Array of syscall descriptors, indexed by call number.
-    static SyscallDesc syscallDescs[];
-
-    const int Num_Syscall_Descs;
+    "(null)",
+    "IntAlu",
+    "IntMult",
+    "IntDiv",
+    "FloatAdd",
+    "FloatCmp",
+    "FloatCvt",
+    "FloatMult",
+    "FloatDiv",
+    "FloatSqrt",
+    "MemRead",
+    "MemWrite",
+    "IprAccess",
+    "InstPrefetch"
 };
 
-
-#endif // __MIPS_LINUX_PROCESS_HH__

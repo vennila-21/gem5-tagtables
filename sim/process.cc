@@ -37,18 +37,15 @@
 #include "base/loader/symtab.hh"
 #include "base/statistics.hh"
 #include "config/full_system.hh"
-#include "cpu/cpu_exec_context.hh"
 #include "cpu/exec_context.hh"
-#include "cpu/smt.hh"
-#include "encumbered/cpu/full/thread.hh"
-#include "encumbered/eio/eio.hh"
-#include "encumbered/mem/functional/main.hh"
+#include "mem/page_table.hh"
+#include "mem/physical.hh"
+#include "mem/translating_port.hh"
 #include "sim/builder.hh"
 #include "sim/process.hh"
 #include "sim/stats.hh"
 #include "sim/syscall_emul.hh"
-
-#include "arch/process.hh"
+#include "sim/system.hh"
 
 using namespace std;
 using namespace TheISA;
@@ -66,20 +63,12 @@ using namespace TheISA;
 int num_processes = 0;
 
 Process::Process(const string &nm,
+                 System *_system,
                  int stdin_fd, 	// initial I/O descriptors
                  int stdout_fd,
                  int stderr_fd)
-    : SimObject(nm)
+    : SimObject(nm), system(_system)
 {
-    // allocate memory space
-    memory = new MainMemory(nm + ".MainMem");
-
-    // allocate initial register file
-    init_regs = new RegFile;
-    memset(init_regs, 0, sizeof(RegFile));
-
-    cpuXC = new CPUExecContext(init_regs);
-
     // initialize first 3 fds (stdin, stdout, stderr)
     fd_map[STDIN_FILENO] = stdin_fd;
     fd_map[STDOUT_FILENO] = stdout_fd;
@@ -92,8 +81,10 @@ Process::Process(const string &nm,
 
     mmap_start = mmap_end = 0;
     nxm_start = nxm_end = 0;
+    pTable = new PageTable(system);
     // other parameters will be initialized when the program is loaded
 }
+
 
 void
 Process::regStats()
@@ -146,13 +137,7 @@ Process::registerExecContext(ExecContext *xc)
     int myIndex = execContexts.size();
     execContexts.push_back(xc);
 
-    if (myIndex == 0) {
-        // copy process's initial regs struct
-        // Hack for now to copy init regs
-        xc->copyArchRegs(cpuXC->getProxy());
-    }
-
-    // return CPU number to caller and increment available CPU count
+    // return CPU number to caller
     return myIndex;
 }
 
@@ -160,13 +145,19 @@ void
 Process::startup()
 {
     if (execContexts.empty())
-        return;
+        fatal("Process %s is not associated with any CPUs!\n", name());
 
     // first exec context for this process... initialize & enable
     ExecContext *xc = execContexts[0];
 
     // mark this context as active so it will start ticking.
     xc->activate(0);
+
+    Port *mem_port;
+    mem_port = system->physmem->getPort("functional");
+    initVirtMem = new TranslatingPort(pTable, true);
+    mem_port->setPeer(initVirtMem);
+    initVirtMem->setPeer(mem_port);
 }
 
 void
@@ -249,39 +240,32 @@ DEFINE_SIM_OBJECT_CLASS_NAME("Process", Process)
 ////////////////////////////////////////////////////////////////////////
 
 
-static void
+void
 copyStringArray(vector<string> &strings, Addr array_ptr, Addr data_ptr,
-                FunctionalMemory *memory)
+                TranslatingPort* memPort)
 {
     Addr data_ptr_swap;
     for (int i = 0; i < strings.size(); ++i) {
         data_ptr_swap = htog(data_ptr);
-        memory->access(Write, array_ptr, &data_ptr_swap, sizeof(Addr));
-        memory->writeString(data_ptr, strings[i].c_str());
+        memPort->writeBlob(array_ptr, (uint8_t*)&data_ptr_swap, sizeof(Addr));
+        memPort->writeString(data_ptr, strings[i].c_str());
         array_ptr += sizeof(Addr);
         data_ptr += strings[i].size() + 1;
     }
     // add NULL terminator
     data_ptr = 0;
-    memory->access(Write, array_ptr, &data_ptr, sizeof(Addr));
+
+    memPort->writeBlob(array_ptr, (uint8_t*)&data_ptr, sizeof(Addr));
 }
 
-LiveProcess::LiveProcess(const string &nm, ObjectFile *objFile,
+LiveProcess::LiveProcess(const string &nm, ObjectFile *_objFile,
+                         System *_system,
                          int stdin_fd, int stdout_fd, int stderr_fd,
-                         vector<string> &argv, vector<string> &envp)
-    : Process(nm, stdin_fd, stdout_fd, stderr_fd)
+                         vector<string> &_argv, vector<string> &_envp)
+    : Process(nm, _system, stdin_fd, stdout_fd, stderr_fd),
+      objFile(_objFile), argv(_argv), envp(_envp)
 {
     prog_fname = argv[0];
-
-    prog_entry = objFile->entryPoint();
-    text_base = objFile->textBase();
-    text_size = objFile->textSize();
-    data_base = objFile->dataBase();
-    data_size = objFile->dataSize() + objFile->bssSize();
-    brk_point = roundUp(data_base + data_size, VMPageSize);
-
-    // load object file into target memory
-    objFile->loadSections(memory);
 
     // load up symbols, if any... these may be used for debugging or
     // profiling.
@@ -294,21 +278,19 @@ LiveProcess::LiveProcess(const string &nm, ObjectFile *objFile,
             debugSymbolTable = NULL;
         }
     }
+}
 
-    // Set up stack.  On Alpha, stack goes below text section.  This
-    // code should get moved to some architecture-specific spot.
-    stack_base = text_base - (409600+4096);
+void
+LiveProcess::argsInit(int intSize, int pageSize)
+{
+    Process::startup();
 
-    // Set up region for mmaps.  Tru64 seems to start just above 0 and
-    // grow up from there.
-    mmap_start = mmap_end = 0x10000;
-
-    // Set pointer for next thread stack.  Reserve 8M for main stack.
-    next_thread_stack_base = stack_base - (8 * 1024 * 1024);
+    // load object file into target memory
+    objFile->loadSections(initVirtMem);
 
     // Calculate how much space we need for arg & env arrays.
-    int argv_array_size = sizeof(Addr) * (argv.size() + 1);
-    int envp_array_size = sizeof(Addr) * (envp.size() + 1);
+    int argv_array_size = intSize * (argv.size() + 1);
+    int envp_array_size = intSize * (envp.size() + 1);
     int arg_data_size = 0;
     for (int i = 0; i < argv.size(); ++i) {
         arg_data_size += argv[i].size() + 1;
@@ -327,37 +309,48 @@ LiveProcess::LiveProcess(const string &nm, ObjectFile *objFile,
     // set bottom of stack
     stack_min = stack_base - space_needed;
     // align it
-    stack_min &= ~7;
+    stack_min &= ~(intSize-1);
     stack_size = stack_base - stack_min;
+    // map memory
+    pTable->allocate(roundDown(stack_min, pageSize),
+                     roundUp(stack_size, pageSize));
 
     // map out initial stack contents
-    Addr argv_array_base = stack_min + sizeof(uint64_t); // room for argc
+    Addr argv_array_base = stack_min + intSize; // room for argc
     Addr envp_array_base = argv_array_base + argv_array_size;
     Addr arg_data_base = envp_array_base + envp_array_size;
     Addr env_data_base = arg_data_base + arg_data_size;
 
     // write contents to stack
     uint64_t argc = argv.size();
-    argc = htog(argc);
-    memory->access(Write, stack_min, &argc, sizeof(uint64_t));
+    if (intSize == 8)
+        argc = htog((uint64_t)argc);
+    else if (intSize == 4)
+        argc = htog((uint32_t)argc);
+    else
+        panic("Unknown int size");
 
-    copyStringArray(argv, argv_array_base, arg_data_base, memory);
-    copyStringArray(envp, envp_array_base, env_data_base, memory);
+    initVirtMem->writeBlob(stack_min, (uint8_t*)&argc, intSize);
 
-    cpuXC->setIntReg(ArgumentReg0, argc);
-    cpuXC->setIntReg(ArgumentReg1, argv_array_base);
-    cpuXC->setIntReg(StackPointerReg, stack_min);
-    cpuXC->setIntReg(GlobalPointerReg, objFile->globalPointer());
-    cpuXC->setPC(prog_entry);
-    cpuXC->setNextPC(prog_entry + sizeof(MachInst));
+    copyStringArray(argv, argv_array_base, arg_data_base, initVirtMem);
+    copyStringArray(envp, envp_array_base, env_data_base, initVirtMem);
+
+    execContexts[0]->setIntReg(ArgumentReg0, argc);
+    execContexts[0]->setIntReg(ArgumentReg1, argv_array_base);
+    execContexts[0]->setIntReg(StackPointerReg, stack_min);
+
+    Addr prog_entry = objFile->entryPoint();
+    execContexts[0]->setPC(prog_entry);
+    execContexts[0]->setNextPC(prog_entry + sizeof(MachInst));
+    execContexts[0]->setNextNPC(prog_entry + (2 * sizeof(MachInst)));
+
+    num_processes++;
 }
 
 void
-LiveProcess::syscall(ExecContext *xc)
+LiveProcess::syscall(int64_t callnum, ExecContext *xc)
 {
     num_syscalls++;
-
-    int64_t callnum = xc->readIntReg(SyscallNumReg);
 
     SyscallDesc *desc = getDesc(callnum);
     if (desc == NULL)
@@ -366,81 +359,4 @@ LiveProcess::syscall(ExecContext *xc)
     desc->doSyscall(callnum, this, xc);
 }
 
-LiveProcess *
-LiveProcess::create(const string &nm,
-                    int stdin_fd, int stdout_fd, int stderr_fd,
-                    string executable,
-                    vector<string> &argv, vector<string> &envp)
-{
-    LiveProcess *process = NULL;
-    ObjectFile *objFile = createObjectFile(executable);
-    if (objFile == NULL) {
-        fatal("Can't load object file %s", executable);
-    }
-
-    // set up syscall emulation pointer for the current ISA
-    process = createProcess(nm, objFile,
-                            stdin_fd, stdout_fd, stderr_fd,
-                            argv, envp);
-
-    delete objFile;
-
-    if (process == NULL)
-        fatal("Unknown error creating process object.");
-
-    return process;
-}
-
-
-
-BEGIN_DECLARE_SIM_OBJECT_PARAMS(LiveProcess)
-
-    VectorParam<string> cmd;
-    Param<string> executable;
-    Param<string> input;
-    Param<string> output;
-    VectorParam<string> env;
-
-END_DECLARE_SIM_OBJECT_PARAMS(LiveProcess)
-
-
-BEGIN_INIT_SIM_OBJECT_PARAMS(LiveProcess)
-
-    INIT_PARAM(cmd, "command line (executable plus arguments)"),
-    INIT_PARAM(executable, "executable (overrides cmd[0] if set)"),
-    INIT_PARAM(input, "filename for stdin (dflt: use sim stdin)"),
-    INIT_PARAM(output, "filename for stdout/stderr (dflt: use sim stdout)"),
-    INIT_PARAM(env, "environment settings")
-
-END_INIT_SIM_OBJECT_PARAMS(LiveProcess)
-
-
-CREATE_SIM_OBJECT(LiveProcess)
-{
-    string in = input;
-    string out = output;
-
-    // initialize file descriptors to default: same as simulator
-    int stdin_fd, stdout_fd, stderr_fd;
-
-    if (in == "stdin" || in == "cin")
-        stdin_fd = STDIN_FILENO;
-    else
-        stdin_fd = Process::openInputFile(input);
-
-    if (out == "stdout" || out == "cout")
-        stdout_fd = STDOUT_FILENO;
-    else if (out == "stderr" || out == "cerr")
-        stdout_fd = STDERR_FILENO;
-    else
-        stdout_fd = Process::openOutputFile(out);
-
-    stderr_fd = (stdout_fd != STDOUT_FILENO) ? stdout_fd : STDERR_FILENO;
-
-    return LiveProcess::create(getInstanceName(),
-                               stdin_fd, stdout_fd, stderr_fd,
-                               (string)executable == "" ? cmd[0] : executable,
-                               cmd, env);
-}
-
-REGISTER_SIM_OBJECT("LiveProcess", LiveProcess)
+DEFINE_SIM_OBJECT_CLASS_NAME("LiveProcess", LiveProcess);

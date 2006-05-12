@@ -26,13 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "arch/alpha/linux/linux.hh"
 #include "arch/alpha/linux/process.hh"
 #include "arch/alpha/isa_traits.hh"
 
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
 #include "kern/linux/linux.hh"
-#include "mem/functional/functional.hh"
 
 #include "sim/process.hh"
 #include "sim/syscall_emul.hh"
@@ -55,7 +55,7 @@ unameFunc(SyscallDesc *desc, int callnum, Process *process,
     strcpy(name->version, "#1 Mon Aug 18 11:32:15 EDT 2003");
     strcpy(name->machine, "alpha");
 
-    name.copyOut(xc->getMemPtr());
+    name.copyOut(xc->getMemPort());
     return 0;
 }
 
@@ -75,7 +75,7 @@ osf_getsysinfoFunc(SyscallDesc *desc, int callnum, Process *process,
           TypedBufferArg<uint64_t> fpcr(xc->getSyscallArg(1));
           // I don't think this exactly matches the HW FPCR
           *fpcr = 0;
-          fpcr.copyOut(xc->getMemPtr());
+          fpcr.copyOut(xc->getMemPort());
           return 0;
       }
 
@@ -101,7 +101,7 @@ osf_setsysinfoFunc(SyscallDesc *desc, int callnum, Process *process,
       case 14: { // SSI_IEEE_FP_CONTROL
           TypedBufferArg<uint64_t> fpcr(xc->getSyscallArg(1));
           // I don't think this exactly matches the HW FPCR
-          fpcr.copyIn(xc->getMemPtr());
+          fpcr.copyIn(xc->getMemPort());
           DPRINTFR(SyscallVerbose, "osf_setsysinfo(SSI_IEEE_FP_CONTROL): "
                    " setting FPCR to 0x%x\n", gtoh(*(uint64_t*)fpcr));
           return 0;
@@ -133,7 +133,7 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 12 */ SyscallDesc("chdir", unimplementedFunc),
     /* 13 */ SyscallDesc("fchdir", unimplementedFunc),
     /* 14 */ SyscallDesc("mknod", unimplementedFunc),
-    /* 15 */ SyscallDesc("chmod", chmodFunc<Linux>),
+    /* 15 */ SyscallDesc("chmod", chmodFunc<AlphaLinux>),
     /* 16 */ SyscallDesc("chown", chownFunc),
     /* 17 */ SyscallDesc("brk", obreakFunc),
     /* 18 */ SyscallDesc("osf_getfsstat", unimplementedFunc),
@@ -163,7 +163,7 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 42 */ SyscallDesc("pipe", pipePseudoFunc),
     /* 43 */ SyscallDesc("osf_set_program_attributes", unimplementedFunc),
     /* 44 */ SyscallDesc("osf_profil", unimplementedFunc),
-    /* 45 */ SyscallDesc("open", openFunc<Linux>),
+    /* 45 */ SyscallDesc("open", openFunc<AlphaLinux>),
     /* 46 */ SyscallDesc("osf_old_sigaction", unimplementedFunc),
     /* 47 */ SyscallDesc("getxgid", getgidPseudoFunc),
     /* 48 */ SyscallDesc("osf_sigprocmask", ignoreFunc),
@@ -172,7 +172,7 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 51 */ SyscallDesc("acct", unimplementedFunc),
     /* 52 */ SyscallDesc("sigpending", unimplementedFunc),
     /* 53 */ SyscallDesc("osf_classcntl", unimplementedFunc),
-    /* 54 */ SyscallDesc("ioctl", ioctlFunc<Linux>),
+    /* 54 */ SyscallDesc("ioctl", ioctlFunc<AlphaLinux>),
     /* 55 */ SyscallDesc("osf_reboot", unimplementedFunc),
     /* 56 */ SyscallDesc("osf_revoke", unimplementedFunc),
     /* 57 */ SyscallDesc("symlink", unimplementedFunc),
@@ -185,11 +185,11 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 64 */ SyscallDesc("getpagesize", getpagesizeFunc),
     /* 65 */ SyscallDesc("osf_mremap", unimplementedFunc),
     /* 66 */ SyscallDesc("vfork", unimplementedFunc),
-    /* 67 */ SyscallDesc("stat", statFunc<Linux>),
-    /* 68 */ SyscallDesc("lstat", lstatFunc<Linux>),
+    /* 67 */ SyscallDesc("stat", statFunc<AlphaLinux>),
+    /* 68 */ SyscallDesc("lstat", lstatFunc<AlphaLinux>),
     /* 69 */ SyscallDesc("osf_sbrk", unimplementedFunc),
     /* 70 */ SyscallDesc("osf_sstk", unimplementedFunc),
-    /* 71 */ SyscallDesc("mmap", mmapFunc<Linux>),
+    /* 71 */ SyscallDesc("mmap", mmapFunc<AlphaLinux>),
     /* 72 */ SyscallDesc("osf_old_vadvise", unimplementedFunc),
     /* 73 */ SyscallDesc("munmap", munmapFunc),
     /* 74 */ SyscallDesc("mprotect", ignoreFunc),
@@ -209,7 +209,7 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 88 */ SyscallDesc("sethostname", unimplementedFunc),
     /* 89 */ SyscallDesc("getdtablesize", unimplementedFunc),
     /* 90 */ SyscallDesc("dup2", unimplementedFunc),
-    /* 91 */ SyscallDesc("fstat", fstatFunc<Linux>),
+    /* 91 */ SyscallDesc("fstat", fstatFunc<AlphaLinux>),
     /* 92 */ SyscallDesc("fcntl", fcntlFunc),
     /* 93 */ SyscallDesc("osf_select", unimplementedFunc),
     /* 94 */ SyscallDesc("poll", unimplementedFunc),
@@ -239,10 +239,10 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 118 */ SyscallDesc("getsockopt", unimplementedFunc),
     /* 119 */ SyscallDesc("numa_syscalls", unimplementedFunc),
     /* 120 */ SyscallDesc("readv", unimplementedFunc),
-    /* 121 */ SyscallDesc("writev", writevFunc<Linux>),
+    /* 121 */ SyscallDesc("writev", writevFunc<AlphaLinux>),
     /* 122 */ SyscallDesc("osf_settimeofday", unimplementedFunc),
     /* 123 */ SyscallDesc("fchown", fchownFunc),
-    /* 124 */ SyscallDesc("fchmod", fchmodFunc<Linux>),
+    /* 124 */ SyscallDesc("fchmod", fchmodFunc<AlphaLinux>),
     /* 125 */ SyscallDesc("recvfrom", unimplementedFunc),
     /* 126 */ SyscallDesc("setreuid", unimplementedFunc),
     /* 127 */ SyscallDesc("setregid", unimplementedFunc),
@@ -262,7 +262,7 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 141 */ SyscallDesc("getpeername", unimplementedFunc),
     /* 142 */ SyscallDesc("osf_gethostid", unimplementedFunc),
     /* 143 */ SyscallDesc("osf_sethostid", unimplementedFunc),
-    /* 144 */ SyscallDesc("getrlimit", getrlimitFunc<Linux>),
+    /* 144 */ SyscallDesc("getrlimit", getrlimitFunc<AlphaLinux>),
     /* 145 */ SyscallDesc("setrlimit", ignoreFunc),
     /* 146 */ SyscallDesc("osf_old_killpg", unimplementedFunc),
     /* 147 */ SyscallDesc("setsid", unimplementedFunc),
@@ -480,12 +480,12 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 356 */ SyscallDesc("rt_sigqueueinfo", unimplementedFunc),
     /* 357 */ SyscallDesc("rt_sigsuspend", unimplementedFunc),
     /* 358 */ SyscallDesc("select", unimplementedFunc),
-    /* 359 */ SyscallDesc("gettimeofday", gettimeofdayFunc<Linux>),
+    /* 359 */ SyscallDesc("gettimeofday", gettimeofdayFunc<AlphaLinux>),
     /* 360 */ SyscallDesc("settimeofday", unimplementedFunc),
     /* 361 */ SyscallDesc("getitimer", unimplementedFunc),
     /* 362 */ SyscallDesc("setitimer", unimplementedFunc),
-    /* 363 */ SyscallDesc("utimes", utimesFunc<Linux>),
-    /* 364 */ SyscallDesc("getrusage", getrusageFunc<Linux>),
+    /* 363 */ SyscallDesc("utimes", utimesFunc<AlphaLinux>),
+    /* 364 */ SyscallDesc("getrusage", getrusageFunc<AlphaLinux>),
     /* 365 */ SyscallDesc("wait4", unimplementedFunc),
     /* 366 */ SyscallDesc("adjtimex", unimplementedFunc),
     /* 367 */ SyscallDesc("getcwd", unimplementedFunc),
@@ -547,8 +547,8 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
     /* 423 */ SyscallDesc("semtimedop", unimplementedFunc),
     /* 424 */ SyscallDesc("tgkill", unimplementedFunc),
     /* 425 */ SyscallDesc("stat64", unimplementedFunc),
-    /* 426 */ SyscallDesc("lstat64", lstat64Func<Linux>),
-    /* 427 */ SyscallDesc("fstat64", fstat64Func<Linux>),
+    /* 426 */ SyscallDesc("lstat64", lstat64Func<AlphaLinux>),
+    /* 427 */ SyscallDesc("fstat64", fstat64Func<AlphaLinux>),
     /* 428 */ SyscallDesc("vserver", unimplementedFunc),
     /* 429 */ SyscallDesc("mbind", unimplementedFunc),
     /* 430 */ SyscallDesc("get_mempolicy", unimplementedFunc),
@@ -567,15 +567,17 @@ SyscallDesc AlphaLinuxProcess::syscallDescs[] = {
 
 AlphaLinuxProcess::AlphaLinuxProcess(const std::string &name,
                                      ObjectFile *objFile,
+                                     System *system,
                                      int stdin_fd,
                                      int stdout_fd,
                                      int stderr_fd,
                                      std::vector<std::string> &argv,
                                      std::vector<std::string> &envp)
-    : LiveProcess(name, objFile, stdin_fd, stdout_fd, stderr_fd, argv, envp),
+    : AlphaLiveProcess(name, objFile, system, stdin_fd, stdout_fd,
+            stderr_fd, argv, envp),
      Num_Syscall_Descs(sizeof(syscallDescs) / sizeof(SyscallDesc))
 {
-    init_regs->intRegFile[0] = 0;
+    //init_regs->intRegFile[0] = 0;
 }
 
 

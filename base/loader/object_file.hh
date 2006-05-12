@@ -29,11 +29,12 @@
 #ifndef __OBJECT_FILE_HH__
 #define __OBJECT_FILE_HH__
 
+#include <limits>
 #include <string>
 
 #include "sim/host.hh"	// for Addr
 
-class FunctionalMemory;
+class Port;
 class SymbolTable;
 
 class ObjectFile
@@ -44,7 +45,7 @@ class ObjectFile
         UnknownArch,
         Alpha,
         SPARC,
-        MIPS
+        Mips
     };
 
     enum OpSys {
@@ -72,8 +73,8 @@ class ObjectFile
 
     void close();
 
-    virtual bool loadSections(FunctionalMemory *mem,
-                              bool loadPhys = false) = 0;
+    virtual bool loadSections(Port *memPort, Addr addrMask =
+            std::numeric_limits<Addr>::max());
     virtual bool loadGlobalSymbols(SymbolTable *symtab) = 0;
     virtual bool loadLocalSymbols(SymbolTable *symtab) = 0;
 
@@ -83,8 +84,9 @@ class ObjectFile
   protected:
 
     struct Section {
-        Addr baseAddr;
-        size_t size;
+        Addr     baseAddr;
+        uint8_t *fileImage;
+        size_t   size;
     };
 
     Addr entry;
@@ -94,8 +96,12 @@ class ObjectFile
     Section data;
     Section bss;
 
+    bool loadSection(Section *sec, Port *memPort, Addr addrMask);
+    void setGlobalPointer(Addr global_ptr) { globalPtr = global_ptr; }
+
   public:
     Addr entryPoint() const { return entry; }
+
     Addr globalPointer() const { return globalPtr; }
 
     Addr textBase() const { return text.baseAddr; }

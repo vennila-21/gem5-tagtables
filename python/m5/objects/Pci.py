@@ -1,5 +1,5 @@
 from m5 import *
-from Device import FooPioDevice, DmaDevice
+from Device import BasicPioDevice, DmaDevice
 
 class PciConfigData(SimObject):
     type = 'PciConfigData'
@@ -38,16 +38,16 @@ class PciConfigData(SimObject):
     MaximumLatency = Param.UInt8(0x00, "Maximum Latency")
     MinimumGrant = Param.UInt8(0x00, "Minimum Grant")
 
-class PciConfigAll(FooPioDevice):
+class PciConfigAll(BasicPioDevice):
     type = 'PciConfigAll'
 
 class PciDevice(DmaDevice):
     type = 'PciDevice'
     abstract = True
-    addr = 0xffffffffL
     pci_bus = Param.Int("PCI bus")
     pci_dev = Param.Int("PCI device number")
     pci_func = Param.Int("PCI function code")
+    pio_latency = Param.Tick(1, "Programmed IO latency in simticks")
     configdata = Param.PciConfigData(Parent.any, "PCI Config data")
     configspace = Param.PciConfigAll(Parent.any, "PCI Configspace")
 

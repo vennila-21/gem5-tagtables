@@ -37,7 +37,6 @@
 #include "dev/pcidev.hh"
 #include "dev/pktfifo.hh"
 #include "dev/sinicreg.hh"
-#include "mem/bus/bus.hh"
 #include "sim/eventq.hh"
 
 namespace Sinic {
@@ -90,10 +89,6 @@ class Base : public PciDev
 
 class Device : public Base
 {
-  protected:
-    Platform *plat;
-    PhysicalMemory *physmem;
-
   protected:
     /** Receive State Machine States */
     enum RxState {
@@ -169,10 +164,6 @@ class Device : public Base
     uint32_t &regData32(Addr daddr) { return *(uint32_t *)&regData8(daddr); }
     uint64_t &regData64(Addr daddr) { return *(uint64_t *)&regData8(daddr); }
 
-  private:
-    Addr addr;
-    static const Addr size = Regs::Size;
-
   protected:
     RxState rxState;
     PacketFifo rxFifo;
@@ -186,7 +177,7 @@ class Device : public Base
     TxState txState;
     PacketFifo txFifo;
     bool txFull;
-    PacketPtr txPacket;
+    EthPacketPtr txPacket;
     int txPacketOffset;
     int txPacketBytes;
     Addr txDmaAddr;
@@ -226,7 +217,7 @@ class Device : public Base
     /**
      * receive address filter
      */
-    bool rxFilter(const PacketPtr &packet);
+    bool rxFilter(const EthPacketPtr &packet);
 
 /**
  * device configuration
@@ -238,7 +229,7 @@ class Device : public Base
  * device ethernet interface
  */
   public:
-    bool recvPacket(PacketPtr packet);
+    bool recvPacket(EthPacketPtr packet);
     void transferDone();
     void setInterface(Interface *i) { assert(!interface); interface = i; }
 
@@ -246,12 +237,10 @@ class Device : public Base
  * DMA parameters
  */
   protected:
-    void rxDmaCopy();
     void rxDmaDone();
     friend class EventWrapper<Device, &Device::rxDmaDone>;
     EventWrapper<Device, &Device::rxDmaDone> rxDmaEvent;
 
-    void txDmaCopy();
     void txDmaDone();
     friend class EventWrapper<Device, &Device::txDmaDone>;
     EventWrapper<Device, &Device::txDmaDone> txDmaEvent;
@@ -270,25 +259,16 @@ class Device : public Base
     void devIntrChangeMask(uint32_t newmask);
 
 /**
- * PCI Configuration interface
- */
-  public:
-    virtual void writeConfig(int offset, int size, const uint8_t *data);
-
-/**
  * Memory Interface
  */
   public:
-    virtual Fault read(MemReqPtr &req, uint8_t *data);
-    virtual Fault write(MemReqPtr &req, const uint8_t *data);
+    virtual Tick read(Packet &pkt);
+    virtual Tick write(Packet &pkt);
 
     void prepareIO(int cpu, int index);
     void prepareRead(int cpu, int index);
     void prepareWrite(int cpu, int index);
-    Fault iprRead(Addr daddr, int cpu, uint64_t &result);
-    Fault readBar0(MemReqPtr &req, Addr daddr, uint8_t *data);
-    Fault writeBar0(MemReqPtr &req, Addr daddr, const uint8_t *data);
-    Tick cacheAccess(MemReqPtr &req);
+ //   Fault iprRead(Addr daddr, int cpu, uint64_t &result);
 
 /**
  * Statistics
@@ -336,17 +316,8 @@ class Device : public Base
   public:
     struct Params : public Base::Params
     {
-        IntrControl *i;
-        PhysicalMemory *pmem;
         Tick tx_delay;
         Tick rx_delay;
-        HierParams *hier;
-        Bus *pio_bus;
-        Bus *header_bus;
-        Bus *payload_bus;
-        Tick pio_latency;
-        PhysicalMemory *physmem;
-        IntrControl *intctrl;
         bool rx_filter;
         Net::EthAddr eaddr;
         uint32_t rx_max_copy;
@@ -362,7 +333,6 @@ class Device : public Base
         Tick dma_read_factor;
         Tick dma_write_delay;
         Tick dma_write_factor;
-        bool dma_no_allocate;
         bool rx_thread;
         bool tx_thread;
         bool rss;
@@ -392,7 +362,7 @@ class Interface : public EtherInt
     Interface(const std::string &name, Device *d)
         : EtherInt(name), dev(d) { dev->setInterface(this); }
 
-    virtual bool recvPacket(PacketPtr pkt) { return dev->recvPacket(pkt); }
+    virtual bool recvPacket(EthPacketPtr pkt) { return dev->recvPacket(pkt); }
     virtual void sendDone() { dev->transferDone(); }
 };
 

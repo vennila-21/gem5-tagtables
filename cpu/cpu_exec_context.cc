@@ -28,6 +28,7 @@
 
 #include <string>
 
+#include "arch/isa_traits.hh"
 #include "cpu/base.hh"
 #include "cpu/cpu_exec_context.hh"
 #include "cpu/exec_context.hh"
@@ -41,10 +42,11 @@
 #include "kern/kernel_stats.hh"
 #include "sim/serialize.hh"
 #include "sim/sim_exit.hh"
-#include "sim/system.hh"
 #include "arch/stacktrace.hh"
 #else
 #include "sim/process.hh"
+#include "sim/system.hh"
+#include "mem/translating_port.hh"
 #endif
 
 using namespace std;
@@ -52,16 +54,16 @@ using namespace std;
 // constructor
 #if FULL_SYSTEM
 CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_sys,
-                         AlphaITB *_itb, AlphaDTB *_dtb,
-                         FunctionalMemory *_mem)
+                         AlphaITB *_itb, AlphaDTB *_dtb)
     : _status(ExecContext::Unallocated), cpu(_cpu), thread_num(_thread_num),
-      cpu_id(-1), lastActivate(0), lastSuspend(0), mem(_mem), itb(_itb),
-      dtb(_dtb), system(_sys), memctrl(_sys->memctrl), physmem(_sys->physmem),
-      profile(NULL), quiesceEvent(this), func_exe_inst(0), storeCondFailures(0)
+      cpu_id(-1), lastActivate(0), lastSuspend(0), system(_sys), itb(_itb),
+      dtb(_dtb), profile(NULL), quiesceEvent(this), func_exe_inst(0),
+      storeCondFailures(0)
+
 {
     proxy = new ProxyExecContext<CPUExecContext>(this);
 
-    memset(&regs, 0, sizeof(RegFile));
+    regs.clear();
 
     if (cpu->params->profile) {
         profile = new FunctionProfile(system->kernelSymtab);
@@ -76,30 +78,39 @@ CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_sys,
     static ProfileNode dummyNode;
     profileNode = &dummyNode;
     profilePC = 3;
+
+    Port *mem_port;
+    physPort = new FunctionalPort();
+    mem_port = system->physmem->getPort("functional");
+    mem_port->setPeer(physPort);
+    physPort->setPeer(mem_port);
+
+    virtPort = new VirtualPort();
+    mem_port = system->physmem->getPort("functional");
+    mem_port->setPeer(virtPort);
+    virtPort->setPeer(mem_port);
 }
 #else
 CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num,
-                         Process *_process, int _asid)
+                         Process *_process, int _asid, MemObject* memobj)
     : _status(ExecContext::Unallocated),
       cpu(_cpu), thread_num(_thread_num), cpu_id(-1), lastActivate(0),
-      lastSuspend(0), process(_process), mem(process->getMemory()), asid(_asid),
+      lastSuspend(0), process(_process), asid(_asid),
       func_exe_inst(0), storeCondFailures(0)
 {
-    memset(&regs, 0, sizeof(RegFile));
-    proxy = new ProxyExecContext<CPUExecContext>(this);
-}
+    /* Use this port to for syscall emulation writes to memory. */
+    Port *mem_port;
+    port = new TranslatingPort(process->pTable, false);
+    mem_port = memobj->getPort("functional");
+    mem_port->setPeer(port);
+    port->setPeer(mem_port);
 
-CPUExecContext::CPUExecContext(BaseCPU *_cpu, int _thread_num,
-                         FunctionalMemory *_mem, int _asid)
-    : cpu(_cpu), thread_num(_thread_num), process(0), mem(_mem), asid(_asid),
-      func_exe_inst(0), storeCondFailures(0)
-{
-    memset(&regs, 0, sizeof(RegFile));
+    regs.clear();
     proxy = new ProxyExecContext<CPUExecContext>(this);
 }
 
 CPUExecContext::CPUExecContext(RegFile *regFile)
-    : cpu(NULL), thread_num(-1), process(NULL), mem(NULL), asid(-1),
+    : cpu(NULL), thread_num(-1), process(NULL), asid(-1),
       func_exe_inst(0), storeCondFailures(0)
 {
     regs = *regFile;
@@ -158,7 +169,6 @@ void
 CPUExecContext::takeOverFrom(ExecContext *oldContext)
 {
     // some things should already be set up
-    assert(mem == oldContext->getMemPtr());
 #if FULL_SYSTEM
     assert(system == oldContext->getSystemPtr());
 #else
@@ -277,22 +287,34 @@ CPUExecContext::regStats(const string &name)
 void
 CPUExecContext::copyArchRegs(ExecContext *xc)
 {
-    // First loop through the integer registers.
-    for (int i = 0; i < AlphaISA::NumIntRegs; ++i) {
-        setIntReg(i, xc->readIntReg(i));
-    }
-
-    // Then loop through the floating point registers.
-    for (int i = 0; i < AlphaISA::NumFloatRegs; ++i) {
-        setFloatRegDouble(i, xc->readFloatRegDouble(i));
-        setFloatRegInt(i, xc->readFloatRegInt(i));
-    }
-
-    // Copy misc. registers
-    regs.miscRegs.copyMiscRegs(xc);
-
-    // Lastly copy PC/NPC
-    setPC(xc->readPC());
-    setNextPC(xc->readNextPC());
+    TheISA::copyRegs(xc, proxy);
 }
+
+#if FULL_SYSTEM
+VirtualPort*
+CPUExecContext::getVirtPort(ExecContext *xc)
+{
+    if (!xc)
+        return virtPort;
+
+    VirtualPort *vp;
+    Port *mem_port;
+
+    vp = new VirtualPort(xc);
+    mem_port = system->physmem->getPort("functional");
+    mem_port->setPeer(vp);
+    vp->setPeer(mem_port);
+    return vp;
+}
+
+void
+CPUExecContext::delVirtPort(VirtualPort *vp)
+{
+//    assert(!vp->nullExecContext());
+    delete vp->getPeer();
+    delete vp;
+}
+
+
+#endif
 

@@ -93,8 +93,8 @@ AlphaTLB::lookup(Addr vpn, uint8_t asn) const
 }
 
 
-void
-AlphaTLB::checkCacheability(MemReqPtr &req)
+Fault
+AlphaTLB::checkCacheability(RequestPtr &req)
 {
     // in Alpha, cacheability is controlled by upper-level bits of the
     // physical address
@@ -109,33 +109,24 @@ AlphaTLB::checkCacheability(MemReqPtr &req)
 
 
 #if ALPHA_TLASER
-    if (req->paddr & PAddrUncachedBit39) {
+    if (req->getPaddr() & PAddrUncachedBit39) {
 #else
-    if (req->paddr & PAddrUncachedBit43) {
+    if (req->getPaddr() & PAddrUncachedBit43) {
 #endif
         // IPR memory space not implemented
-        if (PAddrIprSpace(req->paddr)) {
-            if (!req->xc->misspeculating()) {
-                switch (req->paddr) {
-                  case ULL(0xFFFFF00188):
-                    req->data = 0;
-                    break;
-
-                  default:
-                    panic("IPR memory space not implemented! PA=%x\n",
-                          req->paddr);
-                }
-            }
+        if (PAddrIprSpace(req->getPaddr())) {
+            return new UnimpFault("IPR memory space not implemented!");
         } else {
             // mark request as uncacheable
-            req->flags |= UNCACHEABLE;
+            req->setFlags(req->getFlags() | UNCACHEABLE);
 
 #if !ALPHA_TLASER
             // Clear bits 42:35 of the physical address (10-2 in Tsunami manual)
-            req->paddr &= PAddrUncachedMask;
+            req->setPaddr(req->getPaddr() & PAddrUncachedMask);
 #endif
         }
     }
+    return NoFault;
 }
 
 
@@ -290,38 +281,24 @@ AlphaITB::regStats()
     accesses = hits + misses;
 }
 
-void
-AlphaITB::fault(Addr pc, ExecContext *xc) const
-{
-    if (!xc->misspeculating()) {
-        xc->setMiscReg(AlphaISA::IPR_ITB_TAG, pc);
-        xc->setMiscReg(AlphaISA::IPR_IFAULT_VA_FORM,
-                       xc->readMiscReg(AlphaISA::IPR_IVPTBR) |
-                       (AlphaISA::VAddr(pc).vpn() << 3));
-    }
-}
-
 
 Fault
-AlphaITB::translate(MemReqPtr &req) const
+AlphaITB::translate(RequestPtr &req, ExecContext *xc) const
 {
-    ExecContext *xc = req->xc;
-
-    if (AlphaISA::PcPAL(req->vaddr)) {
+    if (AlphaISA::PcPAL(req->getVaddr())) {
         // strip off PAL PC marker (lsb is 1)
-        req->paddr = (req->vaddr & ~3) & PAddrImplMask;
+        req->setPaddr((req->getVaddr() & ~3) & PAddrImplMask);
         hits++;
         return NoFault;
     }
 
-    if (req->flags & PHYSICAL) {
-        req->paddr = req->vaddr;
+    if (req->getFlags() & PHYSICAL) {
+        req->setPaddr(req->getVaddr());
     } else {
         // verify that this is a good virtual address
-        if (!validVirtualAddress(req->vaddr)) {
-            fault(req->vaddr, req->xc);
+        if (!validVirtualAddress(req->getVaddr())) {
             acv++;
-            return new ItbAcvFault;
+            return new ItbAcvFault(req->getVaddr());
         }
 
 
@@ -329,50 +306,48 @@ AlphaITB::translate(MemReqPtr &req) const
         // VA<47:41> == 0x7e, VA<40:13> maps directly to PA<40:13> for EV6
 #if ALPHA_TLASER
         if ((MCSR_SP(xc->readMiscReg(AlphaISA::IPR_MCSR)) & 2) &&
-            VAddrSpaceEV5(req->vaddr) == 2) {
+            VAddrSpaceEV5(req->getVaddr()) == 2) {
 #else
-        if (VAddrSpaceEV6(req->vaddr) == 0x7e) {
+        if (VAddrSpaceEV6(req->getVaddr()) == 0x7e) {
 #endif
             // only valid in kernel mode
             if (ICM_CM(xc->readMiscReg(AlphaISA::IPR_ICM)) !=
                 AlphaISA::mode_kernel) {
-                fault(req->vaddr, req->xc);
                 acv++;
-                return new ItbAcvFault;
+                return new ItbAcvFault(req->getVaddr());
             }
 
-            req->paddr = req->vaddr & PAddrImplMask;
+            req->setPaddr(req->getVaddr() & PAddrImplMask);
 
 #if !ALPHA_TLASER
             // sign extend the physical address properly
-            if (req->paddr & PAddrUncachedBit40)
-                req->paddr |= ULL(0xf0000000000);
+            if (req->getPaddr() & PAddrUncachedBit40)
+                req->setPaddr(req->getPaddr() | ULL(0xf0000000000));
             else
-                req->paddr &= ULL(0xffffffffff);
+                req->setPaddr(req->getPaddr() & ULL(0xffffffffff));
 #endif
 
         } else {
             // not a physical address: need to look up pte
             int asn = DTB_ASN_ASN(xc->readMiscReg(AlphaISA::IPR_DTB_ASN));
-            AlphaISA::PTE *pte = lookup(AlphaISA::VAddr(req->vaddr).vpn(),
+            AlphaISA::PTE *pte = lookup(AlphaISA::VAddr(req->getVaddr()).vpn(),
                                         asn);
 
             if (!pte) {
-                fault(req->vaddr, req->xc);
                 misses++;
-                return new ItbPageFault;
+                return new ItbPageFault(req->getVaddr());
             }
 
-            req->paddr = (pte->ppn << AlphaISA::PageShift) +
-                (AlphaISA::VAddr(req->vaddr).offset() & ~3);
+            req->setPaddr((pte->ppn << AlphaISA::PageShift) +
+                          (AlphaISA::VAddr(req->getVaddr()).offset()
+                           & ~3));
 
             // check permissions for this access
             if (!(pte->xre &
                   (1 << ICM_CM(xc->readMiscReg(AlphaISA::IPR_ICM))))) {
                 // instruction access fault
-                fault(req->vaddr, req->xc);
                 acv++;
-                return new ItbAcvFault;
+                return new ItbAcvFault(req->getVaddr());
             }
 
             hits++;
@@ -380,12 +355,11 @@ AlphaITB::translate(MemReqPtr &req) const
     }
 
     // check that the physical address is ok (catch bad physical addresses)
-    if (req->paddr & ~PAddrImplMask)
+    if (req->getPaddr() & ~PAddrImplMask)
         return genMachineCheckFault();
 
-    checkCacheability(req);
+    return checkCacheability(req);
 
-    return NoFault;
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -465,38 +439,9 @@ AlphaDTB::regStats()
     accesses = read_accesses + write_accesses;
 }
 
-void
-AlphaDTB::fault(MemReqPtr &req, uint64_t flags) const
-{
-    ExecContext *xc = req->xc;
-    AlphaISA::VAddr vaddr = req->vaddr;
-
-    // Set fault address and flags.  Even though we're modeling an
-    // EV5, we use the EV6 technique of not latching fault registers
-    // on VPTE loads (instead of locking the registers until IPR_VA is
-    // read, like the EV5).  The EV6 approach is cleaner and seems to
-    // work with EV5 PAL code, but not the other way around.
-    if (!xc->misspeculating()
-        && !(req->flags & VPTE) && !(req->flags & NO_FAULT)) {
-        // set VA register with faulting address
-        xc->setMiscReg(AlphaISA::IPR_VA, req->vaddr);
-
-        // set MM_STAT register flags
-        xc->setMiscReg(AlphaISA::IPR_MM_STAT,
-            (((Opcode(xc->getInst()) & 0x3f) << 11)
-             | ((Ra(xc->getInst()) & 0x1f) << 6)
-             | (flags & 0x3f)));
-
-        // set VA_FORM register with faulting formatted address
-        xc->setMiscReg(AlphaISA::IPR_VA_FORM,
-            xc->readMiscReg(AlphaISA::IPR_MVPTBR) | (vaddr.vpn() << 3));
-    }
-}
-
 Fault
-AlphaDTB::translate(MemReqPtr &req, bool write) const
+AlphaDTB::translate(RequestPtr &req, ExecContext *xc, bool write) const
 {
-    ExecContext *xc = req->xc;
     Addr pc = xc->readPC();
 
     AlphaISA::mode_type mode =
@@ -506,58 +451,57 @@ AlphaDTB::translate(MemReqPtr &req, bool write) const
     /**
      * Check for alignment faults
      */
-    if (req->vaddr & (req->size - 1)) {
-        fault(req, write ? MM_STAT_WR_MASK : 0);
-        DPRINTF(TLB, "Alignment Fault on %#x, size = %d", req->vaddr,
-                req->size);
-        return genAlignmentFault();
+    if (req->getVaddr() & (req->getSize() - 1)) {
+        DPRINTF(TLB, "Alignment Fault on %#x, size = %d", req->getVaddr(),
+                req->getSize());
+        uint64_t flags = write ? MM_STAT_WR_MASK : 0;
+        return new DtbAlignmentFault(req->getVaddr(), req->getFlags(), flags);
     }
 
     if (pc & 0x1) {
-        mode = (req->flags & ALTMODE) ?
+        mode = (req->getFlags() & ALTMODE) ?
             (AlphaISA::mode_type)ALT_MODE_AM(
                 xc->readMiscReg(AlphaISA::IPR_ALT_MODE))
             : AlphaISA::mode_kernel;
     }
 
-    if (req->flags & PHYSICAL) {
-        req->paddr = req->vaddr;
+    if (req->getFlags() & PHYSICAL) {
+        req->setPaddr(req->getVaddr());
     } else {
         // verify that this is a good virtual address
-        if (!validVirtualAddress(req->vaddr)) {
-            fault(req, (write ? MM_STAT_WR_MASK : 0) |
-                  MM_STAT_BAD_VA_MASK |
-                  MM_STAT_ACV_MASK);
-
+        if (!validVirtualAddress(req->getVaddr())) {
             if (write) { write_acv++; } else { read_acv++; }
-            return new DtbPageFault;
+            uint64_t flags = (write ? MM_STAT_WR_MASK : 0) |
+                MM_STAT_BAD_VA_MASK |
+                MM_STAT_ACV_MASK;
+            return new DtbPageFault(req->getVaddr(), req->getFlags(), flags);
         }
 
         // Check for "superpage" mapping
 #if ALPHA_TLASER
         if ((MCSR_SP(xc->readMiscReg(AlphaISA::IPR_MCSR)) & 2) &&
-            VAddrSpaceEV5(req->vaddr) == 2) {
+            VAddrSpaceEV5(req->getVaddr()) == 2) {
 #else
-        if (VAddrSpaceEV6(req->vaddr) == 0x7e) {
+        if (VAddrSpaceEV6(req->getVaddr()) == 0x7e) {
 #endif
 
             // only valid in kernel mode
             if (DTB_CM_CM(xc->readMiscReg(AlphaISA::IPR_DTB_CM)) !=
                 AlphaISA::mode_kernel) {
-                fault(req, ((write ? MM_STAT_WR_MASK : 0) |
-                            MM_STAT_ACV_MASK));
                 if (write) { write_acv++; } else { read_acv++; }
-                return new DtbAcvFault;
+                uint64_t flags = ((write ? MM_STAT_WR_MASK : 0) |
+                                  MM_STAT_ACV_MASK);
+                return new DtbAcvFault(req->getVaddr(), req->getFlags(), flags);
             }
 
-            req->paddr = req->vaddr & PAddrImplMask;
+            req->setPaddr(req->getVaddr() & PAddrImplMask);
 
 #if !ALPHA_TLASER
             // sign extend the physical address properly
-            if (req->paddr & PAddrUncachedBit40)
-                req->paddr |= ULL(0xf0000000000);
+            if (req->getPaddr() & PAddrUncachedBit40)
+                req->setPaddr(req->getPaddr() | ULL(0xf0000000000));
             else
-                req->paddr &= ULL(0xffffffffff);
+                req->setPaddr(req->getPaddr() & ULL(0xffffffffff));
 #endif
 
         } else {
@@ -569,48 +513,50 @@ AlphaDTB::translate(MemReqPtr &req, bool write) const
             int asn = DTB_ASN_ASN(xc->readMiscReg(AlphaISA::IPR_DTB_ASN));
 
             // not a physical address: need to look up pte
-            AlphaISA::PTE *pte = lookup(AlphaISA::VAddr(req->vaddr).vpn(),
+            AlphaISA::PTE *pte = lookup(AlphaISA::VAddr(req->getVaddr()).vpn(),
                                         asn);
 
             if (!pte) {
                 // page fault
-                fault(req, (write ? MM_STAT_WR_MASK : 0) |
-                      MM_STAT_DTB_MISS_MASK);
                 if (write) { write_misses++; } else { read_misses++; }
-                return (req->flags & VPTE) ?
-                    (Fault)(new PDtbMissFault) :
-                    (Fault)(new NDtbMissFault);
+                uint64_t flags = (write ? MM_STAT_WR_MASK : 0) |
+                    MM_STAT_DTB_MISS_MASK;
+                return (req->getFlags() & VPTE) ?
+                    (Fault)(new PDtbMissFault(req->getVaddr(), req->getFlags(),
+                                              flags)) :
+                    (Fault)(new NDtbMissFault(req->getVaddr(), req->getFlags(),
+                                              flags));
             }
 
-            req->paddr = (pte->ppn << AlphaISA::PageShift) +
-                AlphaISA::VAddr(req->vaddr).offset();
+            req->setPaddr((pte->ppn << AlphaISA::PageShift) +
+                AlphaISA::VAddr(req->getVaddr()).offset());
 
             if (write) {
                 if (!(pte->xwe & MODE2MASK(mode))) {
                     // declare the instruction access fault
-                    fault(req, MM_STAT_WR_MASK |
-                          MM_STAT_ACV_MASK |
-                          (pte->fonw ? MM_STAT_FONW_MASK : 0));
                     write_acv++;
-                    return new DtbPageFault;
+                    uint64_t flags = MM_STAT_WR_MASK |
+                        MM_STAT_ACV_MASK |
+                        (pte->fonw ? MM_STAT_FONW_MASK : 0);
+                    return new DtbPageFault(req->getVaddr(), req->getFlags(), flags);
                 }
                 if (pte->fonw) {
-                    fault(req, MM_STAT_WR_MASK |
-                          MM_STAT_FONW_MASK);
                     write_acv++;
-                    return new DtbPageFault;
+                    uint64_t flags = MM_STAT_WR_MASK |
+                        MM_STAT_FONW_MASK;
+                    return new DtbPageFault(req->getVaddr(), req->getFlags(), flags);
                 }
             } else {
                 if (!(pte->xre & MODE2MASK(mode))) {
-                    fault(req, MM_STAT_ACV_MASK |
-                          (pte->fonr ? MM_STAT_FONR_MASK : 0));
                     read_acv++;
-                    return new DtbAcvFault;
+                    uint64_t flags = MM_STAT_ACV_MASK |
+                        (pte->fonr ? MM_STAT_FONR_MASK : 0);
+                    return new DtbAcvFault(req->getVaddr(), req->getFlags(), flags);
                 }
                 if (pte->fonr) {
-                    fault(req, MM_STAT_FONR_MASK);
                     read_acv++;
-                    return new DtbPageFault;
+                    uint64_t flags = MM_STAT_FONR_MASK;
+                    return new DtbPageFault(req->getVaddr(), req->getFlags(), flags);
                 }
             }
         }
@@ -622,12 +568,10 @@ AlphaDTB::translate(MemReqPtr &req, bool write) const
     }
 
     // check that the physical address is ok (catch bad physical addresses)
-    if (req->paddr & ~PAddrImplMask)
+    if (req->getPaddr() & ~PAddrImplMask)
         return genMachineCheckFault();
 
-    checkCacheability(req);
-
-    return NoFault;
+    return checkCacheability(req);
 }
 
 AlphaISA::PTE &

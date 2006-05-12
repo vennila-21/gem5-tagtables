@@ -62,6 +62,7 @@ base_sources = Split('''
 	base/range.cc
 	base/random.cc
 	base/sat_counter.cc
+        base/serializer.cc
 	base/socket.cc
 	base/statistics.cc
 	base/str.cc
@@ -81,70 +82,21 @@ base_sources = Split('''
 	base/stats/text.cc
 
 	cpu/base.cc
-        cpu/base_dyn_inst.cc
 	cpu/cpu_exec_context.cc
 	cpu/exetrace.cc
+        cpu/op_class.cc
 	cpu/pc_event.cc
 	cpu/static_inst.cc
         cpu/sampler/sampler.cc
-        cpu/trace/reader/mem_trace_reader.cc
-        cpu/trace/reader/ibm_reader.cc
-        cpu/trace/reader/itx_reader.cc
-        cpu/trace/reader/m5_reader.cc
-        cpu/trace/opt_cpu.cc
-        cpu/trace/trace_cpu.cc
-
-	encumbered/mem/functional/main.cc
-
-	mem/base_hier.cc
-	mem/base_mem.cc
-	mem/hier_params.cc
-	mem/mem_cmd.cc
-	mem/mem_debug.cc
-	mem/mem_req.cc
-	mem/memory_interface.cc
-	mem/bus/base_interface.cc
-	mem/bus/bus.cc
-	mem/bus/bus_bridge.cc
-	mem/bus/bus_bridge_master.cc
-	mem/bus/bus_bridge_slave.cc
-	mem/bus/bus_interface.cc
-	mem/bus/dma_bus_interface.cc
-	mem/bus/dma_interface.cc
-	mem/bus/master_interface.cc
-	mem/bus/slave_interface.cc
-	mem/cache/base_cache.cc
-	mem/cache/cache.cc
-	mem/cache/cache_builder.cc
-	mem/cache/coherence/coherence_protocol.cc
-	mem/cache/coherence/uni_coherence.cc
-	mem/cache/miss/blocking_buffer.cc
-	mem/cache/miss/miss_queue.cc
-	mem/cache/miss/mshr.cc
-	mem/cache/miss/mshr_queue.cc
-        mem/cache/prefetch/base_prefetcher.cc
-        mem/cache/prefetch/prefetcher.cc
-        mem/cache/prefetch/tagged_prefetcher.cc
-	mem/cache/tags/base_tags.cc
-	mem/cache/tags/cache_tags.cc	
-	mem/cache/tags/fa_lru.cc
-	mem/cache/tags/iic.cc
-	mem/cache/tags/lru.cc
-	mem/cache/tags/repl/gen.cc
-	mem/cache/tags/repl/repl.cc
-	mem/cache/tags/split.cc
-	mem/cache/tags/split_lru.cc
-	mem/cache/tags/split_lifo.cc
-	mem/functional/functional.cc
-	mem/timing/base_memory.cc
-        mem/timing/dram_memory.cc
-        mem/timing/dram_mem_bank.cc
-        mem/timing/dram_memory_builder.cc
-	mem/timing/memory_builder.cc
-	mem/timing/simple_mem_bank.cc
-        mem/trace/itx_writer.cc
-	mem/trace/mem_trace_writer.cc
-	mem/trace/m5_writer.cc
+    
+        mem/bridge.cc
+        mem/bus.cc
+        mem/connector.cc
+        mem/mem_object.cc
+        mem/packet.cc
+        mem/physical.cc
+        mem/port.cc
+        mem/request.cc
 
         python/pyconfig.cc
         python/embedded_py.cc
@@ -165,6 +117,7 @@ base_sources = Split('''
 	sim/startup.cc
 	sim/stat_context.cc
 	sim/stat_control.cc
+	sim/system.cc
 	sim/trace_context.cc
         ''')
 
@@ -207,6 +160,17 @@ full_cpu_sources = Split('''
         encumbered/cpu/full/iq/standard/iq_standard.cc
         ''')
 
+trace_reader_sources = Split('''
+        cpu/trace/reader/mem_trace_reader.cc
+        cpu/trace/reader/ibm_reader.cc
+        cpu/trace/reader/itx_reader.cc
+        cpu/trace/reader/m5_reader.cc
+        cpu/trace/opt_cpu.cc
+        cpu/trace/trace_cpu.cc
+        ''')
+
+
+
 # MySql sources
 mysql_sources = Split('''
 	base/mysql.cc
@@ -224,30 +188,32 @@ full_system_sources = Split('''
 
 	dev/alpha_console.cc
 	dev/baddev.cc
-        dev/simconsole.cc
 	dev/disk_image.cc
 	dev/etherbus.cc
 	dev/etherdump.cc
 	dev/etherint.cc
 	dev/etherlink.cc
 	dev/etherpkt.cc
-	dev/ethertap.cc
-	dev/ide_ctrl.cc
+	dev/ethertap.cc	
+        dev/ide_ctrl.cc
 	dev/ide_disk.cc
 	dev/io_device.cc
+	dev/isa_fake.cc
 	dev/ns_gige.cc
 	dev/pciconfigall.cc
 	dev/pcidev.cc
 	dev/pcifake.cc
 	dev/pktfifo.cc
 	dev/platform.cc
-	dev/sinic.cc
+        dev/simconsole.cc
 	dev/simple_disk.cc
+	dev/sinic.cc
 	dev/tsunami.cc
 	dev/tsunami_cchip.cc
-	dev/isa_fake.cc
 	dev/tsunami_io.cc
+	dev/tsunami_fake.cc
 	dev/tsunami_pchip.cc
+
 	dev/uart.cc
 	dev/uart8250.cc
 
@@ -257,16 +223,19 @@ full_system_sources = Split('''
 	kern/linux/events.cc
 	kern/linux/linux_syscalls.cc
 	kern/linux/printk.cc
+
+        mem/vport.cc
+
+	sim/pseudo_inst.cc
+        ''')
+
+
+if env['TARGET_ISA'] == 'alpha':
+    full_system_sources += Split('''
 	kern/tru64/dump_mbuf.cc
 	kern/tru64/printf.cc
 	kern/tru64/tru64_events.cc
 	kern/tru64/tru64_syscalls.cc
-
-	mem/functional/memory_control.cc
-	mem/functional/physical.cc
-
-	sim/system.cc
-	sim/pseudo_inst.cc
         ''')
 
 # turbolaser encumbered sources
@@ -291,14 +260,28 @@ turbolaser_sources = Split('''
 
 # Syscall emulation (non-full-system) sources
 syscall_emulation_sources = Split('''
-	cpu/memtest/memtest.cc
-	encumbered/eio/eio.cc
-	encumbered/eio/exolex.cc
-	encumbered/eio/libexo.cc
-        kern/linux/linux.cc
-        kern/tru64/tru64.cc
+        mem/translating_port.cc
+        mem/page_table.cc
 	sim/process.cc
 	sim/syscall_emul.cc
+        ''')
+
+#if env['TARGET_ISA'] == 'alpha':
+#    syscall_emulation_sources += Split('''
+#        kern/tru64/tru64.cc
+#        ''')
+
+alpha_eio_sources = Split('''
+	encumbered/eio/exolex.cc
+	encumbered/eio/libexo.cc
+	encumbered/eio/eio.cc
+        ''')
+
+if env['TARGET_ISA'] == 'ALPHA_ISA':
+    syscall_emulation_sources += alpha_eio_sources
+    
+memtest_sources = Split('''
+	cpu/memtest/memtest.cc
         ''')
 
 # Add a flag defining what THE_ISA should be for all compilation
@@ -380,7 +363,7 @@ env.Append(CPPPATH='./libelf')
 # Debug binary
 debugEnv = env.Copy(OBJSUFFIX='.do')
 debugEnv.Label = 'debug'
-debugEnv.Append(CCFLAGS=Split('-g -gstabs+ -O0'))
+debugEnv.Append(CCFLAGS=Split('-g3 -gdwarf-2 -O0'))
 debugEnv.Append(CPPDEFINES='DEBUG')
 tlist = debugEnv.Program(target = 'm5.debug',
                          source = make_objs(sources, debugEnv))
@@ -389,7 +372,7 @@ debugEnv.M5Binary = tlist[0]
 # Optimized binary
 optEnv = env.Copy()
 optEnv.Label = 'opt'
-optEnv.Append(CCFLAGS=Split('-g -O5'))
+optEnv.Append(CCFLAGS=Split('-g -O3'))
 tlist = optEnv.Program(target = 'm5.opt',
                        source = make_objs(sources, optEnv))
 optEnv.M5Binary = tlist[0]
@@ -397,7 +380,7 @@ optEnv.M5Binary = tlist[0]
 # "Fast" binary
 fastEnv = env.Copy(OBJSUFFIX='.fo')
 fastEnv.Label = 'fast'
-fastEnv.Append(CCFLAGS=Split('-O5'))
+fastEnv.Append(CCFLAGS=Split('-O3'))
 fastEnv.Append(CPPDEFINES='NDEBUG')
 fastEnv.Program(target = 'm5.fast.unstripped',
                 source = make_objs(sources, fastEnv))
@@ -409,7 +392,7 @@ fastEnv.M5Binary = tlist[0]
 # Profiled binary
 profEnv = env.Copy(OBJSUFFIX='.po')
 profEnv.Label = 'prof'
-profEnv.Append(CCFLAGS=Split('-O5 -g -pg'), LINKFLAGS='-pg')
+profEnv.Append(CCFLAGS=Split('-O3 -g -pg'), LINKFLAGS='-pg')
 tlist = profEnv.Program(target = 'm5.prof',
                         source = make_objs(sources, profEnv))
 profEnv.M5Binary = tlist[0]

@@ -142,6 +142,8 @@ baseFlags = [
     'OoOCPU',
     'HWPrefetch',
     'Stack',
+    'SimpleCPU',
+    'Sparc',
     ]
 
 #

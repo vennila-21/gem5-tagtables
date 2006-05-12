@@ -29,7 +29,7 @@
 #include "arch/alpha/arguments.hh"
 #include "arch/alpha/vtophys.hh"
 #include "cpu/exec_context.hh"
-#include "mem/functional/physical.hh"
+#include "mem/vport.hh"
 
 using namespace AlphaISA;
 
@@ -54,13 +54,15 @@ AlphaArguments::getArg(bool fp)
 {
     if (number < 6) {
         if (fp)
-            return xc->readFloatRegInt(16 + number);
+            return xc->readFloatRegBits(16 + number);
         else
             return xc->readIntReg(16 + number);
     } else {
         Addr sp = xc->readIntReg(30);
-        Addr paddr = vtophys(xc, sp + (number-6) * sizeof(uint64_t));
-        return xc->getPhysMemPtr()->phys_read_qword(paddr);
+        VirtualPort *vp = xc->getVirtPort(xc);
+        uint64_t arg = vp->read<uint64_t>(sp + (number-6) * sizeof(uint64_t));
+        xc->delVirtPort(vp);
+        return arg;
     }
 }
 
