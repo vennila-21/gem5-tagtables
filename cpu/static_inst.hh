@@ -40,12 +40,18 @@
 
 // forward declarations
 struct AlphaSimpleImpl;
+struct OzoneImpl;
+struct SimpleImpl;
 class ExecContext;
 class DynInst;
 
 template <class Impl>
 class AlphaDynInst;
 
+template <class Impl>
+class OzoneDynInst;
+
+class CheckerCPU;
 class FastCPU;
 class SimpleCPU;
 class InorderCPU;
@@ -121,6 +127,9 @@ class StaticInstBase : public RefCounted
         IsWriteBarrier,	///< Is a write barrier
 
         IsNonSpeculative, ///< Should not be executed speculatively
+        IsQuiesce,
+
+        IsUnverifiable,
 
         NumFlags
     };
@@ -208,6 +217,8 @@ class StaticInstBase : public RefCounted
     bool isMemBarrier()   const { return flags[IsMemBarrier]; }
     bool isWriteBarrier() const { return flags[IsWriteBarrier]; }
     bool isNonSpeculative() const { return flags[IsNonSpeculative]; }
+    bool isQuiesce() const { return flags[IsQuiesce]; }
+    bool isUnverifiable() const { return flags[IsUnverifiable]; }
     //@}
 
     /// Operation class.  Used to select appropriate function unit in issue.
