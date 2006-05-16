@@ -42,6 +42,7 @@
 class AlphaDTB;
 class AlphaITB;
 class BaseCPU;
+class EndQuiesceEvent;
 class Event;
 class FunctionalMemory;
 class PhysicalMemory;
@@ -130,7 +131,7 @@ class ExecContext
     virtual void unserialize(Checkpoint *cp, const std::string &section) = 0;
 
 #if FULL_SYSTEM
-    virtual Event *getQuiesceEvent() = 0;
+    virtual EndQuiesceEvent *getQuiesceEvent() = 0;
 
     // Not necessarily the best location for these...
     // Having an extra function just to read these is obnoxious
@@ -142,17 +143,6 @@ class ExecContext
 #endif
 
     virtual int getThreadNum() = 0;
-
-    virtual bool validInstAddr(Addr addr) = 0;
-    virtual bool validDataAddr(Addr addr) = 0;
-    virtual int getInstAsid() = 0;
-    virtual int getDataAsid() = 0;
-
-    virtual Fault translateInstReq(MemReqPtr &req) = 0;
-
-    virtual Fault translateDataReadReq(MemReqPtr &req) = 0;
-
-    virtual Fault translateDataWriteReq(MemReqPtr &req) = 0;
 
     // Also somewhat obnoxious.  Really only used for the TLB fault.
     // However, may be quite useful in SPARC.
@@ -204,11 +194,7 @@ class ExecContext
     virtual void setStCondFailures(unsigned sc_failures) = 0;
 
 #if FULL_SYSTEM
-    virtual int readIntrFlag() = 0;
-    virtual void setIntrFlag(int val) = 0;
-    virtual Fault hwrei() = 0;
     virtual bool inPalMode() = 0;
-    virtual bool simPalCheck(int palFunc) = 0;
 #endif
 
     // Only really makes sense for old CPU model.  Still could be useful though.
@@ -222,12 +208,10 @@ class ExecContext
 
     virtual void setSyscallReturn(SyscallReturn return_value) = 0;
 
-    virtual void syscall() = 0;
+//    virtual void syscall() = 0;
 
     // Same with st cond failures.
     virtual Counter readFuncExeInst() = 0;
-
-    virtual void setFuncExeInst(Counter new_val) = 0;
 #endif
 };
 
@@ -294,7 +278,7 @@ class ProxyExecContext : public ExecContext
     { actualXC->unserialize(cp, section); }
 
 #if FULL_SYSTEM
-    Event *getQuiesceEvent() { return actualXC->getQuiesceEvent(); }
+    EndQuiesceEvent *getQuiesceEvent() { return actualXC->getQuiesceEvent(); }
 
     Tick readLastActivate() { return actualXC->readLastActivate(); }
     Tick readLastSuspend() { return actualXC->readLastSuspend(); }
@@ -304,20 +288,6 @@ class ProxyExecContext : public ExecContext
 #endif
 
     int getThreadNum() { return actualXC->getThreadNum(); }
-
-    bool validInstAddr(Addr addr) { return actualXC->validInstAddr(addr); }
-    bool validDataAddr(Addr addr) { return actualXC->validDataAddr(addr); }
-    int getInstAsid() { return actualXC->getInstAsid(); }
-    int getDataAsid() { return actualXC->getDataAsid(); }
-
-    Fault translateInstReq(MemReqPtr &req)
-    { return actualXC->translateInstReq(req); }
-
-    Fault translateDataReadReq(MemReqPtr &req)
-    { return actualXC->translateDataReadReq(req); }
-
-    Fault translateDataWriteReq(MemReqPtr &req)
-    { return actualXC->translateDataWriteReq(req); }
 
     // @todo: Do I need this?
     MachInst getInst() { return actualXC->getInst(); }
@@ -379,17 +349,8 @@ class ProxyExecContext : public ExecContext
 
     void setStCondFailures(unsigned sc_failures)
     { actualXC->setStCondFailures(sc_failures); }
-
 #if FULL_SYSTEM
-    int readIntrFlag() { return actualXC->readIntrFlag(); }
-
-    void setIntrFlag(int val) { actualXC->setIntrFlag(val); }
-
-    Fault hwrei() { return actualXC->hwrei(); }
-
     bool inPalMode() { return actualXC->inPalMode(); }
-
-    bool simPalCheck(int palFunc) { return actualXC->simPalCheck(palFunc); }
 #endif
 
     // @todo: Fix this!
@@ -405,12 +366,9 @@ class ProxyExecContext : public ExecContext
     void setSyscallReturn(SyscallReturn return_value)
     { actualXC->setSyscallReturn(return_value); }
 
-    void syscall() { actualXC->syscall(); }
+//    void syscall() { actualXC->syscall(); }
 
     Counter readFuncExeInst() { return actualXC->readFuncExeInst(); }
-
-    void setFuncExeInst(Counter new_val)
-    { return actualXC->setFuncExeInst(new_val); }
 #endif
 };
 

@@ -85,6 +85,7 @@ base_sources = Split('''
 	cpu/cpu_exec_context.cc
 	cpu/exetrace.cc
 	cpu/pc_event.cc
+        cpu/quiesce_event.cc
 	cpu/static_inst.cc
         cpu/sampler/sampler.cc
         cpu/trace/reader/mem_trace_reader.cc
@@ -380,7 +381,7 @@ env.Append(CPPPATH='./libelf')
 # Debug binary
 debugEnv = env.Copy(OBJSUFFIX='.do')
 debugEnv.Label = 'debug'
-debugEnv.Append(CCFLAGS=Split('-g -gstabs+ -O0'))
+debugEnv.Append(CCFLAGS=Split('-g -gdwarf-2 -O0'))
 debugEnv.Append(CPPDEFINES='DEBUG')
 tlist = debugEnv.Program(target = 'm5.debug',
                          source = make_objs(sources, debugEnv))
