@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,53 +26,37 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/**
- * @file Port object definitions.
- */
+#ifndef __ARCH_SPARC_SOLARIS_SOLARIS_HH__
+#define __ARCH_SPARC_SOLARIS_SOLARIS_HH__
 
-#include "base/chunk_generator.hh"
-#include "mem/packet_impl.hh"
-#include "mem/port.hh"
+#include "kern/solaris/solaris.hh"
 
-void
-Port::blobHelper(Addr addr, uint8_t *p, int size, Command cmd)
+class SparcSolaris : public Solaris
 {
-    Request req(false);
-    Packet pkt;
-    pkt.req = &req;
-    pkt.cmd = cmd;
-    pkt.dest = Packet::Broadcast;
+  public:
 
-    for (ChunkGenerator gen(addr, size, peerBlockSize());
-         !gen.done(); gen.next()) {
-        req.setPaddr(pkt.addr = gen.addr());
-        req.setSize(pkt.size = gen.size());
-        pkt.dataStatic(p);
-        sendFunctional(pkt);
-        p += gen.size();
-    }
-}
+    static OpenFlagTransTable openFlagTable[];
 
-void
-Port::writeBlob(Addr addr, uint8_t *p, int size)
-{
-    blobHelper(addr, p, size, Write);
-}
+    static const int TGT_O_RDONLY	= 0x00000000;	//!< O_RDONLY
+    static const int TGT_O_WRONLY	= 0x00000001;	//!< O_WRONLY
+    static const int TGT_O_RDWR	        = 0x00000002;	//!< O_RDWR
+    static const int TGT_O_NDELAY       = 0x00000004;	//!< O_NONBLOCK
+    static const int TGT_O_APPEND	= 0x00000008;	//!< O_APPEND
+    static const int TGT_O_SYNC         = 0x00000010;   //!< O_SYNC
+    static const int TGT_O_DSYNC        = 0x00000040;   //!< O_SYNC
+    static const int TGT_O_RSYNC        = 0x00008000;   //!< O_SYNC
+    static const int TGT_O_NONBLOCK     = 0x00000080;   //!< O_NONBLOCK
+    static const int TGT_O_PRIV         = 0x00001000;   //??
+    static const int TGT_O_LARGEFILE    = 0x00002000;   //??
+    static const int TGT_O_CREAT	= 0x00000100;	//!< O_CREAT
+    static const int TGT_O_TRUNC	= 0x00000200;	//!< O_TRUNC
+    static const int TGT_O_EXCL	        = 0x00000400;	//!< O_EXCL
+    static const int TGT_O_NOCTTY	= 0x00000800;	//!< O_NOCTTY
+    static const int TGT_O_XATTR        = 0x00004000;	//??
 
-void
-Port::readBlob(Addr addr, uint8_t *p, int size)
-{
-    blobHelper(addr, p, size, Read);
-}
+    static const int NUM_OPEN_FLAGS;
 
-void
-Port::memsetBlob(Addr addr, uint8_t val, int size)
-{
-    // quick and dirty...
-    uint8_t *buf = new uint8_t[size];
+    static const unsigned TGT_MAP_ANONYMOUS = 0x100;
+};
 
-    memset(buf, val, size);
-    blobHelper(addr, buf, size, Write);
-
-    delete [] buf;
-}
+#endif
