@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * Copyright (c) 2003-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,53 +26,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/**
- * @file Port object definitions.
- */
+#ifndef __SPARC_SOLARIS_PROCESS_HH__
+#define __SPARC_SOLARIS_PROCESS_HH__
 
-#include "base/chunk_generator.hh"
-#include "mem/packet_impl.hh"
-#include "mem/port.hh"
+#include "arch/sparc/solaris/solaris.hh"
+#include "arch/sparc/process.hh"
+#include "sim/process.hh"
 
-void
-Port::blobHelper(Addr addr, uint8_t *p, int size, Command cmd)
+namespace SparcISA {
+
+/// A process with emulated SPARC/Solaris syscalls.
+class SparcSolarisProcess : public SparcLiveProcess
 {
-    Request req(false);
-    Packet pkt;
-    pkt.req = &req;
-    pkt.cmd = cmd;
-    pkt.dest = Packet::Broadcast;
+  public:
+    /// Constructor.
+    SparcSolarisProcess(const std::string &name,
+                      ObjectFile *objFile,
+                      System * system,
+                      int stdin_fd, int stdout_fd, int stderr_fd,
+                      std::vector<std::string> &argv,
+                      std::vector<std::string> &envp);
 
-    for (ChunkGenerator gen(addr, size, peerBlockSize());
-         !gen.done(); gen.next()) {
-        req.setPaddr(pkt.addr = gen.addr());
-        req.setSize(pkt.size = gen.size());
-        pkt.dataStatic(p);
-        sendFunctional(pkt);
-        p += gen.size();
-    }
-}
+    virtual SyscallDesc* getDesc(int callnum);
 
-void
-Port::writeBlob(Addr addr, uint8_t *p, int size)
-{
-    blobHelper(addr, p, size, Write);
-}
+    /// The target system's hostname.
+    static const char *hostname;
 
-void
-Port::readBlob(Addr addr, uint8_t *p, int size)
-{
-    blobHelper(addr, p, size, Read);
-}
+     /// Array of syscall descriptors, indexed by call number.
+    static SyscallDesc syscallDescs[];
 
-void
-Port::memsetBlob(Addr addr, uint8_t val, int size)
-{
-    // quick and dirty...
-    uint8_t *buf = new uint8_t[size];
+    const int Num_Syscall_Descs;
+};
 
-    memset(buf, val, size);
-    blobHelper(addr, buf, size, Write);
 
-    delete [] buf;
-}
+} // namespace SparcISA
+#endif // __ALPHA_SOLARIS_PROCESS_HH__
