@@ -120,26 +120,17 @@ AtomicSimpleCPU::AtomicSimpleCPU(Params *p)
 {
     _status = Idle;
 
-    ifetch_req = new Request(true);
-    ifetch_req->setAsid(0);
-    // @todo fix me and get the real cpu iD!!!
-    ifetch_req->setCpuNum(0);
-    ifetch_req->setSize(sizeof(MachInst));
+    // @todo fix me and get the real cpu id & thread number!!!
+    ifetch_req = new Request();
     ifetch_pkt = new Packet(ifetch_req, Packet::ReadReq, Packet::Broadcast);
     ifetch_pkt->dataStatic(&inst);
 
-    data_read_req = new Request(true);
-    // @todo fix me and get the real cpu iD!!!
-    data_read_req->setCpuNum(0);
-    data_read_req->setAsid(0);
+    data_read_req = new Request();
     data_read_pkt = new Packet(data_read_req, Packet::ReadReq,
                                Packet::Broadcast);
     data_read_pkt->dataStatic(&dataReg);
 
-    data_write_req = new Request(true);
-    // @todo fix me and get the real cpu iD!!!
-    data_write_req->setCpuNum(0);
-    data_write_req->setAsid(0);
+    data_write_req = new Request();
     data_write_pkt = new Packet(data_write_req, Packet::WriteReq,
                                 Packet::Broadcast);
 }
@@ -236,10 +227,7 @@ template <class T>
 Fault
 AtomicSimpleCPU::read(Addr addr, T &data, unsigned flags)
 {
-    data_read_req->setVaddr(addr);
-    data_read_req->setSize(sizeof(T));
-    data_read_req->setFlags(flags);
-    data_read_req->setTime(curTick);
+    data_read_req->setVirt(0, addr, sizeof(T), flags, cpuXC->readPC());
 
     if (traceData) {
         traceData->setAddr(addr);
@@ -250,10 +238,9 @@ AtomicSimpleCPU::read(Addr addr, T &data, unsigned flags)
 
     // Now do the access.
     if (fault == NoFault) {
-        data_read_pkt->reset();
         data_read_pkt->reinitFromRequest();
 
-        dcache_complete = dcachePort.sendAtomic(data_read_pkt);
+        dcache_latency = dcachePort.sendAtomic(data_read_pkt);
         dcache_access = true;
 
         assert(data_read_pkt->result == Packet::Success);
@@ -315,10 +302,7 @@ template <class T>
 Fault
 AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 {
-    data_write_req->setVaddr(addr);
-    data_write_req->setTime(curTick);
-    data_write_req->setSize(sizeof(T));
-    data_write_req->setFlags(flags);
+    data_write_req->setVirt(0, addr, sizeof(T), flags, cpuXC->readPC());
 
     if (traceData) {
         traceData->setAddr(addr);
@@ -329,12 +313,11 @@ AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 
     // Now do the access.
     if (fault == NoFault) {
-        data_write_pkt->reset();
         data = htog(data);
-        data_write_pkt->dataStatic(&data);
         data_write_pkt->reinitFromRequest();
+        data_write_pkt->dataStatic(&data);
 
-        dcache_complete = dcachePort.sendAtomic(data_write_pkt);
+        dcache_latency = dcachePort.sendAtomic(data_write_pkt);
         dcache_access = true;
 
         assert(data_write_pkt->result == Packet::Success);
@@ -410,12 +393,12 @@ AtomicSimpleCPU::tick()
 
         checkForInterrupts();
 
-        ifetch_req->resetMin();
-        ifetch_pkt->reset();
-        Fault fault = setupFetchPacket(ifetch_pkt);
+        Fault fault = setupFetchRequest(ifetch_req);
 
         if (fault == NoFault) {
-            Tick icache_complete = icachePort.sendAtomic(ifetch_pkt);
+            ifetch_pkt->reinitFromRequest();
+
+            Tick icache_latency = icachePort.sendAtomic(ifetch_pkt);
             // ifetch_req is initialized to read the instruction directly
             // into the CPU object's inst field.
 
@@ -430,9 +413,9 @@ AtomicSimpleCPU::tick()
                 // cycle time.  If not, the next tick event may get
                 // scheduled at a non-integer multiple of the CPU
                 // cycle time.
-                Tick icache_stall = icache_complete - curTick - cycles(1);
+                Tick icache_stall = icache_latency - cycles(1);
                 Tick dcache_stall =
-                    dcache_access ? dcache_complete - curTick - cycles(1) : 0;
+                    dcache_access ? dcache_latency - cycles(1) : 0;
                 latency += icache_stall + dcache_stall;
             }
 

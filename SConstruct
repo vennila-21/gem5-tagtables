@@ -62,8 +62,13 @@
 import sys
 import os
 
-# Check for recent-enough Python and SCons versions
-EnsurePythonVersion(2,3)
+# Check for recent-enough Python and SCons versions.  If your system's
+# default installation of Python is not recent enough, you can use a
+# non-default installation of the Python interpreter by either (1)
+# rearranging your PATH so that scons finds the non-default 'python'
+# first or (2) explicitly invoking an alternative interpreter on the
+# scons script, e.g., "/usr/local/bin/python2.4 `which scons` [args]".
+EnsurePythonVersion(2,4)
 
 # Ironically, SCons 0.96 dies if you give EnsureSconsVersion a
 # 3-element version number.
@@ -169,7 +174,24 @@ if sys.platform == 'cygwin':
     env.Append(CCFLAGS=Split("-Wno-uninitialized"))
 env.Append(CPPPATH=[Dir('ext/dnet')])
 
-# Default libraries
+# Find Python include and library directories for embedding the
+# interpreter.  For consistency, we will use the same Python
+# installation used to run scons (and thus this script).  If you want
+# to link in an alternate version, see above for instructions on how
+# to invoke scons with a different copy of the Python interpreter.
+
+# Get brief Python version name (e.g., "python2.4") for locating
+# include & library files
+py_version_name = 'python' + sys.version[:3]
+
+# include path, e.g. /usr/local/include/python2.4
+env.Append(CPPPATH = os.path.join(sys.exec_prefix, 'include', py_version_name))
+env.Append(LIBS = py_version_name)
+# add library path too if it's not in the default place
+if sys.exec_prefix != '/usr':
+    env.Append(LIBPATH = os.path.join(sys.exec_prefix, 'lib'))
+
+# Other default libraries
 env.Append(LIBS=['z'])
 
 # Platform-specific configuration.  Note again that we assume that all
@@ -309,6 +331,32 @@ def config_emitter(target, source, env):
 config_builder = Builder(emitter = config_emitter, action = config_action)
 
 env.Append(BUILDERS = { 'ConfigFile' : config_builder })
+
+###################################################
+#
+# Define a SCons builder for copying files.  This is used by the
+# Python zipfile code in src/python/SConscript, but is placed up here
+# since it's potentially more generally applicable.
+#
+###################################################
+
+copy_builder = Builder(action = Copy("$TARGET", "$SOURCE"))
+
+env.Append(BUILDERS = { 'CopyFile' : copy_builder })
+
+###################################################
+#
+# Define a simple SCons builder to concatenate files.
+#
+# Used to append the Python zip archive to the executable.
+#
+###################################################
+
+concat_builder = Builder(action = Action(['cat $SOURCES > $TARGET',
+                                          'chmod +x $TARGET']))
+
+env.Append(BUILDERS = { 'Concat' : concat_builder })
+
 
 # base help text
 help_text = '''
