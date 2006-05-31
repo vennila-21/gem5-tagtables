@@ -74,6 +74,11 @@ class Port
     /** Descriptive name (for DPRINTF output) */
     const std::string portName;
 
+    /** A pointer to the peer port.  Ports always come in pairs, that way they
+        can use a standardized interface to communicate between different
+        memory objects. */
+    Port *peer;
+
   public:
 
     /**
@@ -83,7 +88,7 @@ class Port
      * of memory system object to which the port belongs.
      */
     Port(const std::string &_name)
-        : portName(_name)
+        : portName(_name), peer(NULL)
     { }
 
     /** Return port name (for DPRINTF). */
@@ -97,15 +102,6 @@ class Port
     enum Status {
         RangeChange
     };
-
-  private:
-
-    /** A pointer to the peer port.  Ports always come in pairs, that way they
-        can use a standardized interface to communicate between different
-        memory objects. */
-    Port *peer;
-
-  public:
 
     /** Function to set the pointer for the peer port.
         @todo should be called by the configuration stuff (python).
@@ -169,10 +165,11 @@ class Port
     */
     bool sendTiming(Packet *pkt) { return peer->recvTiming(pkt); }
 
-    /** Function called by the associated device to send an atomic access,
-        an access in which the data is moved and the state is updated in one
-        cycle, without interleaving with other memory accesses.
-    */
+    /** Function called by the associated device to send an atomic
+     *   access, an access in which the data is moved and the state is
+     *   updated in one cycle, without interleaving with other memory
+     *   accesses.  Returns estimated latency of access.
+     */
     Tick sendAtomic(Packet *pkt)
         { return peer->recvAtomic(pkt); }
 

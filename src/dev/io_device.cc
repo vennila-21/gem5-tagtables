@@ -80,10 +80,10 @@ PioPort::SendEvent::process()
 bool
 PioPort::recvTiming(Packet *pkt)
 {
-    device->recvAtomic(pkt);
+    Tick latency = device->recvAtomic(pkt);
     // turn packet around to go back to requester
     pkt->makeTimingResponse();
-    sendTiming(pkt, pkt->time - pkt->req->getTime());
+    sendTiming(pkt, latency);
     return true;
 }
 
@@ -170,15 +170,12 @@ DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
 
     for (ChunkGenerator gen(addr, size, peerBlockSize());
          !gen.done(); gen.next()) {
-            Request *req = new Request(false);
-            req->setPaddr(gen.addr());
-            req->setSize(gen.size());
-            req->setTime(curTick);
+            Request *req = new Request(gen.addr(), gen.size(), 0);
             Packet *pkt = new Packet(req, cmd, Packet::Broadcast);
 
             // Increment the data pointer on a write
             if (data)
-                pkt->dataStatic(data + prevSize) ;
+                pkt->dataStatic(data + prevSize);
 
             prevSize += gen.size();
 
