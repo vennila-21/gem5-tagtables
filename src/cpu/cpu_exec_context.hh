@@ -55,6 +55,10 @@ class FunctionalPort;
 class PhysicalPort;
 
 
+namespace Kernel {
+    class Statistics;
+};
+
 #else // !FULL_SYSTEM
 
 #include "sim/process.hh"
@@ -145,23 +149,9 @@ class CPUExecContext
     Addr profilePC;
     void dumpFuncProfile();
 
-    /** Event for timing out quiesce instruction */
-    struct EndQuiesceEvent : public Event
-    {
-        /** A pointer to the execution context that is quiesced */
-        CPUExecContext *cpuXC;
+    EndQuiesceEvent *quiesceEvent;
 
-        EndQuiesceEvent(CPUExecContext *_cpuXC);
-
-        /** Event process to occur at interrupt*/
-        virtual void process();
-
-        /** Event description */
-        virtual const char *description();
-    };
-    EndQuiesceEvent quiesceEvent;
-
-    Event *getQuiesceEvent() { return &quiesceEvent; }
+    EndQuiesceEvent *getQuiesceEvent() { return quiesceEvent; }
 
     Tick readLastActivate() { return lastActivate; }
 
@@ -171,6 +161,9 @@ class CPUExecContext
 
     void profileSample();
 
+    Kernel::Statistics *getKernelStats() { return kernelStats; }
+
+    Kernel::Statistics *kernelStats;
 #else
     /// Port that syscalls can use to access memory (provides translation step).
     TranslatingPort *port;
@@ -211,7 +204,8 @@ class CPUExecContext
     // constructor: initialize context from given process structure
 #if FULL_SYSTEM
     CPUExecContext(BaseCPU *_cpu, int _thread_num, System *_system,
-                   AlphaITB *_itb, AlphaDTB *_dtb);
+                   AlphaITB *_itb, AlphaDTB *_dtb,
+                   bool use_kernel_stats = true);
 #else
     CPUExecContext(BaseCPU *_cpu, int _thread_num, Process *_process, int _asid,
             MemObject *memobj);

@@ -32,4 +32,4 @@
 #include "cpu/o3/alpha_impl.hh"
 #include "cpu/o3/fetch_impl.hh"
 
-template class SimpleFetch<AlphaSimpleImpl>;
+template class DefaultFetch<AlphaSimpleImpl>;

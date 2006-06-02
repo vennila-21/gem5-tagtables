@@ -43,6 +43,8 @@
 
 // forward declarations
 struct AlphaSimpleImpl;
+struct OzoneImpl;
+struct SimpleImpl;
 class ExecContext;
 class DynInst;
 class Packet;
@@ -50,6 +52,10 @@ class Packet;
 template <class Impl>
 class AlphaDynInst;
 
+template <class Impl>
+class OzoneDynInst;
+
+class CheckerCPU;
 class FastCPU;
 class AtomicSimpleCPU;
 class TimingSimpleCPU;
@@ -102,6 +108,7 @@ class StaticInstBase : public RefCounted
         IsMemRef,	///< References memory (load, store, or prefetch).
         IsLoad,		///< Reads from memory (load or prefetch).
         IsStore,	///< Writes to memory.
+        IsStoreConditional,    ///< Store conditional instruction.
         IsInstPrefetch,	///< Instruction-cache prefetch.
         IsDataPrefetch,	///< Data-cache prefetch.
         IsCopy,         ///< Fast Cache block copy
@@ -126,6 +133,10 @@ class StaticInstBase : public RefCounted
         IsWriteBarrier,	///< Is a write barrier
 
         IsNonSpeculative, ///< Should not be executed speculatively
+        IsQuiesce,      ///< Is a quiesce instruction
+
+        IsIprAccess,    ///< Accesses IPRs
+        IsUnverifiable, ///< Can't be verified by a checker
 
         NumFlags
     };
@@ -189,6 +200,7 @@ class StaticInstBase : public RefCounted
     bool isMemRef()    	  const { return flags[IsMemRef]; }
     bool isLoad()	  const { return flags[IsLoad]; }
     bool isStore()	  const { return flags[IsStore]; }
+    bool isStoreConditional()	  const { return flags[IsStoreConditional]; }
     bool isInstPrefetch() const { return flags[IsInstPrefetch]; }
     bool isDataPrefetch() const { return flags[IsDataPrefetch]; }
     bool isCopy()         const { return flags[IsCopy];}
@@ -213,6 +225,9 @@ class StaticInstBase : public RefCounted
     bool isMemBarrier()   const { return flags[IsMemBarrier]; }
     bool isWriteBarrier() const { return flags[IsWriteBarrier]; }
     bool isNonSpeculative() const { return flags[IsNonSpeculative]; }
+    bool isQuiesce() const { return flags[IsQuiesce]; }
+    bool isIprAccess() const { return flags[IsIprAccess]; }
+    bool isUnverifiable() const { return flags[IsUnverifiable]; }
     //@}
 
     /// Operation class.  Used to select appropriate function unit in issue.
