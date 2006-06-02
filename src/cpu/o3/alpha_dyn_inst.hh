@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2005 The Regents of The University of Michigan
+ * Copyright (c) 2004-2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,24 @@
  * Authors: Kevin Lim
  */
 
-#ifndef __CPU_O3_CPU_ALPHA_DYN_INST_HH__
-#define __CPU_O3_CPU_ALPHA_DYN_INST_HH__
+#ifndef __CPU_O3_ALPHA_DYN_INST_HH__
+#define __CPU_O3_ALPHA_DYN_INST_HH__
 
+#include "arch/isa_traits.hh"
 #include "cpu/base_dyn_inst.hh"
+#include "cpu/inst_seq.hh"
 #include "cpu/o3/alpha_cpu.hh"
 #include "cpu/o3/alpha_impl.hh"
-#include "cpu/inst_seq.hh"
+
+class Packet;
 
 /**
- * Mostly implementation specific AlphaDynInst.  It is templated in case there
- * are other implementations that are similar enough to be able to use this
- * class without changes.  This is mainly useful if there are multiple similar
- * CPU implementations of the same ISA.
+ * Mostly implementation & ISA specific AlphaDynInst. As with most
+ * other classes in the new CPU model, it is templated on the Impl to
+ * allow for passing in of all types, such as the CPU type and the ISA
+ * type. The AlphaDynInst serves as the primary interface to the CPU
+ * for instructions that are executing.
  */
-
 template <class Impl>
 class AlphaDynInst : public BaseDynInst<Impl>
 {
@@ -52,10 +55,14 @@ class AlphaDynInst : public BaseDynInst<Impl>
 
     /** Binary machine instruction type. */
     typedef TheISA::MachInst MachInst;
+    /** Extended machine instruction type. */
+    typedef TheISA::ExtMachInst ExtMachInst;
     /** Logical register index type. */
     typedef TheISA::RegIndex RegIndex;
     /** Integer register index type. */
     typedef TheISA::IntReg   IntReg;
+    typedef TheISA::FloatReg FloatReg;
+    typedef TheISA::FloatRegBits FloatRegBits;
     /** Misc register index type. */
     typedef TheISA::MiscReg  MiscReg;
 
@@ -66,59 +73,65 @@ class AlphaDynInst : public BaseDynInst<Impl>
 
   public:
     /** BaseDynInst constructor given a binary instruction. */
-    AlphaDynInst(MachInst inst, Addr PC, Addr Pred_PC, InstSeqNum seq_num,
+    AlphaDynInst(ExtMachInst inst, Addr PC, Addr Pred_PC, InstSeqNum seq_num,
                  FullCPU *cpu);
 
     /** BaseDynInst constructor given a static inst pointer. */
     AlphaDynInst(StaticInstPtr &_staticInst);
 
     /** Executes the instruction.*/
-    Fault execute()
-    {
-        return this->fault = this->staticInst->execute(this, this->traceData);
-    }
+    Fault execute();
+
+    /** Initiates the access.  Only valid for memory operations. */
+    Fault initiateAcc();
+
+    /** Completes the access.  Only valid for memory operations. */
+    Fault completeAcc(Packet *pkt);
+
+  private:
+    /** Initializes variables. */
+    void initVars();
 
   public:
     MiscReg readMiscReg(int misc_reg)
     {
-        // Dummy function for now.
-        // @todo: Fix this once reg file gets fixed.
-        return 0;
+        return this->cpu->readMiscReg(misc_reg, this->threadNumber);
     }
 
     MiscReg readMiscRegWithEffect(int misc_reg, Fault &fault)
     {
-        // Dummy function for now.
-        // @todo: Fix this once reg file gets fixed.
-        return 0;
+        return this->cpu->readMiscRegWithEffect(misc_reg, fault,
+                                                this->threadNumber);
     }
 
     Fault setMiscReg(int misc_reg, const MiscReg &val)
     {
-        // Dummy function for now.
-        // @todo: Fix this once reg file gets fixed.
-        return NoFault;
+        this->instResult.integer = val;
+        return this->cpu->setMiscReg(misc_reg, val, this->threadNumber);
     }
 
     Fault setMiscRegWithEffect(int misc_reg, const MiscReg &val)
     {
-        // Dummy function for now.
-        // @todo: Fix this once reg file gets fixed.
-        return NoFault;
+        return this->cpu->setMiscRegWithEffect(misc_reg, val,
+                                               this->threadNumber);
     }
 
 #if FULL_SYSTEM
+    /** Calls hardware return from error interrupt. */
     Fault hwrei();
+    /** Reads interrupt flag. */
     int readIntrFlag();
+    /** Sets interrupt flag. */
     void setIntrFlag(int val);
+    /** Checks if system is in PAL mode. */
     bool inPalMode();
+    /** Traps to handle specified fault. */
     void trap(Fault fault);
     bool simPalCheck(int palFunc);
 #else
-    void syscall();
+    /** Calls a syscall. */
+    void syscall(int64_t callnum);
 #endif
-
-
 
   private:
     /** Physical register index of the destination registers of this
@@ -180,19 +193,19 @@ class AlphaDynInst : public BaseDynInst<Impl>
     void setIntReg(const StaticInst *si, int idx, uint64_t val)
     {
         this->cpu->setIntReg(_destRegIdx[idx], val);
-        this->instResult.integer = val;
+        BaseDynInst<Impl>::setIntReg(si, idx, val);
     }
 
     void setFloatReg(const StaticInst *si, int idx, FloatReg val, int width)
     {
         this->cpu->setFloatReg(_destRegIdx[idx], val, width);
-        this->instResult.fp = val;
+        BaseDynInst<Impl>::setFloatRegSingle(si, idx, val);
     }
 
     void setFloatReg(const StaticInst *si, int idx, FloatReg val)
     {
         this->cpu->setFloatReg(_destRegIdx[idx], val);
-        this->instResult.dbl = val;
+        BaseDynInst<Impl>::setFloatRegDouble(si, idx, val);
     }
 
     void setFloatRegBits(const StaticInst *si, int idx,
@@ -205,7 +218,7 @@ class AlphaDynInst : public BaseDynInst<Impl>
     void setFloatRegBits(const StaticInst *si, int idx, FloatRegBits val)
     {
         this->cpu->setFloatRegBits(_destRegIdx[idx], val);
-        this->instResult.integer = val;
+        BaseDynInst<Impl>::setFloatRegInt(si, idx, val);
     }
 
     /** Returns the physical register index of the i'th destination
@@ -251,16 +264,24 @@ class AlphaDynInst : public BaseDynInst<Impl>
     }
 
   public:
+    /** Calculates EA part of a memory instruction. Currently unused,
+     * though it may be useful in the future if we want to split
+     * memory operations into EA calculation and memory access parts.
+     */
     Fault calcEA()
     {
         return this->staticInst->eaCompInst()->execute(this, this->traceData);
     }
 
+    /** Does the memory access part of a memory instruction. Currently unused,
+     * though it may be useful in the future if we want to split
+     * memory operations into EA calculation and memory access parts.
+     */
     Fault memAccess()
     {
         return this->staticInst->memAccInst()->execute(this, this->traceData);
     }
 };
 
-#endif // __CPU_O3_CPU_ALPHA_DYN_INST_HH__
+#endif // __CPU_O3_ALPHA_DYN_INST_HH__
 

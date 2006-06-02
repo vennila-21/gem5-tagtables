@@ -49,10 +49,6 @@
 
 #include "base/trace.hh"
 
-#if FULL_SYSTEM
-#include "kern/kernel_stats.hh"
-#endif
-
 using namespace std;
 
 vector<BaseCPU *> BaseCPU::cpuList;
@@ -157,8 +153,6 @@ BaseCPU::BaseCPU(Params *p)
     profileEvent = NULL;
     if (params->profile)
         profileEvent = new ProfileEvent(this, params->profile);
-
-    kernelStats = new Kernel::Statistics(system);
 #endif
 
 }
@@ -168,6 +162,7 @@ BaseCPU::Params::Params()
 #if FULL_SYSTEM
     profile = false;
 #endif
+    checker = NULL;
 }
 
 void
@@ -178,10 +173,6 @@ BaseCPU::enableFunctionTrace()
 
 BaseCPU::~BaseCPU()
 {
-#if FULL_SYSTEM
-    if (kernelStats)
-        delete kernelStats;
-#endif
 }
 
 void
@@ -222,8 +213,6 @@ BaseCPU::regStats()
         execContexts[0]->regStats(name());
 
 #if FULL_SYSTEM
-    if (kernelStats)
-        kernelStats->regStats(name() + ".kern");
 #endif
 }
 
@@ -352,12 +341,6 @@ BaseCPU::serialize(std::ostream &os)
 {
     SERIALIZE_ARRAY(interrupts, TheISA::NumInterruptLevels);
     SERIALIZE_SCALAR(intstatus);
-
-#if FULL_SYSTEM
-    if (kernelStats)
-        kernelStats->serialize(os);
-#endif
-
 }
 
 void
@@ -365,11 +348,6 @@ BaseCPU::unserialize(Checkpoint *cp, const std::string &section)
 {
     UNSERIALIZE_ARRAY(interrupts, TheISA::NumInterruptLevels);
     UNSERIALIZE_SCALAR(intstatus);
-
-#if FULL_SYSTEM
-    if (kernelStats)
-        kernelStats->unserialize(cp, section);
-#endif
 }
 
 #endif // FULL_SYSTEM
