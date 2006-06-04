@@ -25,6 +25,8 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Authors: Steve Reinhardt
 
 import sys
 import os
@@ -179,10 +181,10 @@ try:
 
     if output_dir:
         secs_waited = 0
-        while not shell.dir_exists(output_dir) and secs_waited < 45:
+        while not shell.dir_exists(output_dir) and secs_waited < 90:
             time.sleep(5)
             secs_waited += 5
-        if secs_waited > 10:
+        if secs_waited > 30:
             print "waited", secs_waited, "seconds for", output_dir
 
     # run command
