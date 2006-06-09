@@ -24,6 +24,8 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Kevin Lim
  */
 
 #include <string>
@@ -63,7 +65,6 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(O3Checker)
 #if FULL_SYSTEM
     SimObjectParam<AlphaITB *> itb;
     SimObjectParam<AlphaDTB *> dtb;
-    SimObjectParam<MemObject *> mem;
     SimObjectParam<System *> system;
     Param<int> cpu_id;
     Param<Tick> profile;
@@ -93,7 +94,6 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(O3Checker)
 #if FULL_SYSTEM
     INIT_PARAM(itb, "Instruction TLB"),
     INIT_PARAM(dtb, "Data TLB"),
-    INIT_PARAM(mem, "memory"),
     INIT_PARAM(system, "system object"),
     INIT_PARAM(cpu_id, "processor ID"),
     INIT_PARAM(profile, ""),
@@ -136,7 +136,6 @@ CREATE_SIM_OBJECT(O3Checker)
 #if FULL_SYSTEM
     params->itb = itb;
     params->dtb = dtb;
-    params->mem = mem;
     params->system = system;
     params->cpu_id = cpu_id;
     params->profile = profile;

@@ -73,8 +73,10 @@ class BaseDynInst : public FastAlloc, public RefCounted
     typedef TheISA::ExtMachInst ExtMachInst;
     // Logical register index type.
     typedef TheISA::RegIndex RegIndex;
-    // Integer register index type.
+    // Integer register type.
     typedef TheISA::IntReg IntReg;
+    // Floating point register type.
+    typedef TheISA::FloatReg FloatReg;
 
     // The DynInstPtr type.
     typedef typename Impl::DynInstPtr DynInstPtr;
@@ -442,17 +444,27 @@ class BaseDynInst : public FastAlloc, public RefCounted
         instResult.integer = val;
     }
 
-    void setFloatRegSingle(const StaticInst *si, int idx, float val)
+    void setFloatReg(const StaticInst *si, int idx, FloatReg val, int width)
+    {
+        if (width == 32)
+            instResult.fp = val;
+        else if (width == 64)
+            instResult.dbl = val;
+        else
+            panic("Unsupported width!");
+    }
+
+    void setFloatReg(const StaticInst *si, int idx, FloatReg val)
     {
         instResult.fp = val;
     }
 
-    void setFloatRegDouble(const StaticInst *si, int idx, double val)
+    void setFloatRegBits(const StaticInst *si, int idx, uint64_t val, int width)
     {
-        instResult.dbl = val;
+        instResult.integer = val;
     }
 
-    void setFloatRegInt(const StaticInst *si, int idx, uint64_t val)
+    void setFloatRegBits(const StaticInst *si, int idx, uint64_t val)
     {
         instResult.integer = val;
     }
@@ -642,29 +654,29 @@ template<class T>
 inline Fault
 BaseDynInst<Impl>::read(Addr addr, T &data, unsigned flags)
 {
-    if (executed) {
-        panic("Not supposed to re-execute with split mem ops!");
-        fault = cpu->read(req, data, lqIdx);
-        return fault;
+    // Sometimes reads will get retried, so they may come through here
+    // twice.
+    if (!req) {
+        req = new Request();
+        req->setVirt(asid, addr, sizeof(T), flags, this->PC);
+        req->setThreadContext(thread->readCpuId(), threadNumber);
+    } else {
+        assert(addr == req->getVaddr());
     }
-
-    req = new Request();
-    req->setVirt(asid, addr, sizeof(T), flags, this->PC);
-    req->setThreadContext(thread->readCpuId(), threadNumber);
 
     if ((req->getVaddr() & (TheISA::VMPageSize - 1)) + req->getSize() >
         TheISA::VMPageSize) {
         return TheISA::genAlignmentFault();
     }
 
-    fault = cpu->translateDataReadReq(req);
+    fault = cpu->translateDataReadReq(req, thread);
 
     if (fault == NoFault) {
         effAddr = req->getVaddr();
         physEffAddr = req->getPaddr();
         memReqFlags = req->getFlags();
 
-#if FULL_SYSTEM
+#if 0
         if (cpu->system->memctrl->badaddr(physEffAddr)) {
             fault = TheISA::genMachineCheckFault();
             data = (T)-1;
@@ -703,6 +715,8 @@ BaseDynInst<Impl>::write(T data, Addr addr, unsigned flags, uint64_t *res)
         traceData->setData(data);
     }
 
+    assert(req == NULL);
+
     req = new Request();
     req->setVirt(asid, addr, sizeof(T), flags, this->PC);
     req->setThreadContext(thread->readCpuId(), threadNumber);
@@ -712,13 +726,13 @@ BaseDynInst<Impl>::write(T data, Addr addr, unsigned flags, uint64_t *res)
         return TheISA::genAlignmentFault();
     }
 
-    fault = cpu->translateDataWriteReq(req);
+    fault = cpu->translateDataWriteReq(req, thread);
 
     if (fault == NoFault) {
         effAddr = req->getVaddr();
         physEffAddr = req->getPaddr();
         memReqFlags = req->getFlags();
-#if FULL_SYSTEM
+#if 0
         if (cpu->system->memctrl->badaddr(physEffAddr)) {
             fault = TheISA::genMachineCheckFault();
         } else {

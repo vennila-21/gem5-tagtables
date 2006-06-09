@@ -77,6 +77,11 @@ class AlphaFullCPU : public FullO3CPU<Impl>
      * external objects try to update state through this interface,
      * the CPU will create an event to squash all in-flight
      * instructions in order to ensure state is maintained correctly.
+     * It must be defined specifically for the AlphaFullCPU because
+     * not all architectural state is located within the O3ThreadState
+     * (such as the commit PC, and registers), and specific actions
+     * must be taken when using this interface (such as squashing all
+     * in-flight instructions when doing a write to this interface).
      */
     class AlphaTC : public ThreadContext
     {
@@ -96,8 +101,6 @@ class AlphaFullCPU : public FullO3CPU<Impl>
         /** Reads this CPU's ID. */
         virtual int readCpuId() { return cpu->cpu_id; }
 
-        virtual TranslatingPort *getMemPort() { return thread->getMemPort(); }
-
 #if FULL_SYSTEM
         /** Returns a pointer to the system. */
         virtual System *getSystemPtr() { return cpu->system; }
@@ -114,7 +117,15 @@ class AlphaFullCPU : public FullO3CPU<Impl>
         /** Returns a pointer to this thread's kernel statistics. */
         virtual Kernel::Statistics *getKernelStats()
         { return thread->kernelStats; }
+
+        virtual FunctionalPort *getPhysPort() { return thread->getPhysPort(); }
+
+        virtual VirtualPort *getVirtPort(ThreadContext *src_tc = NULL);
+
+        void delVirtPort(VirtualPort *vp);
 #else
+        virtual TranslatingPort *getMemPort() { return thread->getMemPort(); }
+
         /** Returns a pointer to this thread's process. */
         virtual Process *getProcessPtr() { return thread->getProcessPtr(); }
 #endif
@@ -301,43 +312,40 @@ class AlphaFullCPU : public FullO3CPU<Impl>
 
 #if FULL_SYSTEM
     /** Translates instruction requestion. */
-    Fault translateInstReq(RequestPtr &req)
+    Fault translateInstReq(RequestPtr &req, Thread *thread)
     {
-        return itb->translate(req);
+        return itb->translate(req, thread->getTC());
     }
 
     /** Translates data read request. */
-    Fault translateDataReadReq(RequestPtr &req)
+    Fault translateDataReadReq(RequestPtr &req, Thread *thread)
     {
-        return dtb->translate(req, false);
+        return dtb->translate(req, thread->getTC(), false);
     }
 
     /** Translates data write request. */
-    Fault translateDataWriteReq(RequestPtr &req)
+    Fault translateDataWriteReq(RequestPtr &req, Thread *thread)
     {
-        return dtb->translate(req, true);
+        return dtb->translate(req, thread->getTC(), true);
     }
 
 #else
     /** Translates instruction requestion in syscall emulation mode. */
-    Fault translateInstReq(RequestPtr &req)
+    Fault translateInstReq(RequestPtr &req, Thread *thread)
     {
-        int tid = req->getThreadNum();
-        return this->thread[tid]->getProcessPtr()->pTable->translate(req);
+        return thread->getProcessPtr()->pTable->translate(req);
     }
 
     /** Translates data read request in syscall emulation mode. */
-    Fault translateDataReadReq(RequestPtr &req)
+    Fault translateDataReadReq(RequestPtr &req, Thread *thread)
     {
-        int tid = req->getThreadNum();
-        return this->thread[tid]->getProcessPtr()->pTable->translate(req);
+        return thread->getProcessPtr()->pTable->translate(req);
     }
 
     /** Translates data write request in syscall emulation mode. */
-    Fault translateDataWriteReq(RequestPtr &req)
+    Fault translateDataWriteReq(RequestPtr &req, Thread *thread)
     {
-        int tid = req->getThreadNum();
-        return this->thread[tid]->getProcessPtr()->pTable->translate(req);
+        return thread->getProcessPtr()->pTable->translate(req);
     }
 
 #endif
@@ -403,110 +411,11 @@ class AlphaFullCPU : public FullO3CPU<Impl>
     void setSyscallReturn(SyscallReturn return_value, int tid);
 #endif
 
-    /** Read from memory function. */
-    template <class T>
-    Fault read(RequestPtr &req, T &data)
-    {
-#if 0
-#if FULL_SYSTEM && THE_ISA == ALPHA_ISA
-        if (req->flags & LOCKED) {
-            req->xc->setMiscReg(TheISA::Lock_Addr_DepTag, req->paddr);
-            req->xc->setMiscReg(TheISA::Lock_Flag_DepTag, true);
-        }
-#endif
-#endif
-        Fault error;
-
-#if FULL_SYSTEM
-        // @todo: Fix this LL/SC hack.
-        if (req->flags & LOCKED) {
-            lockAddr = req->paddr;
-            lockFlag = true;
-        }
-#endif
-
-        error = this->mem->read(req, data);
-        data = gtoh(data);
-        return error;
-    }
-
     /** CPU read function, forwards read to LSQ. */
     template <class T>
     Fault read(RequestPtr &req, T &data, int load_idx)
     {
         return this->iew.ldstQueue.read(req, data, load_idx);
-    }
-
-    /** Write to memory function. */
-    template <class T>
-    Fault write(RequestPtr &req, T &data)
-    {
-#if 0
-#if FULL_SYSTEM && THE_ISA == ALPHA_ISA
-        ExecContext *xc;
-
-        // If this is a store conditional, act appropriately
-        if (req->flags & LOCKED) {
-            xc = req->xc;
-
-            if (req->flags & UNCACHEABLE) {
-                // Don't update result register (see stq_c in isa_desc)
-                req->result = 2;
-                xc->setStCondFailures(0);//Needed? [RGD]
-            } else {
-                bool lock_flag = xc->readMiscReg(TheISA::Lock_Flag_DepTag);
-                Addr lock_addr = xc->readMiscReg(TheISA::Lock_Addr_DepTag);
-                req->result = lock_flag;
-                if (!lock_flag ||
-                    ((lock_addr & ~0xf) != (req->paddr & ~0xf))) {
-                    xc->setMiscReg(TheISA::Lock_Flag_DepTag, false);
-                    xc->setStCondFailures(xc->readStCondFailures() + 1);
-                    if (((xc->readStCondFailures()) % 100000) == 0) {
-                        std::cerr << "Warning: "
-                                  << xc->readStCondFailures()
-                                  << " consecutive store conditional failures "
-                                  << "on cpu " << req->xc->readCpuId()
-                                  << std::endl;
-                    }
-                    return NoFault;
-                }
-                else xc->setStCondFailures(0);
-            }
-        }
-
-        // Need to clear any locked flags on other proccessors for
-        // this address.  Only do this for succsful Store Conditionals
-        // and all other stores (WH64?).  Unsuccessful Store
-        // Conditionals would have returned above, and wouldn't fall
-        // through.
-        for (int i = 0; i < this->system->execContexts.size(); i++){
-            xc = this->system->execContexts[i];
-            if ((xc->readMiscReg(TheISA::Lock_Addr_DepTag) & ~0xf) ==
-                (req->paddr & ~0xf)) {
-                xc->setMiscReg(TheISA::Lock_Flag_DepTag, false);
-            }
-        }
-
-#endif
-#endif
-
-#if FULL_SYSTEM
-        // @todo: Fix this LL/SC hack.
-        if (req->getFlags() & LOCKED) {
-            if (req->getFlags() & UNCACHEABLE) {
-                req->setScResult(2);
-            } else {
-                if (this->lockFlag) {
-                    req->setScResult(1);
-                } else {
-                    req->setScResult(0);
-                    return NoFault;
-                }
-            }
-        }
-#endif
-
-        return this->mem->write(req, (T)htog(data));
     }
 
     /** CPU write function, forwards write to LSQ. */

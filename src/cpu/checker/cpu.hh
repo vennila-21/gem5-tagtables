@@ -24,6 +24,8 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Kevin Lim
  */
 
 #ifndef __CPU_CHECKER_CPU_HH__
@@ -97,7 +99,6 @@ class CheckerCPU : public BaseCPU
 #if FULL_SYSTEM
         AlphaITB *itb;
         AlphaDTB *dtb;
-        FunctionalMemory *mem;
 #else
         Process *process;
 #endif
@@ -114,11 +115,9 @@ class CheckerCPU : public BaseCPU
 
     MemObject *memPtr;
 
-#if FULL_SYSTEM
     void setSystem(System *system);
 
     System *systemPtr;
-#endif
 
     void setIcachePort(Port *icache_port);
 
@@ -325,7 +324,7 @@ class CheckerCPU : public BaseCPU
     int readIntrFlag() { return thread->readIntrFlag(); }
     void setIntrFlag(int val) { thread->setIntrFlag(val); }
     bool inPalMode() { return thread->inPalMode(); }
-    void ev5_trap(Fault fault) { fault->invoke(xcProxy); }
+    void ev5_trap(Fault fault) { fault->invoke(tc); }
     bool simPalCheck(int palFunc) { return thread->simPalCheck(palFunc); }
 #else
     // Assume that the normal CPU's call to syscall was successful.

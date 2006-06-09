@@ -24,6 +24,9 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Kevin Lim
+ *          Korey Sewell
  */
 
 #ifndef __CPU_O3_LSQ_UNIT_HH__
@@ -210,8 +213,13 @@ class LSQUnit {
   private:
     void writeback(DynInstPtr &inst, PacketPtr pkt);
 
+    void storePostSend(Packet *pkt);
+
     /** Completes the store at the specified index. */
     void completeStore(int store_idx);
+
+    /** Handles doing the retry. */
+    void recvRetry();
 
     /** Increments the given store index (circular queue). */
     inline void incrStIdx(int &store_idx);
@@ -396,6 +404,8 @@ class LSQUnit {
     /** The index of the above store. */
     int stallingLoadIdx;
 
+    PacketPtr sendingPkt;
+
     bool isStoreBlocked;
 
     /** Whether or not a load is blocked due to the memory system. */
@@ -501,7 +511,7 @@ LSQUnit<Impl>::read(Request *req, T &data, int load_idx)
             "storeHead: %i addr: %#x\n",
             load_idx, store_idx, storeHead, req->getPaddr());
 
-#if 0
+#if FULL_SYSTEM
     if (req->getFlags() & LOCKED) {
         cpu->lockAddr = req->getPaddr();
         cpu->lockFlag = true;
@@ -556,7 +566,7 @@ LSQUnit<Impl>::read(Request *req, T &data, int load_idx)
 
             DPRINTF(LSQUnit, "Forwarding from store idx %i to load to "
                     "addr %#x, data %#x\n",
-                    store_idx, req->getVaddr(), *(load_inst->memData));
+                    store_idx, req->getVaddr(), data);
 
             PacketPtr data_pkt = new Packet(req, Packet::ReadReq, Packet::Broadcast);
             data_pkt->dataStatic(load_inst->memData);

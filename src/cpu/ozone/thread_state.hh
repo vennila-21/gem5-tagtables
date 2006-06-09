@@ -24,6 +24,8 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Kevin Lim
  */
 
 #ifndef __CPU_OZONE_THREAD_STATE_HH__
@@ -60,8 +62,8 @@ struct OzoneThreadState : public ThreadState {
     typedef TheISA::MiscReg MiscReg;
 
 #if FULL_SYSTEM
-    OzoneThreadState(FullCPU *_cpu, int _thread_num, FunctionalMemory *_mem)
-        : ThreadState(-1, _thread_num, _mem),
+    OzoneThreadState(FullCPU *_cpu, int _thread_num)
+        : ThreadState(-1, _thread_num),
           inSyscall(0), trapPending(0)
     {
         memset(&regs, 0, sizeof(TheISA::RegFile));
@@ -74,9 +76,9 @@ struct OzoneThreadState : public ThreadState {
         memset(&regs, 0, sizeof(TheISA::RegFile));
     }
 
-    OzoneThreadState(FullCPU *_cpu, int _thread_num, FunctionalMemory *_mem,
+    OzoneThreadState(FullCPU *_cpu, int _thread_num,
                      int _asid)
-        : ThreadState(-1, _thread_num, _mem, NULL, _asid),
+        : ThreadState(-1, _thread_num, NULL, NULL, _asid),
           cpu(_cpu), inSyscall(0), trapPending(0)
     {
         memset(&regs, 0, sizeof(TheISA::RegFile));

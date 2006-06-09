@@ -24,6 +24,8 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Kevin Lim
  */
 
 #ifndef __CPU_O3_THREAD_STATE_HH__
@@ -73,7 +75,7 @@ struct O3ThreadState : public ThreadState {
     bool trapPending;
 
 #if FULL_SYSTEM
-    O3ThreadState(FullCPU *_cpu, int _thread_num, )
+    O3ThreadState(FullCPU *_cpu, int _thread_num)
         : ThreadState(-1, _thread_num),
           inSyscall(0), trapPending(0)
     { }
