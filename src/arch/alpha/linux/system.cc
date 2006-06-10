@@ -46,7 +46,7 @@
 #include "arch/alpha/linux/threadinfo.hh"
 #include "arch/alpha/system.hh"
 #include "base/loader/symtab.hh"
-#include "cpu/exec_context.hh"
+#include "cpu/thread_context.hh"
 #include "cpu/base.hh"
 #include "dev/platform.hh"
 #include "kern/linux/printk.hh"
@@ -175,30 +175,33 @@ LinuxAlphaSystem::~LinuxAlphaSystem()
 
 
 void
-LinuxAlphaSystem::setDelayLoop(ExecContext *xc)
+LinuxAlphaSystem::setDelayLoop(ThreadContext *tc)
 {
     Addr addr = 0;
     if (kernelSymtab->findAddress("loops_per_jiffy", addr)) {
-        Tick cpuFreq = xc->getCpuPtr()->frequency();
+        Tick cpuFreq = tc->getCpuPtr()->frequency();
         Tick intrFreq = platform->intrFrequency();
-        xc->getVirtPort(xc)->write(addr,
-                (uint32_t)((cpuFreq / intrFreq) * 0.9988));
+        VirtualPort *vp;
+
+        vp = tc->getVirtPort();
+        vp->writeHtoG(addr, (uint32_t)((cpuFreq / intrFreq) * 0.9988));
+        tc->delVirtPort(vp);
     }
 }
 
 
 void
-LinuxAlphaSystem::SkipDelayLoopEvent::process(ExecContext *xc)
+LinuxAlphaSystem::SkipDelayLoopEvent::process(ThreadContext *tc)
 {
-    SkipFuncEvent::process(xc);
+    SkipFuncEvent::process(tc);
     // calculate and set loops_per_jiffy
-    ((LinuxAlphaSystem *)xc->getSystemPtr())->setDelayLoop(xc);
+    ((LinuxAlphaSystem *)tc->getSystemPtr())->setDelayLoop(tc);
 }
 
 void
-LinuxAlphaSystem::PrintThreadInfo::process(ExecContext *xc)
+LinuxAlphaSystem::PrintThreadInfo::process(ThreadContext *tc)
 {
-    Linux::ThreadInfo ti(xc);
+    Linux::ThreadInfo ti(tc);
 
     DPRINTF(Thread, "Currently Executing Thread %s, pid %d, started at: %d\n",
             ti.curTaskName(), ti.curTaskPID(), ti.curTaskStart());
