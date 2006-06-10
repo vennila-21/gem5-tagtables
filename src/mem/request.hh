@@ -128,6 +128,13 @@ class Request
         : validCpuAndThreadNums(false)
     { setPhys(_paddr, _size, _flags); }
 
+    Request(int _asid, Addr _vaddr, int _size, int _flags, Addr _pc,
+            int _cpuNum, int _threadNum)
+    {
+        setThreadContext(_cpuNum, _threadNum);
+        setVirt(_asid, _vaddr, _size, _flags, _pc);
+    }
+
     /**
      * Set up CPU and thread numbers. */
     void setThreadContext(int _cpuNum, int _threadNum)
@@ -201,6 +208,8 @@ class Request
     /** Accessor function for asid.*/
     int getAsid() { assert(validAsidVaddr); return asid; }
 
+    /** Accessor function to check if sc result is valid. */
+    bool scResultValid() { return validScResult; }
     /** Accessor function for store conditional return value.*/
     uint64_t getScResult() { assert(validScResult); return scResult; }
     /** Accessor function for store conditional return value.*/

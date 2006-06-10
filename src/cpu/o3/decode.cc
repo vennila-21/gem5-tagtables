@@ -32,4 +32,4 @@
 #include "cpu/o3/alpha_impl.hh"
 #include "cpu/o3/decode_impl.hh"
 
-template class SimpleDecode<AlphaSimpleImpl>;
+template class DefaultDecode<AlphaSimpleImpl>;

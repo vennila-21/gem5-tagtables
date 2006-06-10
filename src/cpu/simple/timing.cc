@@ -52,11 +52,11 @@ TimingSimpleCPU::init()
 
     BaseCPU::init();
 #if FULL_SYSTEM
-    for (int i = 0; i < execContexts.size(); ++i) {
-        ExecContext *xc = execContexts[i];
+    for (int i = 0; i < threadContexts.size(); ++i) {
+        ThreadContext *tc = threadContexts[i];
 
         // initialize CPU, including PC
-        TheISA::initCPU(xc, xc->readCpuId());
+        TheISA::initCPU(tc, tc->readCpuId());
     }
 #endif
 }
@@ -125,11 +125,11 @@ TimingSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
 {
     BaseCPU::takeOverFrom(oldCPU);
 
-    // if any of this CPU's ExecContexts are active, mark the CPU as
+    // if any of this CPU's ThreadContexts are active, mark the CPU as
     // running and schedule its tick event.
-    for (int i = 0; i < execContexts.size(); ++i) {
-        ExecContext *xc = execContexts[i];
-        if (xc->status() == ExecContext::Active && _status != Running) {
+    for (int i = 0; i < threadContexts.size(); ++i) {
+        ThreadContext *tc = threadContexts[i];
+        if (tc->status() == ThreadContext::Active && _status != Running) {
             _status = Running;
             break;
         }
@@ -141,7 +141,7 @@ void
 TimingSimpleCPU::activateContext(int thread_num, int delay)
 {
     assert(thread_num == 0);
-    assert(cpuXC);
+    assert(thread);
 
     assert(_status == Idle);
 
@@ -158,7 +158,7 @@ void
 TimingSimpleCPU::suspendContext(int thread_num)
 {
     assert(thread_num == 0);
-    assert(cpuXC);
+    assert(thread);
 
     assert(_status == Running);
 
@@ -177,14 +177,14 @@ TimingSimpleCPU::read(Addr addr, T &data, unsigned flags)
     // need to fill in CPU & thread IDs here
     Request *data_read_req = new Request();
 
-    data_read_req->setVirt(0, addr, sizeof(T), flags, cpuXC->readPC());
+    data_read_req->setVirt(0, addr, sizeof(T), flags, thread->readPC());
 
     if (traceData) {
         traceData->setAddr(data_read_req->getVaddr());
     }
 
    // translate to physical address
-    Fault fault = cpuXC->translateDataReadReq(data_read_req);
+    Fault fault = thread->translateDataReadReq(data_read_req);
 
     // Now do the access.
     if (fault == NoFault) {
@@ -257,10 +257,10 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 {
     // need to fill in CPU & thread IDs here
     Request *data_write_req = new Request();
-    data_write_req->setVirt(0, addr, sizeof(T), flags, cpuXC->readPC());
+    data_write_req->setVirt(0, addr, sizeof(T), flags, thread->readPC());
 
     // translate to physical address
-    Fault fault = cpuXC->translateDataWriteReq(data_write_req);
+    Fault fault = thread->translateDataWriteReq(data_write_req);
     // Now do the access.
     if (fault == NoFault) {
         Packet *data_write_pkt =

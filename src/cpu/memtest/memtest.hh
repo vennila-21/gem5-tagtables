@@ -42,7 +42,7 @@
 #include "sim/sim_object.hh"
 #include "sim/stats.hh"
 
-class ExecContext;
+class ThreadContext;
 class MemTest : public SimObject
 {
   public:
@@ -86,7 +86,7 @@ class MemTest : public SimObject
     MemInterface *cacheInterface;
     FunctionalMemory *mainMem;
     FunctionalMemory *checkMem;
-    CPUExecContext *cpuXC;
+    SimpleThread *thread;
 
     unsigned size;		// size of testing memory region
 
