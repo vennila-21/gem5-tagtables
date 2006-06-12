@@ -41,7 +41,7 @@
 #include "cpu/thread_context.hh"
 #include "kern/kernel_stats.hh"
 #include "sim/debug.hh"
-#include "sim/sim_events.hh"
+#include "sim/sim_exit.hh"
 
 #if FULL_SYSTEM
 
@@ -575,7 +575,7 @@ SimpleThread::simPalCheck(int palFunc)
       case PAL::halt:
         halt();
         if (--System::numSystemsRunning == 0)
-            new SimExitEvent("all cpus halted");
+            exitSimLoop("all cpus halted");
         break;
 
       case PAL::bpt:

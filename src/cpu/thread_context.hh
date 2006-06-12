@@ -245,7 +245,6 @@ class ThreadContext
 
     virtual void setSyscallReturn(SyscallReturn return_value) = 0;
 
-
     // Same with st cond failures.
     virtual Counter readFuncExeInst() = 0;
 #endif
@@ -430,7 +429,6 @@ class ProxyThreadContext : public ThreadContext
 
     void setSyscallReturn(SyscallReturn return_value)
     { actualTC->setSyscallReturn(return_value); }
-
 
     Counter readFuncExeInst() { return actualTC->readFuncExeInst(); }
 #endif

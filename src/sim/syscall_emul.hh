@@ -27,6 +27,7 @@
  *
  * Authors: Steve Reinhardt
  *          Kevin Lim
+ *          Korey Sewell
  */
 
 #ifndef __SIM_SYSCALL_EMUL_HH__
@@ -247,6 +248,10 @@ SyscallReturn fchownFunc(SyscallDesc *desc, int num,
 
 /// Target fnctl() handler.
 SyscallReturn fcntlFunc(SyscallDesc *desc, int num,
+                        Process *process, ThreadContext *tc);
+
+/// Target fcntl64() handler.
+SyscallReturn fcntl64Func(SyscallDesc *desc, int num,
                         Process *process, ThreadContext *tc);
 
 /// Target setuid() handler.

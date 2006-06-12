@@ -27,6 +27,7 @@
  *
  * Authors: Gabe Black
  *          Ali Saidi
+ *          Korey Sewell
  */
 
 #ifndef __MIPS_PROCESS_HH__
@@ -49,18 +50,6 @@ class MipsLiveProcess : public LiveProcess
                 std::vector<std::string> &envp);
 
     void startup();
-
-  public:
-    // this function is used to create the LiveProcess object, since
-    // we can't tell which subclass of LiveProcess to use until we
-    // open and look at the object file.
-    static MipsLiveProcess *create(const std::string &nm,
-                               System *_system,
-                               int stdin_fd, int stdout_fd, int stderr_fd,
-                               std::string executable,
-                               std::vector<std::string> &argv,
-                               std::vector<std::string> &envp);
-
 };
 
 
