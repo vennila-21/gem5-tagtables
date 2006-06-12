@@ -158,6 +158,12 @@ env = Environment(ENV = os.environ,  # inherit user's environment vars
 
 env.SConsignFile("sconsign")
 
+# Default duplicate option is to use hard links, but this messes up
+# when you use emacs to edit a file in the target dir, as emacs moves
+# file to file~ then copies to file, breaking the link.  Symbolic
+# (soft) links work better.
+env.SetOption('duplicate', 'soft-copy')
+
 # I waffle on this setting... it does avoid a few painful but
 # unnecessary builds, but it also seems to make trivial builds take
 # noticeably longer.
@@ -192,6 +198,19 @@ env.Append(LIBS = py_version_name)
 # add library path too if it's not in the default place
 if sys.exec_prefix != '/usr':
     env.Append(LIBPATH = os.path.join(sys.exec_prefix, 'lib'))
+
+# Set up SWIG flags & scanner
+
+env.Append(SWIGFLAGS=Split('-c++ -python -modern $_CPPINCFLAGS'))
+
+import SCons.Scanner
+
+swig_inc_re = '^[ \t]*[%,#][ \t]*(?:include|import)[ \t]*(<|")([^>"]+)(>|")'
+
+swig_scanner = SCons.Scanner.ClassicCPP("SwigScan", ".i", "CPPPATH",
+                                        swig_inc_re)
+
+env.Append(SCANNERS = swig_scanner)
 
 # Other default libraries
 env.Append(LIBS=['z'])
@@ -268,7 +287,6 @@ sticky_opts.AddOptions(
     BoolOption('USE_SSE2',
                'Compile for SSE2 (-msse2) to get IEEE FP on x86 hosts',
                False),
-    BoolOption('STATS_BINNING', 'Bin statistics by CPU mode', have_mysql),
     BoolOption('USE_MYSQL', 'Use MySQL for stats output', have_mysql),
     BoolOption('USE_FENV', 'Use <fenv.h> IEEE mode control', have_fenv),
     ('CC', 'C compiler', os.environ.get('CC', env['CC'])),
@@ -285,8 +303,7 @@ nonsticky_opts.AddOptions(
 
 # These options get exported to #defines in config/*.hh (see m5/SConscript).
 env.ExportOptions = ['FULL_SYSTEM', 'ALPHA_TLASER', 'USE_FENV', \
-                     'USE_MYSQL', 'NO_FAST_ALLOC', 'SS_COMPATIBLE_FP', \
-                     'STATS_BINNING']
+                     'USE_MYSQL', 'NO_FAST_ALLOC', 'SS_COMPATIBLE_FP']
 
 # Define a handy 'no-op' action
 def no_action(target, source, env):
@@ -469,7 +486,7 @@ for build_path in build_paths:
     # to the configured options.  It returns a list of environments,
     # one for each variant build (debug, opt, etc.)
     envList = SConscript('src/SConscript', build_dir = build_path,
-                         exports = 'env', duplicate = False)
+                         exports = 'env')
 
     # Set up the regression tests for each build.
 #    for e in envList:

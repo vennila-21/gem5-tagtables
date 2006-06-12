@@ -28,66 +28,52 @@
 //
 // Authors: Korey Sewell
 
-// Declarations for execute() methods.
-def template BasicExecDeclare {{
-        Fault execute(%(CPU_exec_context)s *, Trace::InstRecord *) const;
-}};
+////////////////////////////////////////////////////////////////////
+//
+// MT instructions
+//
 
-// Basic instruction class declaration template.
-def template BasicDeclare {{
+output header {{
         /**
-         * Static instruction class for "%(mnemonic)s".
+         * Base class for integer operations.
          */
-        class %(class_name)s : public %(base_class)s
+        class MT : public MipsStaticInst
         {
-          public:
-                /// Constructor.
-                %(class_name)s(MachInst machInst);
-                %(BasicExecDeclare)s
+                protected:
+
+                /// Constructor
+                MT(const char *mnem, MachInst _machInst, OpClass __opClass) : MipsStaticInst(mnem, _machInst, __opClass)
+                {
+                }
+
+                std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
         };
 }};
 
-// Basic instruction class constructor template.
-def template BasicConstructor {{
-        inline %(class_name)s::%(class_name)s(MachInst machInst)  : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s)
+output decoder {{
+        //Edit This Template When MT is Implemented
+        std::string MT::generateDisassembly(Addr pc, const SymbolTable *symtab) const
         {
-                %(constructor)s;
+                return "Disassembly of MT instruction\n";
         }
 }};
 
-
-// Basic instruction class execute method template.
-def template BasicExecute {{
+def template MTExecute {{
+        //Edit This Template When MT is Implemented
         Fault %(class_name)s::execute(%(CPU_exec_context)s *xc, Trace::InstRecord *traceData) const
         {
-                Fault fault = NoFault;
+                //Write the resulting state to the execution context
+                %(op_wb)s;
 
-                %(fp_enable_check)s;
-                %(op_decl)s;
-                %(op_rd)s;
-                %(code)s;
-
-                if(fault == NoFault)
-                {
-                    %(op_wb)s;
-                }
-                return fault;
+                //Call into the trap handler with the appropriate fault
+                return No_Fault;
         }
 }};
 
-// Basic decode template.
-def template BasicDecode {{
-        return new %(class_name)s(machInst);
-}};
-
-// Basic decode template, passing mnemonic in as string arg to constructor.
-def template BasicDecodeWithMnemonic {{
-        return new %(class_name)s("%(mnemonic)s", machInst);
-}};
-
-// The most basic instruction format... used only for a few misc. insts
-def format BasicOp(code, *flags) {{
-        iop = InstObjParams(name, Name, 'MipsStaticInst', CodeBlock(code), flags)
+// Primary format for integer operate instructions:
+def format MipsMT() {{
+        code = 'panic(\"Mips MT Is Currently Unimplemented.\");\n'
+        iop = InstObjParams(name, Name, 'MT', CodeBlock(code))
         header_output = BasicDeclare.subst(iop)
         decoder_output = BasicConstructor.subst(iop)
         decode_block = BasicDecode.subst(iop)

@@ -46,6 +46,7 @@
 #include "arch/isa_traits.hh"
 #include "cpu/quiesce_event.hh"
 #include "kern/kernel_stats.hh"
+#include "sim/sim_exit.hh"
 #include "sim/system.hh"
 #endif
 
@@ -735,7 +736,7 @@ AlphaFullCPU<Impl>::simPalCheck(int palFunc, unsigned tid)
       case PAL::halt:
         halt();
         if (--System::numSystemsRunning == 0)
-            new SimExitEvent("all cpus halted");
+            exitSimLoop("all cpus halted");
         break;
 
       case PAL::bpt:
