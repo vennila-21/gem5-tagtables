@@ -41,7 +41,7 @@ cpu.workload = process
 cpu.mem = magicbus
 
 system = System(physmem = mem, cpu = cpu)
-system.c1 =  Connector(side_a = mem, side_b = magicbus)
+mem.port = magicbus.port
 root = Root(system = system)
 
 # instantiate configuration
@@ -50,5 +50,5 @@ m5.instantiate(root)
 # simulate until program terminates
 exit_event = m5.simulate()
 
-print 'Exiting @', m5.curTick(), 'because', exit_event.getCause()
+print 'Exiting @ cycle', m5.curTick(), 'because', exit_event.getCause()
 

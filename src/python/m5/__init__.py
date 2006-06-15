@@ -64,11 +64,34 @@ def AddToPath(path):
 def setTraceFlags(option, opt_str, value, parser):
     objects.Trace.flags = value
 
+def setTraceStart(option, opt_str, value, parser):
+    objects.Trace.start = value
+
+def clearPCSymbol(option, opt_str, value, parser):
+    objects.ExecutionTrace.pc_symbol = False
+
+def clearPrintCycle(option, opt_str, value, parser):
+    objects.ExecutionTrace.print_cycle = False
+
+def statsTextFile(option, opt_str, value, parser):
+    objects.Statistics.text_file = value
+
 # Standard optparse options.  Need to be explicitly included by the
 # user script when it calls optparse.OptionParser().
 standardOptions = [
     optparse.make_option("--traceflags", type="string", action="callback",
-                         callback=setTraceFlags)
+                         callback=setTraceFlags),
+    optparse.make_option("--tracestart", type="int", action="callback",
+                         callback=setTraceStart),
+    optparse.make_option("--nopcsymbol", action="callback",
+                         callback=clearPCSymbol,
+                         help="Turn off printing PC symbols in trace output"),
+    optparse.make_option("--noprintcycle", action="callback",
+                         callback=clearPrintCycle,
+                         help="Turn off printing cycles in trace output"),
+    optparse.make_option("--statsfile", type="string", action="callback",
+                         callback=statsTextFile, metavar="FILE",
+                         help="Sets the output file for the statistics")
     ]
 
 # make a SmartDict out of the build options for our local use
@@ -80,6 +103,12 @@ build_env.update(defines.m5_build_env)
 env = smartdict.SmartDict()
 env.update(os.environ)
 
+
+# Function to provide to C++ so it can look up instances based on paths
+def resolveSimObject(name):
+    obj = config.instanceDict[name]
+    return obj.getCCObject()
+
 # The final hook to generate .ini files.  Called from the user script
 # once the config is built.
 def instantiate(root):
@@ -89,7 +118,10 @@ def instantiate(root):
     root.print_ini()
     sys.stdout.close() # close config.ini
     sys.stdout = sys.__stdout__ # restore to original
-    main.initialize()  # load config.ini into C++ and process it
+    main.loadIniFile(resolveSimObject)  # load config.ini into C++
+    root.createCCObject()
+    root.connectPorts()
+    main.finalInit()
     noDot = True # temporary until we fix dot
     if not noDot:
        dot = pydot.Dot()
