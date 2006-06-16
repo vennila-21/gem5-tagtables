@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Kevin Lim
+ *          Korey Sewell
  */
 
 #include "config/use_checker.hh"
@@ -334,6 +335,9 @@ DefaultFetch<Impl>::initStage()
     for (int tid = 0; tid < numThreads; tid++) {
         PC[tid] = cpu->readPC(tid);
         nextPC[tid] = cpu->readNextPC(tid);
+#if THE_ISA != ALPHA_ISA
+        nextNPC[tid] = cpu->readNextNPC(tid);
+#endif
     }
 }
 
@@ -408,6 +412,9 @@ DefaultFetch<Impl>::takeOverFrom()
         stalls[i].commit = 0;
         PC[i] = cpu->readPC(i);
         nextPC[i] = cpu->readNextPC(i);
+#if THE_ISA != ALPHA_ISA
+        nextNPC[i] = cpu->readNextNPC(i);
+#endif
         fetchStatus[i] = Running;
     }
     numInst = 0;
@@ -1028,7 +1035,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             fetch_PC = next_PC;
 
             if (instruction->isQuiesce()) {
-                warn("%lli: Quiesce instruction encountered, halting fetch!",
+                warn("cycle %lli: Quiesce instruction encountered, halting fetch!",
                      curTick);
                 fetchStatus[tid] = QuiescePending;
                 ++numInst;
@@ -1049,8 +1056,17 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     if (fault == NoFault) {
         DPRINTF(Fetch, "[tid:%i]: Setting PC to %08p.\n",tid, next_PC);
 
+#if THE_ISA == ALPHA_ISA
         PC[tid] = next_PC;
         nextPC[tid] = next_PC + instSize;
+#else
+        PC[tid] = next_PC;
+        nextPC[tid] = next_PC + instSize;
+        nextPC[tid] = next_PC + instSize;
+
+        thread->setNextPC(thread->readNextNPC());
+        thread->setNextNPC(thread->readNextNPC() + sizeof(MachInst));
+#endif
     } else {
         // We shouldn't be in an icache miss and also have a fault (an ITB
         // miss)
@@ -1093,9 +1109,9 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         fetchStatus[tid] = TrapPending;
         status_change = true;
 
-        warn("%lli fault (%d) detected @ PC %08p", curTick, fault, PC[tid]);
+        warn("cycle %lli: fault (%d) detected @ PC %08p", curTick, fault, PC[tid]);
 #else // !FULL_SYSTEM
-        warn("%lli fault (%d) detected @ PC %08p", curTick, fault, PC[tid]);
+        warn("cycle %lli: fault (%d) detected @ PC %08p", curTick, fault, PC[tid]);
 #endif // FULL_SYSTEM
     }
 }
@@ -1264,6 +1280,6 @@ int
 DefaultFetch<Impl>::branchCount()
 {
     list<unsigned>::iterator threads = (*activeThreads).begin();
-
+    warn("Branch Count Fetch policy unimplemented\n");
     return *threads;
 }
