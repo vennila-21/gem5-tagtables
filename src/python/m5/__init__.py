@@ -30,11 +30,11 @@
 import sys, os, time, atexit, optparse
 
 # import the SWIG-wrapped main C++ functions
-import main
+import cc_main
 # import a few SWIG-wrapped items (those that are likely to be used
 # directly by user scripts) completely into this module for
 # convenience
-from main import simulate, SimLoopExitEvent
+from cc_main import simulate, SimLoopExitEvent
 
 # import the m5 compile options
 import defines
@@ -57,6 +57,20 @@ def AddToPath(path):
     # so place the new dir right after that.
     sys.path.insert(1, path)
 
+
+# The m5 module's pointer to the parsed options object
+options = None
+
+
+# User should call this function after calling parse_args() to pass
+# parsed standard option values back into the m5 module for
+# processing.
+def setStandardOptions(_options):
+    # Set module global var
+    global options
+    options = _options
+    # tell C++ about output directory
+    cc_main.setOutputDir(options.outdir)
 
 # Callback to set trace flags.  Not necessarily the best way to do
 # things in the long run (particularly if we change how these global
@@ -110,6 +124,7 @@ TorF = "True | False"
 # Standard optparse options.  Need to be explicitly included by the
 # user script when it calls optparse.OptionParser().
 standardOptions = [
+    optparse.make_option("--outdir", type="string", default="."),
     optparse.make_option("--traceflags", type="string", action="callback",
                          callback=setTraceFlags),
     optparse.make_option("--tracestart", type="int", action="callback",
@@ -187,14 +202,14 @@ def resolveSimObject(name):
 def instantiate(root):
     config.ticks_per_sec = float(root.clock.frequency)
     # ugly temporary hack to get output to config.ini
-    sys.stdout = file('config.ini', 'w')
+    sys.stdout = file(os.path.join(options.outdir, 'config.ini'), 'w')
     root.print_ini()
     sys.stdout.close() # close config.ini
     sys.stdout = sys.__stdout__ # restore to original
-    main.loadIniFile(resolveSimObject)  # load config.ini into C++
+    cc_main.loadIniFile(resolveSimObject)  # load config.ini into C++
     root.createCCObject()
     root.connectPorts()
-    main.finalInit()
+    cc_main.finalInit()
     noDot = True # temporary until we fix dot
     if not noDot:
        dot = pydot.Dot()
@@ -208,10 +223,10 @@ def instantiate(root):
 
 # Export curTick to user script.
 def curTick():
-    return main.cvar.curTick
+    return cc_main.cvar.curTick
 
 # register our C++ exit callback function with Python
-atexit.register(main.doExitCleanup)
+atexit.register(cc_main.doExitCleanup)
 
 # This import allows user scripts to reference 'm5.objects.Foo' after
 # just doing an 'import m5' (without an 'import m5.objects').  May not
