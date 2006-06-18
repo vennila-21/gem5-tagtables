@@ -135,7 +135,9 @@ showBriefHelp(ostream &out)
 "                    script is executed (just like the -i option to  the\n"
 "                    Python interpreter).\n\n"
 " -h                 Prints this help\n\n"
-" <configfile>       config file name (ends in .py)\n\n",
+" <configfile>       config file name which ends in .py. (Normally you can\n"
+"                    run <configfile> --help to get help on that config files\n"
+"                    parameters.\n\n",
              prog);
 
 }
@@ -166,7 +168,7 @@ sayHello(ostream &out)
 }
 
 
-extern "C" { void init_main(); }
+extern "C" { void init_cc_main(); }
 
 int
 main(int argc, char **argv)
@@ -258,8 +260,8 @@ main(int argc, char **argv)
     Py_Initialize();
     PySys_SetArgv(argc, argv);
 
-    // initialize SWIG 'main' module
-    init_main();
+    // initialize SWIG 'cc_main' module
+    init_cc_main();
 
     if (argc > 0) {
         // extra arg(s): first is script file, remaining ones are args
@@ -296,6 +298,14 @@ main(int argc, char **argv)
     // clean up Python intepreter.
     Py_Finalize();
 }
+
+
+void
+setOutputDir(const string &dir)
+{
+    simout.setDirectory(dir);
+}
+
 
 IniFile inifile;
 
@@ -416,11 +426,6 @@ finalInit()
 #endif
 
     SimObject::regAllStats();
-
-    // uncomment the following to get PC-based execution-time profile
-#ifdef DO_PROFILE
-    init_profile((char *)&_init, (char *)&_fini);
-#endif
 
     // Check to make sure that the stats package is properly initialized
     Stats::check();
