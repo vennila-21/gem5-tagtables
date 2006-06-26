@@ -100,6 +100,7 @@ env.Command('static_inst_exec_sigs.hh', models_db,
                    varlist = temp_cpu_list))
 
 env.Depends('static_inst_exec_sigs.hh', Value(env['USE_CHECKER']))
+env.Depends('static_inst_exec_sigs.hh', Value(env['CPU_MODELS']))
 
 # List of suppported CPUs by the Checker.  Errors out if USE_CHECKER=True
 # and one of these are not being used.
@@ -160,29 +161,23 @@ if 'AlphaO3CPU' in env['CPU_MODELS']:
     if env['USE_CHECKER']:
         sources += Split('o3/checker_builder.cc')
 
-if 'OzoneSimpleCPU' in env['CPU_MODELS']:
-    sources += Split('''
-        ozone/cpu.cc
-        ozone/cpu_builder.cc
-        ozone/dyn_inst.cc
-        ozone/front_end.cc
-        ozone/inorder_back_end.cc
-        ozone/inst_queue.cc
-        ozone/rename_table.cc
-        ''')
-
 if 'OzoneCPU' in env['CPU_MODELS']:
     sources += Split('''
         ozone/base_dyn_inst.cc
         ozone/bpred_unit.cc
-        ozone/lsq_unit.cc
+        ozone/cpu.cc
+        ozone/cpu_builder.cc
+        ozone/dyn_inst.cc
+        ozone/front_end.cc
         ozone/lw_back_end.cc
         ozone/lw_lsq.cc
+        ozone/rename_table.cc
         ''')
     if env['USE_CHECKER']:
         sources += Split('ozone/checker_builder.cc')
 
 if env['USE_CHECKER']:
+    sources += Split('checker/cpu.cc')
     checker_supports = False
     for i in CheckerSupportedCPUList:
         if i in env['CPU_MODELS']:

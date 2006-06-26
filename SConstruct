@@ -159,7 +159,7 @@ env = Environment(ENV = os.environ,  # inherit user's environment vars
                   ROOT = ROOT,
                   SRCDIR = SRCDIR)
 
-env.SConsignFile("sconsign")
+env.SConsignFile(os.path.join(build_root,"sconsign"))
 
 # Default duplicate option is to use hard links, but this messes up
 # when you use emacs to edit a file in the target dir, as emacs moves
@@ -264,7 +264,7 @@ env['ALL_ISA_LIST'] = ['alpha', 'sparc', 'mips']
 # Define the universe of supported CPU models
 env['ALL_CPU_LIST'] = ['AtomicSimpleCPU', 'TimingSimpleCPU',
                        'FullCPU', 'AlphaO3CPU',
-                       'OzoneSimpleCPU', 'OzoneCPU']
+                       'OzoneCPU']
 
 # Sticky options get saved in the options file so they persist from
 # one invocation to the next (unless overridden, in which case the new
