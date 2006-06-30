@@ -127,6 +127,7 @@ class Serializable
     static int ckptMaxCount;
     static int ckptPrevCount;
     static void serializeAll();
+    static void unserializeAll();
     static void unserializeGlobals(Checkpoint *cp);
 };
 
@@ -204,6 +205,9 @@ class SerializableClass
 SerializableClass the##OBJ_CLASS##Class(CLASS_NAME,			   \
                                          OBJ_CLASS::createForUnserialize);
 
+void
+setCheckpointName(const std::string &name);
+
 class Checkpoint
 {
   private:
@@ -237,9 +241,6 @@ class Checkpoint
 
     // Filename for base checkpoint file within directory.
     static const char *baseFilename;
-
-    // Set up a checkpoint creation event or series of events.
-    static void setup(Tick when, Tick period = 0);
 };
 
 #endif // __SERIALIZE_HH__
