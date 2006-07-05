@@ -208,7 +208,7 @@ TimingSimpleCPU::read(Addr addr, T &data, unsigned flags)
 {
     // need to fill in CPU & thread IDs here
     Request *data_read_req = new Request();
-
+    data_read_req->setThreadContext(0,0); //Need CPU/Thread IDS HERE
     data_read_req->setVirt(0, addr, sizeof(T), flags, thread->readPC());
 
     if (traceData) {
@@ -289,6 +289,7 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 {
     // need to fill in CPU & thread IDs here
     Request *data_write_req = new Request();
+    data_write_req->setThreadContext(0,0); //Need CPU/Thread IDS HERE
     data_write_req->setVirt(0, addr, sizeof(T), flags, thread->readPC());
 
     // translate to physical address
@@ -372,6 +373,7 @@ TimingSimpleCPU::fetch()
 
     // need to fill in CPU & thread IDs here
     Request *ifetch_req = new Request();
+    ifetch_req->setThreadContext(0,0); //Need CPU/Thread IDS HERE
     Fault fault = setupFetchRequest(ifetch_req);
 
     ifetch_pkt = new Packet(ifetch_req, Packet::ReadReq, Packet::Broadcast);
