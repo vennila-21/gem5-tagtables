@@ -51,6 +51,7 @@ baseFlags = [
     'Activity',
     'AlphaConsole',
     'BADADDR',
+    'BaseCPU',
     'BE',
     'BPredRAS',
     'Bus',
