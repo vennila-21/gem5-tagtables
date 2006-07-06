@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2006 The Regents of The University of Michigan
+ * Copyright (c) 2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,36 +25,21 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Kevin Lim
+ * Authors: Korey Sewell
  */
 
-#ifndef __CPU_O3_ALPHA_PARAMS_HH__
-#define __CPU_O3_ALPHA_PARAMS_HH__
+#ifndef __CPU_O3_DYN_INST_HH__
+#define __CPU_O3_DYN_INST_HH__
 
-#include "cpu/o3/cpu.hh"
-#include "cpu/o3/params.hh"
+#include "arch/isa_specific.hh"
 
-//Forward declarations
-class AlphaDTB;
-class AlphaITB;
-class MemObject;
-class Process;
-class System;
+#if THE_ISA == ALPHA_ISA
+template <class Impl>
+class AlphaDynInst;
 
-/**
- * This file defines the parameters that will be used for the AlphaO3CPU.
- * This must be defined externally so that the Impl can have a params class
- * defined that it can pass to all of the individual stages.
- */
+struct AlphaSimpleImpl;
 
-class AlphaSimpleParams : public O3Params
-{
-  public:
-
-#if FULL_SYSTEM
-    AlphaITB *itb;
-    AlphaDTB *dtb;
+typedef AlphaDynInst<AlphaSimpleImpl> O3DynInst;
 #endif
-};
 
-#endif // __CPU_O3_ALPHA_PARAMS_HH__
+#endif // __CPU_O3_DYN_INST_HH__
