@@ -88,7 +88,7 @@ TimingSimpleCPU::TimingSimpleCPU(Params *p)
 {
     _status = Idle;
     ifetch_pkt = dcache_pkt = NULL;
-    quiesceEvent = NULL;
+    drainEvent = NULL;
     state = SimObject::Timing;
 }
 
@@ -112,17 +112,16 @@ TimingSimpleCPU::unserialize(Checkpoint *cp, const string &section)
 }
 
 bool
-TimingSimpleCPU::quiesce(Event *quiesce_event)
+TimingSimpleCPU::drain(Event *drain_event)
 {
-    // TimingSimpleCPU is ready to quiesce if it's not waiting for
+    // TimingSimpleCPU is ready to drain if it's not waiting for
     // an access to complete.
     if (status() == Idle || status() == Running || status() == SwitchedOut) {
-        DPRINTF(Config, "Ready to quiesce\n");
+        changeState(SimObject::DrainedTiming);
         return false;
     } else {
-        DPRINTF(Config, "Waiting to quiesce\n");
-        changeState(SimObject::Quiescing);
-        quiesceEvent = quiesce_event;
+        changeState(SimObject::Draining);
+        drainEvent = drain_event;
         return true;
     }
 }
@@ -207,7 +206,7 @@ TimingSimpleCPU::read(Addr addr, T &data, unsigned flags)
 {
     // need to fill in CPU & thread IDs here
     Request *data_read_req = new Request();
-
+    data_read_req->setThreadContext(0,0); //Need CPU/Thread IDS HERE
     data_read_req->setVirt(0, addr, sizeof(T), flags, thread->readPC());
 
     if (traceData) {
@@ -288,6 +287,7 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 {
     // need to fill in CPU & thread IDs here
     Request *data_write_req = new Request();
+    data_write_req->setThreadContext(0,0); //Need CPU/Thread IDS HERE
     data_write_req->setVirt(0, addr, sizeof(T), flags, thread->readPC());
 
     // translate to physical address
@@ -371,6 +371,7 @@ TimingSimpleCPU::fetch()
 
     // need to fill in CPU & thread IDs here
     Request *ifetch_req = new Request();
+    ifetch_req->setThreadContext(0,0); //Need CPU/Thread IDS HERE
     Fault fault = setupFetchRequest(ifetch_req);
 
     ifetch_pkt = new Packet(ifetch_req, Packet::ReadReq, Packet::Broadcast);
@@ -420,8 +421,8 @@ TimingSimpleCPU::completeIfetch(Packet *pkt)
     delete pkt->req;
     delete pkt;
 
-    if (getState() == SimObject::Quiescing) {
-        completeQuiesce();
+    if (getState() == SimObject::Draining) {
+        completeDrain();
         return;
     }
 
@@ -477,8 +478,8 @@ TimingSimpleCPU::completeDataAccess(Packet *pkt)
     assert(_status == DcacheWaitResponse);
     _status = Running;
 
-    if (getState() == SimObject::Quiescing) {
-        completeQuiesce();
+    if (getState() == SimObject::Draining) {
+        completeDrain();
 
         delete pkt->req;
         delete pkt;
@@ -497,11 +498,11 @@ TimingSimpleCPU::completeDataAccess(Packet *pkt)
 
 
 void
-TimingSimpleCPU::completeQuiesce()
+TimingSimpleCPU::completeDrain()
 {
-    DPRINTF(Config, "Done quiescing\n");
-    changeState(SimObject::QuiescedTiming);
-    quiesceEvent->process();
+    DPRINTF(Config, "Done draining\n");
+    changeState(SimObject::DrainedTiming);
+    drainEvent->process();
 }
 
 bool
