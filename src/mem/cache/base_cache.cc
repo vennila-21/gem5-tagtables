@@ -98,6 +98,43 @@ BaseCache::CachePort::clearBlocked()
     blocked = false;
 }
 
+BaseCache::CacheEvent::CacheEvent(CachePort *_cachePort)
+    : Event(&mainEventQueue, CPU_Tick_Pri), cachePort(_cachePort)
+{
+    this->setFlags(AutoDelete);
+    pkt = NULL;
+}
+
+BaseCache::CacheEvent::CacheEvent(CachePort *_cachePort, Packet *_pkt)
+    : Event(&mainEventQueue, CPU_Tick_Pri), cachePort(_cachePort), pkt(_pkt)
+{
+    this->setFlags(AutoDelete);
+}
+
+void
+BaseCache::CacheEvent::process()
+{
+    if (!pkt)
+    {
+        if (!cachePort->isCpuSide)
+            pkt = cachePort->cache->getPacket();
+        else
+            pkt = cachePort->cache->getCoherencePacket();
+        bool success = cachePort->sendTiming(pkt);
+        cachePort->cache->sendResult(pkt, success);
+        return;
+    }
+    //Know the packet to send, no need to mark in service (must succed)
+    bool success = cachePort->sendTiming(pkt);
+    assert(success);
+}
+
+const char *
+BaseCache::CacheEvent::description()
+{
+    return "timing event\n";
+}
+
 Port*
 BaseCache::getPort(const std::string &if_name, int idx)
 {
