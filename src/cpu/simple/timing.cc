@@ -90,6 +90,7 @@ TimingSimpleCPU::TimingSimpleCPU(Params *p)
     _status = Idle;
     ifetch_pkt = dcache_pkt = NULL;
     drainEvent = NULL;
+    fetchEvent = NULL;
     state = SimObject::Timing;
 }
 
@@ -119,11 +120,11 @@ TimingSimpleCPU::drain(Event *drain_event)
     // an access to complete.
     if (status() == Idle || status() == Running || status() == SwitchedOut) {
         changeState(SimObject::DrainedTiming);
-        return false;
+        return true;
     } else {
         changeState(SimObject::Draining);
         drainEvent = drain_event;
-        return true;
+        return false;
     }
 }
 
@@ -131,9 +132,15 @@ void
 TimingSimpleCPU::resume()
 {
     if (_status != SwitchedOut && _status != Idle) {
-        Event *e =
-            new EventWrapper<TimingSimpleCPU, &TimingSimpleCPU::fetch>(this, true);
-        e->schedule(curTick);
+        // Delete the old event if it existed.
+        if (fetchEvent) {
+            assert(!fetchEvent->scheduled());
+            delete fetchEvent;
+        }
+
+        fetchEvent =
+            new EventWrapper<TimingSimpleCPU, &TimingSimpleCPU::fetch>(this, false);
+        fetchEvent->schedule(curTick);
     }
 }
 
@@ -148,6 +155,11 @@ TimingSimpleCPU::switchOut()
 {
     assert(status() == Running || status() == Idle);
     _status = SwitchedOut;
+
+    // If we've been scheduled to resume but are then told to switch out,
+    // we'll need to cancel it.
+    if (fetchEvent && fetchEvent->scheduled())
+        fetchEvent->deschedule();
 }
 
 
@@ -179,9 +191,9 @@ TimingSimpleCPU::activateContext(int thread_num, int delay)
     notIdleFraction++;
     _status = Running;
     // kick things off by initiating the fetch of the next instruction
-    Event *e =
-        new EventWrapper<TimingSimpleCPU, &TimingSimpleCPU::fetch>(this, true);
-    e->schedule(curTick + cycles(delay));
+    fetchEvent =
+        new EventWrapper<TimingSimpleCPU, &TimingSimpleCPU::fetch>(this, false);
+    fetchEvent->schedule(curTick + cycles(delay));
 }
 
 
