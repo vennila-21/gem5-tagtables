@@ -745,7 +745,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::serialize(std::ostream &os)
 {
-    SERIALIZE_ENUM(_status);
+    SimObject::State so_state = SimObject::getState();
+    SERIALIZE_ENUM(so_state);
     BaseCPU::serialize(os);
     nameOut(os, csprintf("%s.tickEvent", name()));
     tickEvent.serialize(os);
@@ -766,7 +767,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::unserialize(Checkpoint *cp, const std::string &section)
 {
-    UNSERIALIZE_ENUM(_status);
+    SimObject::State so_state;
+    UNSERIALIZE_ENUM(so_state);
     BaseCPU::unserialize(cp, section);
     tickEvent.unserialize(cp, csprintf("%s.tickEvent", section));
 
@@ -1045,7 +1047,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::setArchFloatRegSingle(int reg_idx, float val, unsigned tid)
 {
-    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(reg_idx);
+    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(idx);
 
     regFile.setFloatReg(phys_reg, val);
 }
@@ -1054,7 +1057,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::setArchFloatRegDouble(int reg_idx, double val, unsigned tid)
 {
-    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(reg_idx);
+    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(idx);
 
     regFile.setFloatReg(phys_reg, val, 64);
 }
@@ -1063,7 +1067,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::setArchFloatRegInt(int reg_idx, uint64_t val, unsigned tid)
 {
-    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(reg_idx);
+    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(idx);
 
     regFile.setFloatRegBits(phys_reg, val);
 }
