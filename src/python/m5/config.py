@@ -665,7 +665,8 @@ class BaseProxy(object):
                 result, done = self.find(obj)
 
         if not done:
-            raise AttributeError, "Can't resolve proxy '%s' from '%s'" % \
+            raise AttributeError, \
+                  "Can't resolve proxy '%s' from '%s'" % \
                   (self.path(), base.path())
 
         if isinstance(result, BaseProxy):
