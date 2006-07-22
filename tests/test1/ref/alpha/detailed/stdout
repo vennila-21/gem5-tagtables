@@ -1,0 +1,13 @@
+main dictionary has 1245 entries
+49508 bytes wasted
+>M5 Simulator System
+
+Copyright (c) 2001-2006
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Jul 21 2006 16:19:30
+M5 started Fri Jul 21 16:41:07 2006
+M5 executing on zamp.eecs.umich.edu
+Exiting @ tick 198813 because a thread reached the max instruction count
