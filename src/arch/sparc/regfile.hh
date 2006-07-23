@@ -55,14 +55,12 @@ namespace SparcISA
     // NWINDOWS - number of register windows, can be 3 to 32
     const int NWindows = 32;
 
-
     const int AsrStart = 0;
     const int PrStart = 32;
     const int HprStart = 64;
     const int MiscStart = 96;
 
     const uint64_t Bit64 = (1ULL << 63);
-
     class IntRegFile
     {
       protected:
@@ -182,7 +180,7 @@ namespace SparcISA
         //Since the floating point registers overlap each other,
         //A generic storage space is used. The float to be returned is
         //pulled from the appropriate section of this region.
-        char regSpace[SingleWidth / 8 * NumFloatRegs];
+        char regSpace[(SingleWidth / 8) * NumFloatRegs];
 
       public:
 
@@ -200,15 +198,15 @@ namespace SparcISA
             {
               case SingleWidth:
                 float32_t result32;
-                memcpy(&result32, regSpace + 4 * floatReg, width);
+                memcpy(&result32, regSpace + 4 * floatReg, sizeof(result32));
                 return htog(result32);
               case DoubleWidth:
                 float64_t result64;
-                memcpy(&result64, regSpace + 4 * floatReg, width);
+                memcpy(&result64, regSpace + 4 * floatReg, sizeof(result64));
                 return htog(result64);
               case QuadWidth:
                 float128_t result128;
-                memcpy(&result128, regSpace + 4 * floatReg, width);
+                memcpy(&result128, regSpace + 4 * floatReg, sizeof(result128));
                 return htog(result128);
               default:
                 panic("Attempted to read a %d bit floating point register!", width);
@@ -224,15 +222,15 @@ namespace SparcISA
             {
               case SingleWidth:
                 uint32_t result32;
-                memcpy(&result32, regSpace + 4 * floatReg, width);
+                memcpy(&result32, regSpace + 4 * floatReg, sizeof(result32));
                 return htog(result32);
               case DoubleWidth:
                 uint64_t result64;
-                memcpy(&result64, regSpace + 4 * floatReg, width);
+                memcpy(&result64, regSpace + 4 * floatReg, sizeof(result64));
                 return htog(result64);
               case QuadWidth:
                 uint64_t result128;
-                memcpy(&result128, regSpace + 4 * floatReg, width);
+                memcpy(&result128, regSpace + 4 * floatReg, sizeof(result128));
                 return htog(result128);
               default:
                 panic("Attempted to read a %d bit floating point register!", width);
@@ -247,15 +245,16 @@ namespace SparcISA
 
             uint32_t result32;
             uint64_t result64;
+            DPRINTF(Sparc, "Setting floating point register %d\n", floatReg);
             switch(width)
             {
               case SingleWidth:
                 result32 = gtoh((uint32_t)val);
-                memcpy(regSpace + 4 * floatReg, &result32, width);
+                memcpy(regSpace + 4 * floatReg, &result32, sizeof(result32));
                 break;
               case DoubleWidth:
                 result64 = gtoh((uint64_t)val);
-                memcpy(regSpace + 4 * floatReg, &result64, width);
+                memcpy(regSpace + 4 * floatReg, &result64, sizeof(result64));
                 break;
               case QuadWidth:
                 panic("Quad width FP not implemented.");
@@ -277,11 +276,11 @@ namespace SparcISA
             {
               case SingleWidth:
                 result32 = gtoh((uint32_t)val);
-                memcpy(regSpace + 4 * floatReg, &result32, width);
+                memcpy(regSpace + 4 * floatReg, &result32, sizeof(result32));
                 break;
               case DoubleWidth:
                 result64 = gtoh((uint64_t)val);
-                memcpy(regSpace + 4 * floatReg, &result64, width);
+                memcpy(regSpace + 4 * floatReg, &result64, sizeof(result64));
                 break;
               case QuadWidth:
                 panic("Quad width FP not implemented.");
@@ -625,11 +624,9 @@ namespace SparcISA
             hpstateFields.red = 1;
             hpstateFields.hpriv = 1;
             hpstateFields.tlz = 0; // this is a guess
-
             hintp = 0; // no interrupts pending
             hstick_cmprFields.int_dis = 1; // disable timer compare interrupts
             hstick_cmprFields.tick_cmpr = 0; // Reset to 0 for pretty printing
-
 #else
 /*	    //This sets up the initial state of the processor for usermode processes
             pstateFields.priv = 0; //Process runs in user mode
@@ -686,6 +683,8 @@ namespace SparcISA
         void unserialize(Checkpoint * cp, const std::string & section);
 
         void copyMiscRegs(ThreadContext * tc);
+
+      protected:
 
         bool isHyperPriv() { return hpstateFields.hpriv; }
         bool isPriv() { return hpstateFields.hpriv || pstateFields.priv; }
