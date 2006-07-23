@@ -1,0 +1,88 @@
+// Copyright (c) 2006 The Regents of The University of Michigan
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Ali Saidi
+//          Gabe Black
+//          Steve Reinhardt
+
+def operand_types {{
+    'sb' : ('signed int', 8),
+    'ub' : ('unsigned int', 8),
+    'shw' : ('signed int', 16),
+    'uhw' : ('unsigned int', 16),
+    'sw' : ('signed int', 32),
+    'uw' : ('unsigned int', 32),
+    'sdw' : ('signed int', 64),
+    'udw' : ('unsigned int', 64),
+    'sf' : ('float', 32),
+    'df' : ('float', 64),
+    'qf' : ('float', 128)
+}};
+
+def operands {{
+    # Int regs default to unsigned, but code should not count on this.
+    # For clarity, descriptions that depend on unsigned behavior should
+    # explicitly specify '.uq'.
+    'Rd': 		('IntReg', 'udw', 'RD', 'IsInteger', 1),
+    'RdLow': 		('IntReg', 'udw', 'RD & (~1)', 'IsInteger', 2),
+    'RdHigh':		('IntReg', 'udw', 'RD | 1', 'IsInteger', 3),
+    'Rs1': 		('IntReg', 'udw', 'RS1', 'IsInteger', 4),
+    'Rs2': 		('IntReg', 'udw', 'RS2', 'IsInteger', 5),
+    'Frd':		('FloatReg', 'df', 'RD', 'IsFloating', 10),
+    'Frs1':		('FloatReg', 'df', 'RS1', 'IsFloating', 11),
+    'Frs2':		('FloatReg', 'df', 'RS2', 'IsFloating', 12),
+    'Mem': 		('Mem', 'udw', None, ('IsMemRef', 'IsLoad', 'IsStore'), 20),
+    'NPC': 		('NPC', 'udw', None, ( None, None, 'IsControl' ), 31),
+    'NNPC':		('NNPC', 'udw', None, (None, None, 'IsControl' ), 32),
+    #'Runiq': ('ControlReg', 'uq', 'Uniq', None, 1),
+    #'FPCR':  ('ControlReg', 'uq', 'Fpcr', None, 1),
+    'R0':  		('IntReg', 'udw', '0', None, 6),
+    'R1':  		('IntReg', 'udw', '1', None, 7),
+    'R15': 		('IntReg', 'udw', '15', 'IsInteger', 8),
+    'R16': 		('IntReg', 'udw', '16', None, 9),
+
+    # Control registers
+    'Y':		('ControlReg', 'udw', 'MISCREG_Y', None, 40),
+    'Ccr':		('ControlReg', 'udw', 'MISCREG_CCR', None, 41),
+    'Asi':		('ControlReg', 'udw', 'MISCREG_ASI', None, 42),
+
+    'Tpc':		('ControlReg', 'udw', 'MISCREG_TPC', None, 43),
+    'Tnpc':		('ControlReg', 'udw', 'MISCREG_TNPC', None, 44),
+    'Tstate':		('ControlReg', 'udw', 'MISCREG_TSTATE', None, 45),
+    'Pstate':		('ControlReg', 'udw', 'MISCREG_PSTATE', None, 46),
+    'Tl':		('ControlReg', 'udw', 'MISCREG_TL', None, 47),
+
+    'Cwp':		('ControlReg', 'udw', 'MISCREG_CWP', None, 48),
+    'Cansave':		('ControlReg', 'udw', 'MISCREG_CANSAVE', None, 49),
+    'Canrestore':	('ControlReg', 'udw', 'MISCREG_CANRESTORE', None, 50),
+    'Cleanwin':		('ControlReg', 'udw', 'MISCREG_CLEANWIN', None, 51),
+    'Otherwin':		('ControlReg', 'udw', 'MISCREG_OTHERWIN', None, 52),
+    'Wstate':		('ControlReg', 'udw', 'MISCREG_WSTATE', None, 53),
+    'Gl':               ('ControlReg', 'udw', 'MISCREG_GL', None, 54),
+
+    'Fsr':		('ControlReg', 'udw', 'MISCREG_FSR', None, 55)
+
+}};
