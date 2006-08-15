@@ -38,8 +38,6 @@
 #include "cpu/o3/fu_pool.hh"
 #include "cpu/o3/iew.hh"
 
-using namespace std;
-
 template<class Impl>
 DefaultIEW<Impl>::DefaultIEW(Params *params)
     : issueToExecQueue(params->backComSize, params->forwardComSize),
@@ -73,6 +71,7 @@ DefaultIEW<Impl>::DefaultIEW(Params *params)
         dispatchStatus[i] = Running;
         stalls[i].commit = false;
         fetchRedirect[i] = false;
+        bdelayDoneSeqNum[i] = 0;
     }
 
     wbMax = wbWidth * params->wbDepth;
@@ -335,7 +334,7 @@ DefaultIEW<Impl>::setIEWQueue(TimeBuffer<IEWStruct> *iq_ptr)
 
 template<class Impl>
 void
-DefaultIEW<Impl>::setActiveThreads(list<unsigned> *at_ptr)
+DefaultIEW<Impl>::setActiveThreads(std::list<unsigned> *at_ptr)
 {
     DPRINTF(IEW, "Setting active threads list pointer.\n");
     activeThreads = at_ptr;
@@ -428,13 +427,31 @@ DefaultIEW<Impl>::squash(unsigned tid)
     instQueue.squash(tid);
 
     // Tell the LDSTQ to start squashing.
+#if THE_ISA == ALPHA_ISA
     ldstQueue.squash(fromCommit->commitInfo[tid].doneSeqNum, tid);
-
+#else
+    ldstQueue.squash(fromCommit->commitInfo[tid].bdelayDoneSeqNum, tid);
+#endif
     updatedQueues = true;
 
     // Clear the skid buffer in case it has any data in it.
-    while (!skidBuffer[tid].empty()) {
+    DPRINTF(IEW, "[tid:%i]: Removing skidbuffer instructions until [sn:%i].\n",
+            tid, fromCommit->commitInfo[tid].bdelayDoneSeqNum);
 
+    while (!skidBuffer[tid].empty()) {
+#if THE_ISA != ALPHA_ISA
+        if (skidBuffer[tid].front()->seqNum <=
+            fromCommit->commitInfo[tid].bdelayDoneSeqNum) {
+            DPRINTF(IEW, "[tid:%i]: Cannot remove skidbuffer instructions "
+                    "that occur before delay slot [sn:%i].\n",
+                    fromCommit->commitInfo[tid].bdelayDoneSeqNum,
+                    tid);
+            break;
+        } else {
+            DPRINTF(IEW, "[tid:%i]: Removing instruction [sn:%i] from "
+                    "skidBuffer.\n", tid, skidBuffer[tid].front()->seqNum);
+        }
+#endif
         if (skidBuffer[tid].front()->isLoad() ||
             skidBuffer[tid].front()->isStore() ) {
             toRename->iewInfo[tid].dispatchedToLSQ++;
@@ -444,6 +461,8 @@ DefaultIEW<Impl>::squash(unsigned tid)
 
         skidBuffer[tid].pop();
     }
+
+    bdelayDoneSeqNum[tid] = fromCommit->commitInfo[tid].bdelayDoneSeqNum;
 
     emptyRenameInsts(tid);
 }
@@ -458,10 +477,26 @@ DefaultIEW<Impl>::squashDueToBranch(DynInstPtr &inst, unsigned tid)
     toCommit->squash[tid] = true;
     toCommit->squashedSeqNum[tid] = inst->seqNum;
     toCommit->mispredPC[tid] = inst->readPC();
-    toCommit->nextPC[tid] = inst->readNextPC();
     toCommit->branchMispredict[tid] = true;
+
+#if THE_ISA == ALPHA_ISA
     toCommit->branchTaken[tid] = inst->readNextPC() !=
         (inst->readPC() + sizeof(TheISA::MachInst));
+    toCommit->nextPC[tid] = inst->readNextPC();
+#else
+    bool branch_taken = inst->readNextNPC() !=
+        (inst->readNextPC() + sizeof(TheISA::MachInst));
+
+    toCommit->branchTaken[tid] = branch_taken;
+
+    toCommit->condDelaySlotBranch[tid] = inst->isCondDelaySlot();
+
+    if (inst->isCondDelaySlot() && branch_taken) {
+        toCommit->nextPC[tid] = inst->readNextPC();
+    } else {
+        toCommit->nextPC[tid] = inst->readNextNPC();
+    }
+#endif
 
     toCommit->includeSquashInst[tid] = false;
 
@@ -626,7 +661,7 @@ DefaultIEW<Impl>::skidCount()
 {
     int max=0;
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         unsigned thread_count = skidBuffer[*threads++].size();
@@ -641,7 +676,7 @@ template<class Impl>
 bool
 DefaultIEW<Impl>::skidsEmpty()
 {
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         if (!skidBuffer[*threads++].empty())
@@ -657,7 +692,7 @@ DefaultIEW<Impl>::updateStatus()
 {
     bool any_unblocking = false;
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     threads = (*activeThreads).begin();
 
@@ -825,8 +860,10 @@ DefaultIEW<Impl>::sortInsts()
 {
     int insts_from_rename = fromRename->size;
 #ifdef DEBUG
+#if THE_ISA == ALPHA_ISA
     for (int i = 0; i < numThreads; i++)
         assert(insts[i].empty());
+#endif
 #endif
     for (int i = 0; i < insts_from_rename; ++i) {
         insts[fromRename->insts[i]->threadNumber].push(fromRename->insts[i]);
@@ -837,7 +874,23 @@ template <class Impl>
 void
 DefaultIEW<Impl>::emptyRenameInsts(unsigned tid)
 {
+    DPRINTF(IEW, "[tid:%i]: Removing incoming rename instructions until "
+            "[sn:%i].\n", tid, bdelayDoneSeqNum[tid]);
+
     while (!insts[tid].empty()) {
+
+#if THE_ISA != ALPHA_ISA
+        if (insts[tid].front()->seqNum <= bdelayDoneSeqNum[tid]) {
+            DPRINTF(IEW, "[tid:%i]: Done removing, cannot remove instruction"
+                    " that occurs at or before delay slot [sn:%i].\n",
+                    tid, bdelayDoneSeqNum[tid]);
+            break;
+        } else {
+            DPRINTF(IEW, "[tid:%i]: Removing incoming rename instruction "
+                    "[sn:%i].\n", tid, insts[tid].front()->seqNum);
+        }
+#endif
+
         if (insts[tid].front()->isLoad() ||
             insts[tid].front()->isStore() ) {
             toRename->iewInfo[tid].dispatchedToLSQ++;
@@ -1120,7 +1173,7 @@ DefaultIEW<Impl>::dispatchInsts(unsigned tid)
     }
 
     if (!insts_to_dispatch.empty()) {
-        DPRINTF(IEW,"[tid:%i]: Issue: Bandwidth Full. Blocking.\n");
+        DPRINTF(IEW,"[tid:%i]: Issue: Bandwidth Full. Blocking.\n", tid);
         block(tid);
         toRename->iewUnblock[tid] = false;
     }
@@ -1140,13 +1193,13 @@ DefaultIEW<Impl>::printAvailableInsts()
 {
     int inst = 0;
 
-    cout << "Available Instructions: ";
+    std::cout << "Available Instructions: ";
 
     while (fromIssue->insts[inst]) {
 
-        if (inst%3==0) cout << "\n\t";
+        if (inst%3==0) std::cout << "\n\t";
 
-        cout << "PC: " << fromIssue->insts[inst]->readPC()
+        std::cout << "PC: " << fromIssue->insts[inst]->readPC()
              << " TN: " << fromIssue->insts[inst]->threadNumber
              << " SN: " << fromIssue->insts[inst]->seqNum << " | ";
 
@@ -1154,7 +1207,7 @@ DefaultIEW<Impl>::printAvailableInsts()
 
     }
 
-    cout << "\n";
+    std::cout << "\n";
 }
 
 template <class Impl>
@@ -1164,7 +1217,7 @@ DefaultIEW<Impl>::executeInsts()
     wbNumInst = 0;
     wbCycle = 0;
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         unsigned tid = *threads++;
@@ -1263,9 +1316,13 @@ DefaultIEW<Impl>::executeInsts()
                 fetchRedirect[tid] = true;
 
                 DPRINTF(IEW, "Execute: Branch mispredict detected.\n");
+#if THE_ISA == ALPHA_ISA
                 DPRINTF(IEW, "Execute: Redirecting fetch to PC: %#x.\n",
                         inst->nextPC);
-
+#else
+                DPRINTF(IEW, "Execute: Redirecting fetch to PC: %#x.\n",
+                        inst->nextNPC);
+#endif
                 // If incorrect, then signal the ROB that it must be squashed.
                 squashDueToBranch(inst, tid);
 
@@ -1384,7 +1441,7 @@ DefaultIEW<Impl>::tick()
     // Free function units marked as being freed this cycle.
     fuPool->processFreeUnits();
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     // Check stall and squash signals, dispatch any instructions.
     while (threads != (*activeThreads).end()) {

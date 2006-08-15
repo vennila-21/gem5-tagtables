@@ -37,6 +37,7 @@
 #include "mem/packet_impl.hh"
 #include "sim/eventq.hh"
 #include "sim/sim_object.hh"
+#include "mem/tport.hh"
 
 class Platform;
 class PioDevice;
@@ -48,25 +49,17 @@ class System;
  * sensitive to an address range use. The port takes all the memory
  * access types and roles them into one read() and write() call that the device
  * must respond to. The device must also provide the addressRanges() function
- * with which it returns the address ranges it is interested in. An extra
- * sendTiming() function is implemented which takes an delay. In this way the
- * device can immediatly call sendTiming(pkt, time) after processing a request
- * and the request will be handled by the port even if the port bus the device
- * connects to is blocked.
- */
-class PioPort : public Port
+ * with which it returns the address ranges it is interested in. */
+
+class PioPort : public SimpleTimingPort
 {
   protected:
     /** The device that this port serves. */
     PioDevice *device;
 
-    /** The platform that device/port are in. This is used to select which mode
+    /** The system that device/port are in. This is used to select which mode
      * we are currently operating in. */
-    Platform *platform;
-
-    /** A list of outgoing timing response packets that haven't been serviced
-     * yet. */
-    std::list<Packet*> transmitList;
+    System *sys;
 
     /** The current status of the peer(bus) that we are connected to. */
     Status peerStatus;
@@ -82,42 +75,9 @@ class PioPort : public Port
 
     virtual void getDeviceAddressRanges(AddrRangeList &resp, AddrRangeList &snoop);
 
-    void resendNacked(Packet *pkt);
-
-    /**
-     * This class is used to implemented sendTiming() with a delay. When a delay
-     * is requested a new event is created. When the event time expires it
-     * attempts to send the packet. If it cannot, the packet is pushed onto the
-     * transmit list to be sent when recvRetry() is called. */
-    class SendEvent : public Event
-    {
-        PioPort *port;
-        Packet *packet;
-
-        SendEvent(PioPort *p, Packet *pkt, Tick t)
-            : Event(&mainEventQueue), port(p), packet(pkt)
-        { schedule(curTick + t); }
-
-        virtual void process();
-
-        virtual const char *description()
-        { return "Future scheduled sendTiming event"; }
-
-        friend class PioPort;
-    };
-
-    /** Schedule a sendTiming() event to be called in the future. */
-    void sendTiming(Packet *pkt, Tick time)
-    { new PioPort::SendEvent(this, pkt, time); }
-
-    /** This function is notification that the device should attempt to send a
-     * packet again. */
-    virtual void recvRetry();
-
   public:
-    PioPort(PioDevice *dev, Platform *p, std::string pname = "-pioport");
+    PioPort(PioDevice *dev, System *s, std::string pname = "-pioport");
 
-  friend class PioPort::SendEvent;
 };
 
 
@@ -147,12 +107,19 @@ class DmaPort : public Port
     DmaDevice *device;
     std::list<Packet*> transmitList;
 
-    /** The platform that device/port are in. This is used to select which mode
+    /** The system that device/port are in. This is used to select which mode
      * we are currently operating in. */
-    Platform *platform;
+    System *sys;
 
     /** Number of outstanding packets the dma port has. */
     int pendingCount;
+
+    /** If a dmaAction is in progress. */
+    int actionInProgress;
+
+    /** If we need to drain, keep the drain event around until we're done
+     * here.*/
+    Event *drainEvent;
 
     virtual bool recvTiming(Packet *pkt);
     virtual Tick recvAtomic(Packet *pkt)
@@ -171,13 +138,14 @@ class DmaPort : public Port
     void sendDma(Packet *pkt, bool front = false);
 
   public:
-    DmaPort(DmaDevice *dev, Platform *p);
+    DmaPort(DmaDevice *dev, System *s);
 
     void dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
                    uint8_t *data = NULL);
 
     bool dmaPending() { return pendingCount > 0; }
 
+    unsigned int drain(Event *de);
 };
 
 /**
@@ -195,6 +163,8 @@ class PioDevice : public MemObject
     /** The platform we are in. This is used to decide what type of memory
      * transaction we should perform. */
     Platform *platform;
+
+    System *sys;
 
     /** The pioPort that handles the requests for us and provides us requests
      * that it sees. */
@@ -240,20 +210,22 @@ class PioDevice : public MemObject
     const Params *params() const { return _params; }
 
     PioDevice(Params *p)
-              : MemObject(p->name),  platform(p->platform), pioPort(NULL),
-                _params(p)
+              : MemObject(p->name),  platform(p->platform), sys(p->system),
+              pioPort(NULL), _params(p)
               {}
 
     virtual ~PioDevice();
 
     virtual void init();
 
+    virtual unsigned int drain(Event *de);
+
     virtual Port *getPort(const std::string &if_name, int idx = -1)
     {
         if (if_name == "pio") {
             if (pioPort != NULL)
                 panic("pio port already connected to.");
-            pioPort = new PioPort(this, params()->platform);
+            pioPort = new PioPort(this, sys);
             return pioPort;
         } else
             return NULL;
@@ -287,7 +259,7 @@ class BasicPioDevice : public PioDevice
     {}
 
     /** return the address ranges that this device responds to.
-     * @params range_list range list to populate with ranges
+     * @param range_list range list to populate with ranges
      */
     void addressRanges(AddrRangeList &range_list);
 
@@ -310,17 +282,19 @@ class DmaDevice : public PioDevice
 
     bool dmaPending() { return dmaPort->dmaPending(); }
 
+    virtual unsigned int drain(Event *de);
+
     virtual Port *getPort(const std::string &if_name, int idx = -1)
     {
         if (if_name == "pio") {
             if (pioPort != NULL)
                 panic("pio port already connected to.");
-            pioPort = new PioPort(this, params()->platform);
+            pioPort = new PioPort(this, sys);
             return pioPort;
         } else if (if_name == "dma") {
             if (dmaPort != NULL)
                 panic("dma port already connected to.");
-            dmaPort = new DmaPort(this, params()->platform);
+            dmaPort = new DmaPort(this, sys);
             return dmaPort;
         } else
             return NULL;

@@ -32,7 +32,6 @@
 #ifndef __CPU_O3_COMMIT_HH__
 #define __CPU_O3_COMMIT_HH__
 
-#include "arch/faults.hh"
 #include "base/statistics.hh"
 #include "base/timebuf.hh"
 #include "cpu/exetrace.hh"
@@ -165,6 +164,9 @@ class DefaultCommit
     /** Sets the pointer to the IEW stage. */
     void setIEWStage(IEW *iew_stage);
 
+    /** Skid buffer between rename and commit. */
+    std::queue<DynInstPtr> skidBuffer;
+
     /** The pointer to the IEW stage. Used solely to ensure that
      * various events (traps, interrupts, syscalls) do not occur until
      * all stores have written back.
@@ -256,6 +258,9 @@ class DefaultCommit
     /** Gets instructions from rename and inserts them into the ROB. */
     void getInsts();
 
+    /** Insert all instructions from rename into skidBuffer */
+    void skidInsert();
+
     /** Marks completed instructions using information sent from IEW. */
     void markCompletedInsts();
 
@@ -286,13 +291,11 @@ class DefaultCommit
     /** Sets the next PC of a specific thread. */
     void setNextPC(uint64_t val, unsigned tid) { nextPC[tid] = val; }
 
-#if THE_ISA != ALPHA_ISA
     /** Reads the next NPC of a specific thread. */
-    uint64_t readNextPC(unsigned tid) { return nextNPC[tid]; }
+    uint64_t readNextNPC(unsigned tid) { return nextNPC[tid]; }
 
     /** Sets the next NPC of a specific thread. */
-    void setNextPC(uint64_t val, unsigned tid) { nextNPC[tid] = val; }
-#endif
+    void setNextNPC(uint64_t val, unsigned tid) { nextNPC[tid] = val; }
 
   private:
     /** Time buffer interface. */
@@ -397,10 +400,8 @@ class DefaultCommit
     /** The next PC of each thread. */
     Addr nextPC[Impl::MaxThreads];
 
-#if THE_ISA != ALPHA_ISA
     /** The next NPC of each thread. */
     Addr nextNPC[Impl::MaxThreads];
-#endif
 
     /** The sequence number of the youngest valid instruction in the ROB. */
     InstSeqNum youngestSeqNum[Impl::MaxThreads];

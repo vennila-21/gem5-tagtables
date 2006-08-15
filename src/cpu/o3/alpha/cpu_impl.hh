@@ -31,6 +31,7 @@
 #include "config/use_checker.hh"
 
 #include "arch/alpha/faults.hh"
+#include "arch/alpha/isa_traits.hh"
 #include "base/cprintf.hh"
 #include "base/statistics.hh"
 #include "base/timebuf.hh"
@@ -52,8 +53,6 @@
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
 #endif
-
-using namespace TheISA;
 
 template <class Impl>
 AlphaO3CPU<Impl>::AlphaO3CPU(Params *params)
@@ -191,14 +190,14 @@ AlphaO3CPU<Impl>::regStats()
 
 
 template <class Impl>
-MiscReg
+TheISA::MiscReg
 AlphaO3CPU<Impl>::readMiscReg(int misc_reg, unsigned tid)
 {
     return this->regFile.readMiscReg(misc_reg, tid);
 }
 
 template <class Impl>
-MiscReg
+TheISA::MiscReg
 AlphaO3CPU<Impl>::readMiscRegWithEffect(int misc_reg, Fault &fault,
                                         unsigned tid)
 {
@@ -300,6 +299,7 @@ template <class Impl>
 void
 AlphaO3CPU<Impl>::processInterrupts()
 {
+    using namespace TheISA;
     // Check for interrupts here.  For now can copy the code that
     // exists within isa_fullsys_traits.hh.  Also assume that thread 0
     // is the one that handles the interrupts.
@@ -411,12 +411,12 @@ AlphaO3CPU<Impl>::setSyscallReturn(SyscallReturn return_value, int tid)
     // return value itself in the standard return value reg (v0).
     if (return_value.successful()) {
         // no error
-        this->setArchIntReg(SyscallSuccessReg, 0, tid);
-        this->setArchIntReg(ReturnValueReg, return_value.value(), tid);
+        this->setArchIntReg(TheISA::SyscallSuccessReg, 0, tid);
+        this->setArchIntReg(TheISA::ReturnValueReg, return_value.value(), tid);
     } else {
         // got an error, return details
-        this->setArchIntReg(SyscallSuccessReg, (IntReg) -1, tid);
-        this->setArchIntReg(ReturnValueReg, -return_value.value(), tid);
+        this->setArchIntReg(TheISA::SyscallSuccessReg, (IntReg) -1, tid);
+        this->setArchIntReg(TheISA::ReturnValueReg, -return_value.value(), tid);
     }
 }
 #endif

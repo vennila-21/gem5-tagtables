@@ -71,7 +71,8 @@ virtual Fault completeAcc(uint8_t *data, %s *xc, Trace::InstRecord *traceData) c
 # Generate a temporary CPU list, including the CheckerCPU if
 # it's enabled.  This isn't used for anything else other than StaticInst
 # headers.
-temp_cpu_list = env['CPU_MODELS']
+temp_cpu_list = env['CPU_MODELS'][:]
+
 if env['USE_CHECKER']:
     temp_cpu_list.append('CheckerCPU')
 
@@ -112,6 +113,9 @@ CheckerSupportedCPUList = ['O3CPU', 'OzoneCPU']
 # specified in CPU_MODELS build option.
 #
 #################################################################
+
+# Keep a list of CPU models that support SMT
+env['SMT_CPU_MODELS'] = []
 
 sources = []
 
@@ -156,6 +160,8 @@ if 'O3CPU' in env['CPU_MODELS']:
         ''')
     if env['USE_CHECKER']:
         sources += Split('o3/checker_builder.cc')
+    else:
+        env['SMT_CPU_MODELS'].append('O3CPU') # Checker doesn't support SMT right now
 
 if 'OzoneCPU' in env['CPU_MODELS']:
     need_bp_unit = True

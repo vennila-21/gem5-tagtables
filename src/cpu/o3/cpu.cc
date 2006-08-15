@@ -441,7 +441,7 @@ FullO3CPU<Impl>::tick()
 
     if (!tickEvent.scheduled()) {
         if (_status == SwitchedOut ||
-            getState() == SimObject::DrainedTiming) {
+            getState() == SimObject::Drained) {
             // increment stat
             lastRunningCycle = curTick;
         } else if (!activityRec.active()) {
@@ -577,39 +577,19 @@ void
 FullO3CPU<Impl>::suspendContext(int tid)
 {
     DPRINTF(O3CPU,"[tid: %i]: Suspending Thread Context.\n", tid);
-    unscheduleTickEvent();
+    deactivateThread(tid);
+    if (activeThreads.size() == 0)
+        unscheduleTickEvent();
     _status = Idle;
-/*
-    //Remove From Active List, if Active
-    list<unsigned>::iterator isActive = find(
-        activeThreads.begin(), activeThreads.end(), tid);
-
-    if (isActive != activeThreads.end()) {
-        DPRINTF(O3CPU,"[tid:%i]: Removing from active threads list\n",
-                tid);
-        activeThreads.erase(isActive);
-    }
-*/
 }
 
 template <class Impl>
 void
 FullO3CPU<Impl>::haltContext(int tid)
 {
-    DPRINTF(O3CPU,"[tid:%i]: Halting Thread Context", tid);
-/*
-    //Remove From Active List, if Active
-    list<unsigned>::iterator isActive = find(
-        activeThreads.begin(), activeThreads.end(), tid);
-
-    if (isActive != activeThreads.end()) {
-        DPRINTF(O3CPU,"[tid:%i]: Removing from active threads list\n",
-                tid);
-        activeThreads.erase(isActive);
-
-        removeThread(tid);
-    }
-*/
+    //For now, this is the same as deallocate
+    DPRINTF(O3CPU,"[tid:%i]: Halt Context called. Deallocating", tid);
+    deallocateContext(tid, 1);
 }
 
 template <class Impl>
@@ -687,11 +667,12 @@ FullO3CPU<Impl>::removeThread(unsigned tid)
     }
 
     // Squash Throughout Pipeline
-    fetch.squash(0,tid);
+    InstSeqNum squash_seq_num = commit.rob->readHeadInst(tid)->seqNum;
+    fetch.squash(0, squash_seq_num, true, tid);
     decode.squash(tid);
-    rename.squash(tid);
+    rename.squash(squash_seq_num, tid);
     iew.squash(tid);
-    commit.rob->squash(commit.rob->readHeadInst(tid)->seqNum, tid);
+    commit.rob->squash(squash_seq_num, tid);
 
     assert(iew.ldstQueue.getCount(tid) == 0);
 
@@ -765,7 +746,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::serialize(std::ostream &os)
 {
-    SERIALIZE_ENUM(_status);
+    SimObject::State so_state = SimObject::getState();
+    SERIALIZE_ENUM(so_state);
     BaseCPU::serialize(os);
     nameOut(os, csprintf("%s.tickEvent", name()));
     tickEvent.serialize(os);
@@ -786,7 +768,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::unserialize(Checkpoint *cp, const std::string &section)
 {
-    UNSERIALIZE_ENUM(_status);
+    SimObject::State so_state;
+    UNSERIALIZE_ENUM(so_state);
     BaseCPU::unserialize(cp, section);
     tickEvent.unserialize(cp, csprintf("%s.tickEvent", section));
 
@@ -803,7 +786,7 @@ FullO3CPU<Impl>::unserialize(Checkpoint *cp, const std::string &section)
 }
 
 template <class Impl>
-bool
+unsigned int
 FullO3CPU<Impl>::drain(Event *drain_event)
 {
     drainCount = 0;
@@ -815,7 +798,7 @@ FullO3CPU<Impl>::drain(Event *drain_event)
 
     // Wake the CPU and record activity so everything can drain out if
     // the CPU was not able to immediately drain.
-    if (getState() != SimObject::DrainedTiming) {
+    if (getState() != SimObject::Drained) {
         // A bit of a hack...set the drainEvent after all the drain()
         // calls have been made, that way if all of the stages drain
         // immediately, the signalDrained() function knows not to call
@@ -825,9 +808,9 @@ FullO3CPU<Impl>::drain(Event *drain_event)
         wakeCPU();
         activityRec.activity();
 
-        return false;
+        return 1;
     } else {
-        return true;
+        return 0;
     }
 }
 
@@ -835,11 +818,14 @@ template <class Impl>
 void
 FullO3CPU<Impl>::resume()
 {
+    assert(system->getMemoryMode() == System::Timing);
     fetch.resume();
     decode.resume();
     rename.resume();
     iew.resume();
     commit.resume();
+
+    changeState(SimObject::Running);
 
     if (_status == SwitchedOut || _status == Idle)
         return;
@@ -847,7 +833,6 @@ FullO3CPU<Impl>::resume()
     if (!tickEvent.scheduled())
         tickEvent.schedule(curTick);
     _status = Running;
-    changeState(SimObject::Timing);
 }
 
 template <class Impl>
@@ -858,7 +843,7 @@ FullO3CPU<Impl>::signalDrained()
         if (tickEvent.scheduled())
             tickEvent.squash();
 
-        changeState(SimObject::DrainedTiming);
+        changeState(SimObject::Drained);
 
         if (drainEvent) {
             drainEvent->process();
@@ -1063,7 +1048,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::setArchFloatRegSingle(int reg_idx, float val, unsigned tid)
 {
-    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(reg_idx);
+    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(idx);
 
     regFile.setFloatReg(phys_reg, val);
 }
@@ -1072,7 +1058,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::setArchFloatRegDouble(int reg_idx, double val, unsigned tid)
 {
-    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(reg_idx);
+    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(idx);
 
     regFile.setFloatReg(phys_reg, val, 64);
 }
@@ -1081,7 +1068,8 @@ template <class Impl>
 void
 FullO3CPU<Impl>::setArchFloatRegInt(int reg_idx, uint64_t val, unsigned tid)
 {
-    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(reg_idx);
+    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    PhysRegIndex phys_reg = commitRenameMap[tid].lookup(idx);
 
     regFile.setFloatRegBits(phys_reg, val);
 }
@@ -1114,7 +1102,6 @@ FullO3CPU<Impl>::setNextPC(uint64_t val,unsigned tid)
     commit.setNextPC(val, tid);
 }
 
-#if THE_ISA != ALPHA_ISA
 template <class Impl>
 uint64_t
 FullO3CPU<Impl>::readNextNPC(unsigned tid)
@@ -1124,11 +1111,10 @@ FullO3CPU<Impl>::readNextNPC(unsigned tid)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::setNextNNPC(uint64_t val,unsigned tid)
+FullO3CPU<Impl>::setNextNPC(uint64_t val,unsigned tid)
 {
     commit.setNextNPC(val, tid);
 }
-#endif
 
 template <class Impl>
 typename FullO3CPU<Impl>::ListIt
@@ -1178,7 +1164,9 @@ FullO3CPU<Impl>::removeFrontInst(DynInstPtr &inst)
 
 template <class Impl>
 void
-FullO3CPU<Impl>::removeInstsNotInROB(unsigned tid)
+FullO3CPU<Impl>::removeInstsNotInROB(unsigned tid,
+                                     bool squash_delay_slot,
+                                     const InstSeqNum &delay_slot_seq_num)
 {
     DPRINTF(O3CPU, "Thread %i: Deleting instructions from instruction"
             " list.\n", tid);
@@ -1209,6 +1197,12 @@ FullO3CPU<Impl>::removeInstsNotInROB(unsigned tid)
     while (inst_it != end_it) {
         assert(!instList.empty());
 
+#if THE_ISA != ALPHA_ISA
+        if(!squash_delay_slot &&
+           delay_slot_seq_num >= (*inst_it)->seqNum) {
+            break;
+        }
+#endif
         squashInstIt(inst_it, tid);
 
         inst_it--;

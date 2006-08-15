@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Kevin Lim
- *          Korey Sewell
  */
 
+#include "arch/alpha/types.hh"
 #include "cpu/o3/thread_context.hh"
 
 template <class Impl>
@@ -65,8 +65,8 @@ class AlphaTC : public O3ThreadContext<Impl>
         panic("Alpha has no NextNPC!");
     }
 
-    virtual void changeRegFileContext(TheISA::RegFile::ContextParam param,
-                                      TheISA::RegFile::ContextVal val)
+    virtual void changeRegFileContext(TheISA::RegContextParam param,
+                                      TheISA::RegContextVal val)
     { panic("Not supported on Alpha!"); }
 
 

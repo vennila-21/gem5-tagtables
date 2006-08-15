@@ -30,19 +30,23 @@
  */
 
 #include "arch/mips/isa_traits.hh"
-//#include "config/full_system.hh"
-#include "cpu/static_inst.hh"
+#include "arch/mips/regfile/regfile.hh"
 #include "sim/serialize.hh"
 #include "base/bitfield.hh"
 
 using namespace MipsISA;
 using namespace std;
 
-
 void
 MipsISA::copyRegs(ThreadContext *src, ThreadContext *dest)
 {
     panic("Copy Regs Not Implemented Yet\n");
+}
+
+void
+MipsISA::copyMiscRegs(ThreadContext *src, ThreadContext *dest)
+{
+    panic("Copy Misc. Regs Not Implemented Yet\n");
 }
 
 void
@@ -67,9 +71,9 @@ void
 RegFile::serialize(std::ostream &os)
 {
     intRegFile.serialize(os);
-    //SERIALIZE_ARRAY(floatRegFile.q, NumFloatRegs);
+    //SERIALIZE_ARRAY(floatRegFile, NumFloatRegs);
+    //SERIALZE_ARRAY(miscRegFile);
     //SERIALIZE_SCALAR(miscRegs.fpcr);
-    //SERIALIZE_SCALAR(miscRegs.uniq);
     //SERIALIZE_SCALAR(miscRegs.lock_flag);
     //SERIALIZE_SCALAR(miscRegs.lock_addr);
     SERIALIZE_SCALAR(pc);
@@ -82,9 +86,9 @@ void
 RegFile::unserialize(Checkpoint *cp, const std::string &section)
 {
     intRegFile.unserialize(cp, section);
-    //UNSERIALIZE_ARRAY(floatRegFile.q, NumFloatRegs);
+    //UNSERIALIZE_ARRAY(floatRegFile);
+    //UNSERIALZE_ARRAY(miscRegFile);
     //UNSERIALIZE_SCALAR(miscRegs.fpcr);
-    //UNSERIALIZE_SCALAR(miscRegs.uniq);
     //UNSERIALIZE_SCALAR(miscRegs.lock_flag);
     //UNSERIALIZE_SCALAR(miscRegs.lock_addr);
     UNSERIALIZE_SCALAR(pc);

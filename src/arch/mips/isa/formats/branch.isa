@@ -36,7 +36,6 @@
 output header {{
 
 #include <iostream>
-    using namespace std;
 
     /**
      * Base class for instructions whose disassembly is not purely a
@@ -235,10 +234,11 @@ def format Branch(code,*opt_flags) {{
         else:
             inst_flags += (x, )
 
+    #Take into account uncond. branch instruction
     if 'cond == 1' in code:
-         inst_flags += ('IsCondControl', )
+         inst_flags += ('IsUnCondControl', )
     else:
-         inst_flags += ('IsUncondControl', )
+         inst_flags += ('IsCondControl', )
 
     #Condition code
     code = 'bool cond;\n' + code

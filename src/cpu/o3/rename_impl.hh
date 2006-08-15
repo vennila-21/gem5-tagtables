@@ -26,14 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Kevin Lim
+ *          Korey Sewell
  */
 
 #include <list>
 
 #include "config/full_system.hh"
 #include "cpu/o3/rename.hh"
-
-using namespace std;
 
 template <class Impl>
 DefaultRename<Impl>::DefaultRename(Params *params)
@@ -222,7 +221,7 @@ DefaultRename<Impl>::initStage()
 
 template<class Impl>
 void
-DefaultRename<Impl>::setActiveThreads(list<unsigned> *at_ptr)
+DefaultRename<Impl>::setActiveThreads(std::list<unsigned> *at_ptr)
 {
     DPRINTF(Rename, "Setting active threads list pointer.\n");
     activeThreads = at_ptr;
@@ -271,7 +270,8 @@ DefaultRename<Impl>::switchOut()
 {
     // Clear any state, fix up the rename map.
     for (int i = 0; i < numThreads; i++) {
-        typename list<RenameHistory>::iterator hb_it = historyBuffer[i].begin();
+        typename std::list<RenameHistory>::iterator hb_it =
+            historyBuffer[i].begin();
 
         while (!historyBuffer[i].empty()) {
             assert(hb_it != historyBuffer[i].end());
@@ -318,7 +318,7 @@ DefaultRename<Impl>::takeOverFrom()
 
 template <class Impl>
 void
-DefaultRename<Impl>::squash(unsigned tid)
+DefaultRename<Impl>::squash(const InstSeqNum &squash_seq_num, unsigned tid)
 {
     DPRINTF(Rename, "[tid:%u]: Squashing instructions.\n",tid);
 
@@ -341,19 +341,55 @@ DefaultRename<Impl>::squash(unsigned tid)
     unsigned squashCount = 0;
 
     for (int i=0; i<fromDecode->size; i++) {
-        if (fromDecode->insts[i]->threadNumber == tid) {
+        if (fromDecode->insts[i]->threadNumber == tid &&
+            fromDecode->insts[i]->seqNum > squash_seq_num) {
             fromDecode->insts[i]->setSquashed();
             wroteToTimeBuffer = true;
             squashCount++;
         }
+
     }
 
+    // Clear the instruction list and skid buffer in case they have any
+    // insts in them. Since we support multiple ISAs, we cant just:
+    // "insts[tid].clear();" or "skidBuffer[tid].clear()" since there is
+    // a possible delay slot inst for different architectures
+    // insts[tid].clear();
+#if THE_ISA == ALPHA_ISA
     insts[tid].clear();
+#else
+    DPRINTF(Rename, "[tid:%i] Squashing incoming decode instructions until "
+            "[sn:%i].\n",tid, squash_seq_num);
+    ListIt ilist_it = insts[tid].begin();
+    while (ilist_it != insts[tid].end()) {
+        if ((*ilist_it)->seqNum > squash_seq_num) {
+            (*ilist_it)->setSquashed();
+            DPRINTF(Rename, "Squashing incoming decode instruction, "
+                    "[tid:%i] [sn:%i] PC %08p.\n", tid, (*ilist_it)->seqNum, (*ilist_it)->PC);
+        }
+        ilist_it++;
+    }
+#endif
 
     // Clear the skid buffer in case it has any data in it.
+    // See comments above.
+    //     skidBuffer[tid].clear();
+#if THE_ISA == ALPHA_ISA
     skidBuffer[tid].clear();
-
-    doSquash(tid);
+#else
+    DPRINTF(Rename, "[tid:%i] Squashing incoming skidbuffer instructions "
+            "until [sn:%i].\n", tid, squash_seq_num);
+    ListIt slist_it = skidBuffer[tid].begin();
+    while (slist_it != skidBuffer[tid].end()) {
+        if ((*slist_it)->seqNum > squash_seq_num) {
+            (*slist_it)->setSquashed();
+            DPRINTF(Rename, "Squashing skidbuffer instruction, [tid:%i] [sn:%i]"
+                    "PC %08p.\n", tid, (*slist_it)->seqNum, (*slist_it)->PC);
+        }
+        slist_it++;
+    }
+#endif
+    doSquash(squash_seq_num, tid);
 }
 
 template <class Impl>
@@ -370,7 +406,7 @@ DefaultRename<Impl>::tick()
 
     sortInsts();
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     // Check stall and squash signals.
     while (threads != (*activeThreads).end()) {
@@ -572,7 +608,7 @@ DefaultRename<Impl>::renameInsts(unsigned tid)
         if (inst->isSquashed()) {
             DPRINTF(Rename, "[tid:%u]: instruction %i with PC %#x is "
                     "squashed, skipping.\n",
-                    tid, inst->seqNum, inst->threadNumber,inst->readPC());
+                    tid, inst->seqNum, inst->readPC());
 
             ++renameSquashedInsts;
 
@@ -707,8 +743,10 @@ DefaultRename<Impl>::sortInsts()
 {
     int insts_from_decode = fromDecode->size;
 #ifdef DEBUG
+#if THE_ISA == ALPHA_ISA
     for (int i=0; i < numThreads; i++)
         assert(insts[i].empty());
+#endif
 #endif
     for (int i = 0; i < insts_from_decode; ++i) {
         DynInstPtr inst = fromDecode->insts[i];
@@ -720,7 +758,7 @@ template<class Impl>
 bool
 DefaultRename<Impl>::skidsEmpty()
 {
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         if (!skidBuffer[*threads++].empty())
@@ -736,7 +774,7 @@ DefaultRename<Impl>::updateStatus()
 {
     bool any_unblocking = false;
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     threads = (*activeThreads).begin();
 
@@ -824,11 +862,10 @@ DefaultRename<Impl>::unblock(unsigned tid)
 
 template <class Impl>
 void
-DefaultRename<Impl>::doSquash(unsigned tid)
+DefaultRename<Impl>::doSquash(const InstSeqNum &squashed_seq_num, unsigned tid)
 {
-    typename list<RenameHistory>::iterator hb_it = historyBuffer[tid].begin();
-
-    InstSeqNum squashed_seq_num = fromCommit->commitInfo[tid].doneSeqNum;
+    typename std::list<RenameHistory>::iterator hb_it =
+        historyBuffer[tid].begin();
 
     // After a syscall squashes everything, the history buffer may be empty
     // but the ROB may still be squashing instructions.
@@ -866,7 +903,8 @@ DefaultRename<Impl>::removeFromHistory(InstSeqNum inst_seq_num, unsigned tid)
             "history buffer %u (size=%i), until [sn:%lli].\n",
             tid, tid, historyBuffer[tid].size(), inst_seq_num);
 
-    typename list<RenameHistory>::iterator hb_it = historyBuffer[tid].end();
+    typename std::list<RenameHistory>::iterator hb_it =
+        historyBuffer[tid].end();
 
     --hb_it;
 
@@ -963,8 +1001,9 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst,unsigned tid)
 
         historyBuffer[tid].push_front(hb_entry);
 
-        DPRINTF(Rename, "[tid:%u]: Adding instruction to history buffer, "
-                "[sn:%lli].\n",tid,
+        DPRINTF(Rename, "[tid:%u]: Adding instruction to history buffer "
+                "(size=%i), [sn:%lli].\n",tid,
+                historyBuffer[tid].size(),
                 (*historyBuffer[tid].begin()).instSeqNum);
 
         // Tell the instruction to rename the appropriate destination
@@ -1143,7 +1182,13 @@ DefaultRename<Impl>::checkSignalsAndUpdate(unsigned tid)
         DPRINTF(Rename, "[tid:%u]: Squashing instructions due to squash from "
                 "commit.\n", tid);
 
-        squash(tid);
+#if THE_ISA == ALPHA_ISA
+        InstSeqNum squashed_seq_num = fromCommit->commitInfo[tid].doneSeqNum;
+#else
+        InstSeqNum squashed_seq_num = fromCommit->commitInfo[tid].bdelayDoneSeqNum;
+#endif
+
+        squash(squashed_seq_num, tid);
 
         return true;
     }
@@ -1258,7 +1303,7 @@ template <class Impl>
 void
 DefaultRename<Impl>::dumpHistory()
 {
-    typename list<RenameHistory>::iterator buf_it;
+    typename std::list<RenameHistory>::iterator buf_it;
 
     for (int i = 0; i < numThreads; i++) {
 
