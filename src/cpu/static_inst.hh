@@ -34,14 +34,16 @@
 #include <bitset>
 #include <string>
 
+#include "arch/isa_traits.hh"
+#include "sim/faults.hh"
 #include "base/bitfield.hh"
 #include "base/hashmap.hh"
 #include "base/misc.hh"
 #include "base/refcnt.hh"
 #include "cpu/op_class.hh"
 #include "cpu/o3/dyn_inst.hh"
+#include "sim/faults.hh"
 #include "sim/host.hh"
-#include "arch/isa_traits.hh"
 
 // forward declarations
 struct AlphaSimpleImpl;
@@ -214,6 +216,7 @@ class StaticInstBase : public RefCounted
     bool isIndirectCtrl() const { return flags[IsIndirectControl]; }
     bool isCondCtrl()	  const { return flags[IsCondControl]; }
     bool isUncondCtrl()	  const { return flags[IsUncondControl]; }
+    bool isCondDelaySlot() const { return flags[IsCondDelaySlot]; }
 
     bool isThreadSync()   const { return flags[IsThreadSync]; }
     bool isSerializing()  const { return flags[IsSerializing] ||

@@ -28,14 +28,10 @@
  * Authors: Kevin Lim
  */
 
-#include <list>
-#include <vector>
-
+#include "arch/types.hh"
 #include "base/trace.hh"
 #include "base/traceflags.hh"
 #include "cpu/o3/bpred_unit.hh"
-
-using namespace std;
 
 template<class Impl>
 BPredUnit<Impl>::BPredUnit(Params *params)
@@ -159,7 +155,7 @@ BPredUnit<Impl>::predict(DynInstPtr &inst, Addr &PC, unsigned tid)
     void *bp_history = NULL;
 
     if (inst->isUncondCtrl()) {
-        DPRINTF(Fetch, "BranchPred: [tid:%i] Unconditional control.\n", tid);
+        DPRINTF(Fetch, "BranchPred: [tid:%i]: Unconditional control.\n", tid);
         pred_taken = true;
         // Tell the BP there was an unconditional branch.
         BPUncond(bp_history);
@@ -201,15 +197,20 @@ BPredUnit<Impl>::predict(DynInstPtr &inst, Addr &PC, unsigned tid)
             ++BTBLookups;
 
             if (inst->isCall()) {
-                RAS[tid].push(PC + sizeof(MachInst));
+#if THE_ISA == ALPHA_ISA
+                Addr ras_pc = PC + sizeof(MachInst); // Next PC
+#else
+                Addr ras_pc = PC + (2 * sizeof(MachInst)); // Next Next PC
+#endif
+                RAS[tid].push(ras_pc);
 
                 // Record that it was a call so that the top RAS entry can
                 // be popped off if the speculation is incorrect.
                 predict_record.wasCall = true;
 
-                DPRINTF(Fetch, "BranchPred: [tid:%i] Instruction %#x was a call"
+                DPRINTF(Fetch, "BranchPred: [tid:%i]: Instruction %#x was a call"
                         ", adding %#x to the RAS.\n",
-                        tid, inst->readPC(), PC + sizeof(MachInst));
+                        tid, inst->readPC(), ras_pc);
             }
 
             if (BTB.valid(PC, tid)) {
@@ -242,7 +243,7 @@ BPredUnit<Impl>::predict(DynInstPtr &inst, Addr &PC, unsigned tid)
 
     predHist[tid].push_front(predict_record);
 
-    DPRINTF(Fetch, "[tid:%i] predHist.size(): %i\n", tid, predHist[tid].size());
+    DPRINTF(Fetch, "[tid:%i]: predHist.size(): %i\n", tid, predHist[tid].size());
 
     return pred_taken;
 }
@@ -251,8 +252,8 @@ template <class Impl>
 void
 BPredUnit<Impl>::update(const InstSeqNum &done_sn, unsigned tid)
 {
-    DPRINTF(Fetch, "BranchPred: [tid:%i]: Commiting branches until sequence"
-            "number %lli.\n", tid, done_sn);
+    DPRINTF(Fetch, "BranchPred: [tid:%i]: Commiting branches until "
+            "[sn:%lli].\n", tid, done_sn);
 
     while (!predHist[tid].empty() &&
            predHist[tid].back().seqNum <= done_sn) {

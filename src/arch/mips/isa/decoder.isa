@@ -133,7 +133,8 @@ decode OPCODE_HI default Unknown::unknown() {
                 format BasicOp {
                     0x2: movz({{ Rd = (Rt == 0) ? Rs : Rd; }});
                     0x3: movn({{ Rd = (Rt != 0) ? Rs : Rd; }});
-                    0x4: syscall({{ xc->syscall(R2); }}, IsNonSpeculative);
+                    0x4: syscall({{ xc->syscall(R2); }},
+                                 IsSerializeAfter, IsNonSpeculative);
                     0x7: sync({{ ; }}, IsMemBarrier);
                 }
 
@@ -1089,7 +1090,7 @@ decode OPCODE_HI default Unknown::unknown() {
         0x0: StoreCond::sc({{ Mem.uw = Rt.uw;}},
                            {{ uint64_t tmp = write_result;
                               Rt.uw = (tmp == 0 || tmp == 1) ? tmp : Rt.uw;
-                           }}, mem_flags=LOCKED);
+                           }}, mem_flags=LOCKED, inst_flags = IsStoreConditional);
 
         format StoreMemory {
             0x1: swc1({{ Mem.uw = Ft.uw; }});

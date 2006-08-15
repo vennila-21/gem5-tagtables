@@ -98,6 +98,7 @@ base_sources = Split('''
         mem/packet.cc
         mem/physical.cc
         mem/port.cc
+        mem/tport.cc
 
         mem/cache/base_cache.cc
         mem/cache/cache.cc
@@ -298,7 +299,7 @@ alpha_eio_sources = Split('''
 	encumbered/eio/eio.cc
         ''')
 
-if env['TARGET_ISA'] == 'ALPHA_ISA':
+if env['TARGET_ISA'] == 'alpha':
     syscall_emulation_sources += alpha_eio_sources
     
 memtest_sources = Split('''

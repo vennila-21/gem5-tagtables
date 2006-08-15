@@ -38,7 +38,7 @@
 #include <set>
 #include <vector>
 
-#include "arch/isa_traits.hh"
+#include "arch/types.hh"
 #include "base/statistics.hh"
 #include "base/timebuf.hh"
 #include "config/full_system.hh"
@@ -330,7 +330,7 @@ class FullO3CPU : public BaseO3CPU
 
     /** Starts draining the CPU's pipeline of all instructions in
      * order to stop all memory accesses. */
-    virtual bool drain(Event *drain_event);
+    virtual unsigned int drain(Event *drain_event);
 
     /** Resumes execution after a drain. */
     virtual void resume();
@@ -449,8 +449,10 @@ class FullO3CPU : public BaseO3CPU
      */
     void removeFrontInst(DynInstPtr &inst);
 
-    /** Remove all instructions that are not currently in the ROB. */
-    void removeInstsNotInROB(unsigned tid);
+    /** Remove all instructions that are not currently in the ROB.
+     *  There's also an option to not squash delay slot instructions.*/
+    void removeInstsNotInROB(unsigned tid, bool squash_delay_slot,
+                             const InstSeqNum &delay_slot_seq_num);
 
     /** Remove all instructions younger than the given sequence number. */
     void removeInstsUntil(const InstSeqNum &seq_num,unsigned tid);

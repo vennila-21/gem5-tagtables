@@ -119,6 +119,8 @@ add_option('-d', "--outdir", metavar="DIR", default=".",
     help="Set the output directory to DIR [Default: %default]")
 add_option('-i', "--interactive", action="store_true", default=False,
     help="Invoke the interactive interpreter after running the script")
+add_option("--pdb", action="store_true", default=False,
+    help="Invoke the python debugger before running the script")
 add_option('-p', "--path", metavar="PATH[:PATH]", action='append', split=':',
     help="Prepend PATH to the system path when invoking the script")
 add_option('-q', "--quiet", action="count", default=0,
@@ -175,12 +177,14 @@ bool_option("print-fetch-seq", default=False,
     help="Print fetch sequence numbers in trace output")
 bool_option("print-cpseq", default=False,
     help="Print correct path sequence numbers in trace output")
+#bool_option("print-reg-delta", default=False,
+#    help="Print which registers changed to what in trace output")
 
 options = attrdict()
 arguments = []
 
 def usage(exitcode=None):
-    print parser.help
+    parser.print_help()
     if exitcode is not None:
         sys.exit(exitcode)
 
@@ -244,9 +248,15 @@ def main():
         print "M5 compiled %s" % cc_main.cvar.compileDate;
         print "M5 started %s" % datetime.now().ctime()
         print "M5 executing on %s" % socket.gethostname()
+        print "command line:",
+        for argv in sys.argv:
+            print argv,
+        print
 
     # check to make sure we can find the listed script
     if not arguments or not os.path.isfile(arguments[0]):
+        if arguments and not os.path.isfile(arguments[0]):
+            print "Script %s not found" % arguments[0]
         usage(2)
 
     # tell C++ about output directory
@@ -282,12 +292,25 @@ def main():
     objects.ExecutionTrace.print_iregs = options.print_iregs
     objects.ExecutionTrace.print_fetchseq = options.print_fetch_seq
     objects.ExecutionTrace.print_cpseq = options.print_cpseq
+    #objects.ExecutionTrace.print_reg_delta = options.print_reg_delta
 
-    scope = { '__file__' : sys.argv[0] }
     sys.argv = arguments
     sys.path = [ os.path.dirname(sys.argv[0]) ] + sys.path
-    exec("import readline", scope)
-    execfile(sys.argv[0], scope)
+
+    scope = { '__file__' : sys.argv[0] }
+
+    # we want readline if we're doing anything interactive
+    if options.interactive or options.pdb:
+        exec("import readline", scope)
+
+    # if pdb was requested, execfile the thing under pdb, otherwise,
+    # just do the execfile normally
+    if options.pdb:
+        from pdb import Pdb
+        debugger = Pdb()
+        debugger.run('execfile("%s")' % sys.argv[0], scope)
+    else:
+        execfile(sys.argv[0], scope)
 
     # once the script is done
     if options.interactive:

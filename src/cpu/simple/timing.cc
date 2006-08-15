@@ -33,6 +33,7 @@
 #include "cpu/simple/timing.hh"
 #include "mem/packet_impl.hh"
 #include "sim/builder.hh"
+#include "sim/system.hh"
 
 using namespace std;
 using namespace TheISA;
@@ -84,14 +85,22 @@ TimingSimpleCPU::CpuPort::recvStatusChange(Status status)
     panic("TimingSimpleCPU doesn't expect recvStatusChange callback!");
 }
 
+
+void
+TimingSimpleCPU::CpuPort::TickEvent::schedule(Packet *_pkt, Tick t)
+{
+    pkt = _pkt;
+    Event::schedule(t);
+}
+
 TimingSimpleCPU::TimingSimpleCPU(Params *p)
-    : BaseSimpleCPU(p), icachePort(this), dcachePort(this)
+    : BaseSimpleCPU(p), icachePort(this, p->clock), dcachePort(this, p->clock)
 {
     _status = Idle;
     ifetch_pkt = dcache_pkt = NULL;
     drainEvent = NULL;
     fetchEvent = NULL;
-    state = SimObject::Timing;
+    changeState(SimObject::Running);
 }
 
 
@@ -102,29 +111,31 @@ TimingSimpleCPU::~TimingSimpleCPU()
 void
 TimingSimpleCPU::serialize(ostream &os)
 {
-    SERIALIZE_ENUM(_status);
+    SimObject::State so_state = SimObject::getState();
+    SERIALIZE_ENUM(so_state);
     BaseSimpleCPU::serialize(os);
 }
 
 void
 TimingSimpleCPU::unserialize(Checkpoint *cp, const string &section)
 {
-    UNSERIALIZE_ENUM(_status);
+    SimObject::State so_state;
+    UNSERIALIZE_ENUM(so_state);
     BaseSimpleCPU::unserialize(cp, section);
 }
 
-bool
+unsigned int
 TimingSimpleCPU::drain(Event *drain_event)
 {
     // TimingSimpleCPU is ready to drain if it's not waiting for
     // an access to complete.
     if (status() == Idle || status() == Running || status() == SwitchedOut) {
-        changeState(SimObject::DrainedTiming);
-        return true;
+        changeState(SimObject::Drained);
+        return 0;
     } else {
         changeState(SimObject::Draining);
         drainEvent = drain_event;
-        return false;
+        return 1;
     }
 }
 
@@ -134,7 +145,9 @@ TimingSimpleCPU::resume()
     if (_status != SwitchedOut && _status != Idle) {
         // Delete the old event if it existed.
         if (fetchEvent) {
-            assert(!fetchEvent->scheduled());
+            if (fetchEvent->scheduled())
+                fetchEvent->deschedule();
+
             delete fetchEvent;
         }
 
@@ -142,12 +155,9 @@ TimingSimpleCPU::resume()
             new EventWrapper<TimingSimpleCPU, &TimingSimpleCPU::fetch>(this, false);
         fetchEvent->schedule(curTick);
     }
-}
 
-void
-TimingSimpleCPU::setMemoryMode(State new_mode)
-{
-    assert(new_mode == SimObject::Timing);
+    assert(system->getMemoryMode() == System::Timing);
+    changeState(SimObject::Running);
 }
 
 void
@@ -460,11 +470,26 @@ TimingSimpleCPU::completeIfetch(Packet *pkt)
     }
 }
 
+void
+TimingSimpleCPU::IcachePort::ITickEvent::process()
+{
+    cpu->completeIfetch(pkt);
+}
 
 bool
 TimingSimpleCPU::IcachePort::recvTiming(Packet *pkt)
 {
-    cpu->completeIfetch(pkt);
+    // These next few lines could be replaced with something faster
+    // who knows what though
+    Tick time = pkt->req->getTime();
+    while (time < curTick)
+        time += lat;
+
+    if (time == curTick)
+        cpu->completeIfetch(pkt);
+    else
+        tickEvent.schedule(pkt, time);
+
     return true;
 }
 
@@ -514,15 +539,29 @@ void
 TimingSimpleCPU::completeDrain()
 {
     DPRINTF(Config, "Done draining\n");
-    changeState(SimObject::DrainedTiming);
+    changeState(SimObject::Drained);
     drainEvent->process();
 }
 
 bool
 TimingSimpleCPU::DcachePort::recvTiming(Packet *pkt)
 {
-    cpu->completeDataAccess(pkt);
+    Tick time = pkt->req->getTime();
+    while (time < curTick)
+        time += lat;
+
+    if (time == curTick)
+        cpu->completeDataAccess(pkt);
+    else
+        tickEvent.schedule(pkt, time);
+
     return true;
+}
+
+void
+TimingSimpleCPU::DcachePort::DTickEvent::process()
+{
+    cpu->completeDataAccess(pkt);
 }
 
 void
@@ -551,11 +590,11 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(TimingSimpleCPU)
     Param<Counter> max_loads_any_thread;
     Param<Counter> max_loads_all_threads;
     SimObjectParam<MemObject *> mem;
+    SimObjectParam<System *> system;
 
 #if FULL_SYSTEM
     SimObjectParam<AlphaITB *> itb;
     SimObjectParam<AlphaDTB *> dtb;
-    SimObjectParam<System *> system;
     Param<int> cpu_id;
     Param<Tick> profile;
 #else
@@ -583,11 +622,11 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(TimingSimpleCPU)
     INIT_PARAM(max_loads_all_threads,
                "terminate when all threads have reached this load count"),
     INIT_PARAM(mem, "memory"),
+    INIT_PARAM(system, "system object"),
 
 #if FULL_SYSTEM
     INIT_PARAM(itb, "Instruction TLB"),
     INIT_PARAM(dtb, "Data TLB"),
-    INIT_PARAM(system, "system object"),
     INIT_PARAM(cpu_id, "processor ID"),
     INIT_PARAM(profile, ""),
 #else
@@ -618,11 +657,11 @@ CREATE_SIM_OBJECT(TimingSimpleCPU)
     params->functionTrace = function_trace;
     params->functionTraceStart = function_trace_start;
     params->mem = mem;
+    params->system = system;
 
 #if FULL_SYSTEM
     params->itb = itb;
     params->dtb = dtb;
-    params->system = system;
     params->cpu_id = cpu_id;
     params->profile = profile;
 #else

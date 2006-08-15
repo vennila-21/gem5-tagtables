@@ -86,6 +86,11 @@ output header {{
                 const SymbolTable *symtab) const;
 
             void printReg(std::ostream &os, int reg) const;
+            void printSrcReg(std::ostream &os, int reg) const;
+            void printDestReg(std::ostream &os, int reg) const;
+
+            void printRegArray(std::ostream &os,
+                const RegIndex indexArray[], int num) const;
         };
 
         bool passesCondition(uint32_t codes, uint32_t condition);
@@ -148,6 +153,33 @@ output decoder {{
         inline void printMnemonic(std::ostream &os, const char * mnemonic)
         {
             ccprintf(os, "\t%s   ", mnemonic);
+        }
+
+        void SparcStaticInst::printRegArray(std::ostream &os,
+            const RegIndex indexArray[], int num) const
+        {
+            if(num <= 0)
+                return;
+            printReg(os, indexArray[0]);
+            for(int x = 1; x < num; x++)
+            {
+                os << ", ";
+                printReg(os, indexArray[x]);
+            }
+        }
+
+        void
+        SparcStaticInst::printSrcReg(std::ostream &os, int reg) const
+        {
+            if(_numSrcRegs > reg)
+                printReg(os, _srcRegIdx[reg]);
+        }
+
+        void
+        SparcStaticInst::printDestReg(std::ostream &os, int reg) const
+        {
+            if(_numDestRegs > reg)
+                printReg(os, _destRegIdx[reg]);
         }
 
         void

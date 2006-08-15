@@ -32,10 +32,11 @@
 #include "base/trace.hh"
 #include "dev/io_device.hh"
 #include "sim/builder.hh"
+#include "sim/system.hh"
 
 
-PioPort::PioPort(PioDevice *dev, Platform *p, std::string pname)
-    : Port(dev->name() + pname), device(dev), platform(p)
+PioPort::PioPort(PioDevice *dev, System *s, std::string pname)
+    : SimpleTimingPort(dev->name() + pname), device(dev), sys(s)
 { }
 
 
@@ -57,38 +58,6 @@ PioPort::getDeviceAddressRanges(AddrRangeList &resp, AddrRangeList &snoop)
     snoop.clear();
     device->addressRanges(resp);
 }
-
-
-void
-PioPort::recvRetry()
-{
-    bool result = true;
-    while (result && transmitList.size()) {
-        result = Port::sendTiming(transmitList.front());
-        if (result)
-            transmitList.pop_front();
-    }
-}
-
-void
-PioPort::SendEvent::process()
-{
-    if (port->Port::sendTiming(packet))
-        return;
-
-    port->transmitList.push_back(packet);
-}
-
-void
-PioPort::resendNacked(Packet *pkt) {
-    pkt->reinitNacked();
-    if (transmitList.size()) {
-         transmitList.push_front(pkt);
-    } else {
-        if (!Port::sendTiming(pkt))
-            transmitList.push_front(pkt);
-    }
-};
 
 
 bool
@@ -119,6 +88,19 @@ PioDevice::init()
     pioPort->sendStatusChange(Port::RangeChange);
 }
 
+
+unsigned int
+PioDevice::drain(Event *de)
+{
+    unsigned int count;
+    count = pioPort->drain(de);
+    if (count)
+        changeState(Draining);
+    else
+        changeState(Drained);
+    return count;
+}
+
 void
 BasicPioDevice::addressRanges(AddrRangeList &range_list)
 {
@@ -128,8 +110,9 @@ BasicPioDevice::addressRanges(AddrRangeList &range_list)
 }
 
 
-DmaPort::DmaPort(DmaDevice *dev, Platform *p)
-    : Port(dev->name() + "-dmaport"), device(dev), platform(p), pendingCount(0)
+DmaPort::DmaPort(DmaDevice *dev, System *s)
+    : Port(dev->name() + "-dmaport"), device(dev), sys(s), pendingCount(0),
+      actionInProgress(0), drainEvent(NULL)
 { }
 
 bool
@@ -159,6 +142,11 @@ DmaPort::recvTiming(Packet *pkt)
         }
         delete pkt->req;
         delete pkt;
+
+        if (pendingCount == 0 && drainEvent) {
+            drainEvent->process();
+            drainEvent = NULL;
+        }
     }  else {
         panic("Got packet without sender state... huh?\n");
     }
@@ -169,6 +157,29 @@ DmaPort::recvTiming(Packet *pkt)
 DmaDevice::DmaDevice(Params *p)
     : PioDevice(p), dmaPort(NULL)
 { }
+
+
+unsigned int
+DmaDevice::drain(Event *de)
+{
+    unsigned int count;
+    count = pioPort->drain(de) + dmaPort->drain(de);
+    if (count)
+        changeState(Draining);
+    else
+        changeState(Drained);
+    return count;
+}
+
+unsigned int
+DmaPort::drain(Event *de)
+{
+    if (pendingCount == 0)
+        return 0;
+    drainEvent = de;
+    return 1;
+}
+
 
 void
 DmaPort::recvRetry()
@@ -195,6 +206,8 @@ DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
 {
     assert(event);
 
+    assert(device->getState() == SimObject::Running);
+
     DmaReqState *reqState = new DmaReqState(event, this, size);
 
     for (ChunkGenerator gen(addr, size, peerBlockSize());
@@ -212,51 +225,54 @@ DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
             pendingCount++;
             sendDma(pkt);
     }
+
 }
 
 
 void
 DmaPort::sendDma(Packet *pkt, bool front)
 {
-   // some kind of selction between access methods
-   // more work is going to have to be done to make
-   // switching actually work
-  /* MemState state = device->platform->system->memState;
+    // some kind of selction between access methods
+    // more work is going to have to be done to make
+    // switching actually work
 
-   if (state == Timing) {  */
-       DPRINTF(DMA, "Attempting to send Packet %#x with addr: %#x\n",
-               pkt, pkt->getAddr());
-       if (transmitList.size() || !sendTiming(pkt)) {
-           if (front)
-               transmitList.push_front(pkt);
-           else
-               transmitList.push_back(pkt);
-           DPRINTF(DMA, "-- Failed: queued\n");
-       } else {
-           DPRINTF(DMA, "-- Done\n");
-       }
-  /*  } else if (state == Atomic) {
-       sendAtomic(pkt);
-       if (pkt->senderState) {
-           DmaReqState *state = dynamic_cast<DmaReqState*>(pkt->senderState);
-           assert(state);
-           state->completionEvent->schedule(curTick + (pkt->time -
-           pkt->req->getTime()) +1);
-           delete state;
-       }
-       pendingCount--;
-       assert(pendingCount >= 0);
-       delete pkt->req;
-       delete pkt;
+    System::MemoryMode state = sys->getMemoryMode();
+    if (state == System::Timing) {
+        DPRINTF(DMA, "Attempting to send Packet %#x with addr: %#x\n",
+                pkt, pkt->getAddr());
+        if (transmitList.size() || !sendTiming(pkt)) {
+            if (front)
+                transmitList.push_front(pkt);
+            else
+                transmitList.push_back(pkt);
+            DPRINTF(DMA, "-- Failed: queued\n");
+        } else {
+            DPRINTF(DMA, "-- Done\n");
+        }
+    } else if (state == System::Atomic) {
+        Tick lat;
+        lat = sendAtomic(pkt);
+        assert(pkt->senderState);
+        DmaReqState *state = dynamic_cast<DmaReqState*>(pkt->senderState);
+        assert(state);
 
-   } else if (state == Functional) {
-       sendFunctional(pkt);
-       // Is this correct???
-       completionEvent->schedule(pkt->req->responseTime - pkt->req->requestTime);
-       completionEvent == NULL;
+        state->numBytes += pkt->req->getSize();
+        if (state->totBytes == state->numBytes) {
+            state->completionEvent->schedule(curTick + lat);
+            delete state;
+            delete pkt->req;
+        }
+        pendingCount--;
+        assert(pendingCount >= 0);
+        delete pkt;
+
+        if (pendingCount == 0 && drainEvent) {
+            drainEvent->process();
+            drainEvent = NULL;
+        }
+
    } else
        panic("Unknown memory command state.");
-  */
 }
 
 DmaDevice::~DmaDevice()

@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Kevin Lim
+ *          Korey Sewell
  */
 
 #include "config/full_system.hh"
@@ -43,8 +44,6 @@
 #if USE_CHECKER
 #include "cpu/checker/cpu.hh"
 #endif
-
-using namespace std;
 
 template <class Impl>
 DefaultCommit<Impl>::TrapEvent::TrapEvent(DefaultCommit<Impl> *_commit,
@@ -86,7 +85,7 @@ DefaultCommit<Impl>::DefaultCommit(Params *params)
 {
     _status = Active;
     _nextStatus = Inactive;
-    string policy = params->smtCommitPolicy;
+    std::string policy = params->smtCommitPolicy;
 
     //Convert string to lowercase
     std::transform(policy.begin(), policy.end(), policy.begin(),
@@ -120,7 +119,7 @@ DefaultCommit<Impl>::DefaultCommit(Params *params)
         changedROBNumEntries[i] = false;
         trapSquash[i] = false;
         tcSquash[i] = false;
-        PC[i] = nextPC[i] = 0;
+        PC[i] = nextPC[i] = nextNPC[i] = 0;
     }
 }
 
@@ -235,7 +234,7 @@ DefaultCommit<Impl>::setCPU(O3CPU *cpu_ptr)
 
 template <class Impl>
 void
-DefaultCommit<Impl>::setThreads(vector<Thread *> &threads)
+DefaultCommit<Impl>::setThreads(std::vector<Thread *> &threads)
 {
     thread = threads;
 }
@@ -296,7 +295,7 @@ DefaultCommit<Impl>::setIEWStage(IEW *iew_stage)
 
 template<class Impl>
 void
-DefaultCommit<Impl>::setActiveThreads(list<unsigned> *at_ptr)
+DefaultCommit<Impl>::setActiveThreads(std::list<unsigned> *at_ptr)
 {
     DPRINTF(Commit, "Commit: Setting active threads list pointer.\n");
     activeThreads = at_ptr;
@@ -390,7 +389,7 @@ void
 DefaultCommit<Impl>::updateStatus()
 {
     // reset ROB changed variable
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
     while (threads != (*activeThreads).end()) {
         unsigned tid = *threads++;
         changedROBNumEntries[tid] = false;
@@ -419,7 +418,7 @@ DefaultCommit<Impl>::setNextStatus()
 {
     int squashes = 0;
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         unsigned tid = *threads++;
@@ -442,7 +441,7 @@ template <class Impl>
 bool
 DefaultCommit<Impl>::changedROBEntries()
 {
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         unsigned tid = *threads++;
@@ -569,7 +568,7 @@ DefaultCommit<Impl>::tick()
     if ((*activeThreads).size() <= 0)
         return;
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     // Check if any of the threads are done squashing.  Change the
     // status if they are done.
@@ -687,7 +686,7 @@ DefaultCommit<Impl>::commit()
     // Check for any possible squashes, handle them first
     ////////////////////////////////////
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         unsigned tid = *threads++;
@@ -723,14 +722,48 @@ DefaultCommit<Impl>::commit()
             // then use one older sequence number.
             InstSeqNum squashed_inst = fromIEW->squashedSeqNum[tid];
 
-            if (fromIEW->includeSquashInst[tid] == true)
-                squashed_inst--;
+#if THE_ISA != ALPHA_ISA
+            InstSeqNum bdelay_done_seq_num;
+            bool squash_bdelay_slot;
 
+            if (fromIEW->branchMispredict[tid]) {
+                if (fromIEW->branchTaken[tid] &&
+                    fromIEW->condDelaySlotBranch[tid]) {
+                    DPRINTF(Commit, "[tid:%i]: Cond. delay slot branch"
+                            "mispredicted as taken. Squashing after previous "
+                            "inst, [sn:%i]\n",
+                            tid, squashed_inst);
+                     bdelay_done_seq_num = squashed_inst;
+                     squash_bdelay_slot = true;
+                } else {
+                    DPRINTF(Commit, "[tid:%i]: Branch Mispredict. Squashing "
+                            "after delay slot [sn:%i]\n", tid, squashed_inst+1);
+                    bdelay_done_seq_num = squashed_inst + 1;
+                    squash_bdelay_slot = false;
+                }
+            } else {
+                bdelay_done_seq_num = squashed_inst;
+            }
+#endif
+
+            if (fromIEW->includeSquashInst[tid] == true) {
+                squashed_inst--;
+#if THE_ISA != ALPHA_ISA
+                bdelay_done_seq_num--;
+#endif
+            }
             // All younger instructions will be squashed. Set the sequence
             // number as the youngest instruction in the ROB.
             youngestSeqNum[tid] = squashed_inst;
 
+#if THE_ISA == ALPHA_ISA
             rob->squash(squashed_inst, tid);
+            toIEW->commitInfo[tid].squashDelaySlot = true;
+#else
+            rob->squash(bdelay_done_seq_num, tid);
+            toIEW->commitInfo[tid].squashDelaySlot = squash_bdelay_slot;
+            toIEW->commitInfo[tid].bdelayDoneSeqNum = bdelay_done_seq_num;
+#endif
             changedROBNumEntries[tid] = true;
 
             toIEW->commitInfo[tid].doneSeqNum = squashed_inst;
@@ -766,6 +799,10 @@ DefaultCommit<Impl>::commit()
 
         // Try to commit any instructions.
         commitInsts();
+    } else {
+#if THE_ISA != ALPHA_ISA
+        skidInsert();
+#endif
     }
 
     //Check for any activity
@@ -840,6 +877,7 @@ DefaultCommit<Impl>::commitInsts()
         } else {
             PC[tid] = head_inst->readPC();
             nextPC[tid] = head_inst->readNextPC();
+            nextNPC[tid] = head_inst->readNextNPC();
 
             // Increment the total number of non-speculative instructions
             // executed.
@@ -868,7 +906,13 @@ DefaultCommit<Impl>::commitInsts()
                 }
 
                 PC[tid] = nextPC[tid];
+#if THE_ISA == ALPHA_ISA
                 nextPC[tid] = nextPC[tid] + sizeof(TheISA::MachInst);
+#else
+                nextPC[tid] = nextNPC[tid];
+                nextNPC[tid] = nextNPC[tid] + sizeof(TheISA::MachInst);
+#endif
+
 #if FULL_SYSTEM
                 int count = 0;
                 Addr oldpc;
@@ -996,6 +1040,12 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
     // Check if the instruction caused a fault.  If so, trap.
     Fault inst_fault = head_inst->getFault();
 
+    // DTB will sometimes need the machine instruction for when
+    // faults happen.  So we will set it here, prior to the DTB
+    // possibly needing it for its fault.
+    thread[tid]->setInst(
+        static_cast<TheISA::MachInst>(head_inst->staticInst->machInst));
+
     if (inst_fault != NoFault) {
         head_inst->setCompleted();
         DPRINTF(Commit, "Inst [sn:%lli] PC %#x has a fault\n",
@@ -1017,12 +1067,6 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
         // Mark that we're in state update mode so that the trap's
         // execution doesn't generate extra squashes.
         thread[tid]->inSyscall = true;
-
-        // DTB will sometimes need the machine instruction for when
-        // faults happen.  So we will set it here, prior to the DTB
-        // possibly needing it for its fault.
-        thread[tid]->setInst(
-            static_cast<TheISA::MachInst>(head_inst->staticInst->machInst));
 
         // Execute the trap.  Although it's slightly unrealistic in
         // terms of timing (as it doesn't wait for the full timing of
@@ -1069,12 +1113,39 @@ template <class Impl>
 void
 DefaultCommit<Impl>::getInsts()
 {
-    // Read any renamed instructions and place them into the ROB.
-    int insts_to_process = min((int)renameWidth, fromRename->size);
+    DPRINTF(Commit, "Getting instructions from Rename stage.\n");
 
-    for (int inst_num = 0; inst_num < insts_to_process; ++inst_num)
-    {
-        DynInstPtr inst = fromRename->insts[inst_num];
+#if THE_ISA == ALPHA_ISA
+    // Read any renamed instructions and place them into the ROB.
+    int insts_to_process = std::min((int)renameWidth, fromRename->size);
+#else
+    // Read any renamed instructions and place them into the ROB.
+    int insts_to_process = std::min((int)renameWidth,
+                               (int)(fromRename->size + skidBuffer.size()));
+    int rename_idx = 0;
+
+    DPRINTF(Commit, "%i insts available to process. Rename Insts:%i "
+            "SkidBuffer Insts:%i\n", insts_to_process, fromRename->size,
+            skidBuffer.size());
+#endif
+
+
+    for (int inst_num = 0; inst_num < insts_to_process; ++inst_num) {
+        DynInstPtr inst;
+
+#if THE_ISA == ALPHA_ISA
+        inst = fromRename->insts[inst_num];
+#else
+        // Get insts from skidBuffer or from Rename
+        if (skidBuffer.size() > 0) {
+            DPRINTF(Commit, "Grabbing skidbuffer inst.\n");
+            inst = skidBuffer.front();
+            skidBuffer.pop();
+        } else {
+            DPRINTF(Commit, "Grabbing rename inst.\n");
+            inst = fromRename->insts[rename_idx++];
+        }
+#endif
         int tid = inst->threadNumber;
 
         if (!inst->isSquashed() &&
@@ -1089,6 +1160,53 @@ DefaultCommit<Impl>::getInsts()
             assert(rob->getThreadEntries(tid) <= rob->getMaxEntries(tid));
 
             youngestSeqNum[tid] = inst->seqNum;
+        } else {
+            DPRINTF(Commit, "Instruction PC %#x [sn:%i] [tid:%i] was "
+                    "squashed, skipping.\n",
+                    inst->readPC(), inst->seqNum, tid);
+        }
+    }
+
+#if THE_ISA != ALPHA_ISA
+    if (rename_idx < fromRename->size) {
+        DPRINTF(Commit,"Placing Rename Insts into skidBuffer.\n");
+
+        for (;
+             rename_idx < fromRename->size;
+             rename_idx++) {
+            DynInstPtr inst = fromRename->insts[rename_idx];
+            int tid = inst->threadNumber;
+
+            if (!inst->isSquashed()) {
+                DPRINTF(Commit, "Inserting PC %#x [sn:%i] [tid:%i] into ",
+                        "skidBuffer.\n", inst->readPC(), inst->seqNum, tid);
+                skidBuffer.push(inst);
+            } else {
+                DPRINTF(Commit, "Instruction PC %#x [sn:%i] [tid:%i] was "
+                        "squashed, skipping.\n",
+                        inst->readPC(), inst->seqNum, tid);
+            }
+        }
+    }
+#endif
+
+}
+
+template <class Impl>
+void
+DefaultCommit<Impl>::skidInsert()
+{
+    DPRINTF(Commit, "Attempting to any instructions from rename into "
+            "skidBuffer.\n");
+
+    for (int inst_num = 0; inst_num < fromRename->size; ++inst_num) {
+        DynInstPtr inst = fromRename->insts[inst_num];
+        int tid = inst->threadNumber;
+
+        if (!inst->isSquashed()) {
+            DPRINTF(Commit, "Inserting PC %#x [sn:%i] [tid:%i] into ",
+                    "skidBuffer.\n", inst->readPC(), inst->seqNum, tid);
+            skidBuffer.push(inst);
         } else {
             DPRINTF(Commit, "Instruction PC %#x [sn:%i] [tid:%i] was "
                     "squashed, skipping.\n",
@@ -1124,7 +1242,7 @@ template <class Impl>
 bool
 DefaultCommit<Impl>::robDoneSquashing()
 {
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         unsigned tid = *threads++;
@@ -1221,8 +1339,8 @@ template<class Impl>
 int
 DefaultCommit<Impl>::roundRobin()
 {
-    list<unsigned>::iterator pri_iter = priority_list.begin();
-    list<unsigned>::iterator end      = priority_list.end();
+    std::list<unsigned>::iterator pri_iter = priority_list.begin();
+    std::list<unsigned>::iterator end      = priority_list.end();
 
     while (pri_iter != end) {
         unsigned tid = *pri_iter;
@@ -1252,7 +1370,7 @@ DefaultCommit<Impl>::oldestReady()
     unsigned oldest = 0;
     bool first = true;
 
-    list<unsigned>::iterator threads = (*activeThreads).begin();
+    std::list<unsigned>::iterator threads = (*activeThreads).begin();
 
     while (threads != (*activeThreads).end()) {
         unsigned tid = *threads++;

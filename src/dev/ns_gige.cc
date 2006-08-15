@@ -1377,7 +1377,7 @@ NSGigE::doRxDmaRead()
     assert(rxDmaState == dmaIdle || rxDmaState == dmaReadWaiting);
     rxDmaState = dmaReading;
 
-    if (dmaPending())
+    if (dmaPending() || getState() != Running)
         rxDmaState = dmaReadWaiting;
     else
         dmaRead(rxDmaAddr, rxDmaLen, &rxDmaReadEvent, (uint8_t*)rxDmaData);
@@ -1408,7 +1408,7 @@ NSGigE::doRxDmaWrite()
     assert(rxDmaState == dmaIdle || rxDmaState == dmaWriteWaiting);
     rxDmaState = dmaWriting;
 
-    if (dmaPending())
+    if (dmaPending() || getState() != Running)
         rxDmaState = dmaWriteWaiting;
     else
         dmaWrite(rxDmaAddr, rxDmaLen, &rxDmaWriteEvent, (uint8_t*)rxDmaData);
@@ -1826,7 +1826,7 @@ NSGigE::doTxDmaRead()
     assert(txDmaState == dmaIdle || txDmaState == dmaReadWaiting);
     txDmaState = dmaReading;
 
-    if (dmaPending())
+    if (dmaPending() || getState() != Running)
         txDmaState = dmaReadWaiting;
     else
         dmaRead(txDmaAddr, txDmaLen, &txDmaReadEvent, (uint8_t*)txDmaData);
@@ -1857,7 +1857,7 @@ NSGigE::doTxDmaWrite()
     assert(txDmaState == dmaIdle || txDmaState == dmaWriteWaiting);
     txDmaState = dmaWriting;
 
-    if (dmaPending())
+    if (dmaPending() || getState() != Running)
         txDmaState = dmaWriteWaiting;
     else
         dmaWrite(txDmaAddr, txDmaLen, &txDmaWriteEvent, (uint8_t*)txDmaData);
@@ -2406,6 +2406,20 @@ NSGigE::recvPacket(EthPacketPtr packet)
     return true;
 }
 
+
+void
+NSGigE::resume()
+{
+    SimObject::resume();
+
+    // During drain we could have left the state machines in a waiting state and
+    // they wouldn't get out until some other event occured to kick them.
+    // This way they'll get out immediately
+    txKick();
+    rxKick();
+}
+
+
 //=====================================================================
 //
 //
@@ -2801,6 +2815,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(NSGigE)
     Param<uint32_t> pci_dev;
     Param<uint32_t> pci_func;
     Param<Tick> pio_latency;
+    Param<Tick> config_latency;
 
     Param<Tick> clock;
     Param<bool> dma_desc_free;
@@ -2834,6 +2849,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(NSGigE)
     INIT_PARAM(pci_dev, "PCI device number"),
     INIT_PARAM(pci_func, "PCI function code"),
     INIT_PARAM_DFLT(pio_latency, "Programmed IO latency in bus cycles", 1),
+    INIT_PARAM(config_latency, "Number of cycles for a config read or write"),
     INIT_PARAM(clock, "State machine cycle time"),
 
     INIT_PARAM(dma_desc_free, "DMA of Descriptors is free"),
@@ -2871,6 +2887,7 @@ CREATE_SIM_OBJECT(NSGigE)
     params->deviceNum = pci_dev;
     params->functionNum = pci_func;
     params->pio_delay = pio_latency;
+    params->config_delay = config_latency;
 
     params->clock = clock;
     params->dma_desc_free = dma_desc_free;

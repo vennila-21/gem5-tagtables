@@ -26,10 +26,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Steve Reinhardt
- *          Korey Sewell
  */
 
 #include "arch/utility.hh"
+#include "arch/faults.hh"
 #include "base/cprintf.hh"
 #include "base/inifile.hh"
 #include "base/loader/symtab.hh"
@@ -55,10 +55,10 @@
 #include "sim/sim_events.hh"
 #include "sim/sim_object.hh"
 #include "sim/stats.hh"
+#include "sim/system.hh"
 
 #if FULL_SYSTEM
 #include "base/remote_gdb.hh"
-#include "sim/system.hh"
 #include "arch/tlb.hh"
 #include "arch/stacktrace.hh"
 #include "arch/vtophys.hh"
@@ -178,8 +178,8 @@ void
 BaseSimpleCPU::serialize(ostream &os)
 {
     BaseCPU::serialize(os);
-    SERIALIZE_SCALAR(inst);
-    nameOut(os, csprintf("%s.xc", name()));
+//    SERIALIZE_SCALAR(inst);
+    nameOut(os, csprintf("%s.xc.0", name()));
     thread->serialize(os);
 }
 
@@ -187,8 +187,8 @@ void
 BaseSimpleCPU::unserialize(Checkpoint *cp, const string &section)
 {
     BaseCPU::unserialize(cp, section);
-    UNSERIALIZE_SCALAR(inst);
-    thread->unserialize(cp, csprintf("%s.xc", section));
+//    UNSERIALIZE_SCALAR(inst);
+    thread->unserialize(cp, csprintf("%s.xc.0", section));
 }
 
 void
@@ -455,6 +455,7 @@ BaseSimpleCPU::advancePC(Fault fault)
 #else
         thread->setNextPC(thread->readNextNPC());
         thread->setNextNPC(thread->readNextNPC() + sizeof(MachInst));
+        assert(thread->readNextPC() != thread->readNextNPC());
 #endif
 
     }
