@@ -1,10 +1,11 @@
+
 Nathan L. Binkert
 -----------------------
 * Alpha full system support
 * Statistics package
 * Event queue
 * Pseudo instructions
-* Remote GDB facilities 
+* Remote GDB facilities
 * PC sampling
 * Trace facilities
 * Tru64 support
@@ -30,14 +31,15 @@ Ali G. Saidi
 * I/O <-> memory interface
 * PCI device interface
 * Multiple ISA support
-* Memory bridge, bus, packet, port interfaces 
+* Memory bridge, bus, packet, port interfaces
 * SPARC IPRs
 
 Kevin T. Lim
 -----------------------
 * New CPU model
+* CPU checker
 * CPU class restructuring
-* Quiecsing/Draining 
+* Quiecsing/Draining
 
 Ronald G. Dreslinski Jr
 -----------------------
@@ -55,11 +57,11 @@ Gabriel Black
 -----------------------
 * Multiple ISA support
 * Alpha support reorgization
-* SPARC ISA
+* SPARC SE support
 
 Korey L. Sewell
 -----------------------
-* New CPU SMT support
+* O3CPU SMT support
 * MIPS support
 
 Andrew L. Schultz
@@ -77,7 +79,6 @@ Steve E. Raasch
 -----------------------
 * Deprecated CPU model
 * Generic CPU structures
-
 
 David Green
 -----------------------
