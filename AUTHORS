@@ -11,6 +11,8 @@ Nathan L. Binkert
 * Tru64 support
 * Ethernet (Link, NSGIGE, Sinic) device support
 * PCI device support
+* Checkpoint framework
+* Configuration system
 
 Steven K. Reinhardt
 -----------------------
@@ -23,6 +25,7 @@ Steven K. Reinhardt
 * PC sampling
 * Deprecated detailed CPU
 * Binary Loading
+* Configuration system
 
 Ali G. Saidi
 -----------------------
@@ -57,6 +60,7 @@ Lisa R. Hsu
 Gabriel Black
 -----------------------
 * Multiple ISA support
+* SPARC ISA support
 * Alpha support reorganization
 * SPARC SE support
 
@@ -76,6 +80,7 @@ Erik G. Hallnor
 -----------------------
 * Caches
 * Trace reader support
+* Checkpoint framework
 
 Steve E. Raasch
 -----------------------
