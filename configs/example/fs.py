@@ -47,6 +47,9 @@ parser.add_option("-b", "--benchmark", action="store", type="string",
                   dest="benchmark",
                   help="Specify the benchmark to run. Available benchmarks: %s"\
                           % DefinedBenchmarks)
+parser.add_option("--etherdump", action="store", type="string", dest="etherdump",
+                  help="Specify the filename to dump a pcap capture of the ethernet"
+                  "traffic")
 
 (options, args) = parser.parse_args()
 
@@ -87,36 +90,37 @@ if len(bm) == 2:
     s1 = makeLinuxAlphaSystem(mem_mode, bm[0])
     s1.cpu = cpu
     cpu.connectMemPorts(s1.membus)
+    cpu.mem = s1.physmem
     s2 = makeLinuxAlphaSystem(mem_mode, bm[1])
     s2.cpu = cpu2
     cpu2.connectMemPorts(s2.membus)
-    root = makeDualRoot(s1, s2)
+    cpu2.mem = s2.physmem
+    root = makeDualRoot(s1, s2, options.etherdump)
 elif len(bm) == 1:
     root = Root(clock = '1THz',
                 system = makeLinuxAlphaSystem(mem_mode, bm[0]))
     root.system.cpu = cpu
     cpu.connectMemPorts(root.system.membus)
+    cpu.mem = root.system.physmem
 else:
     print "Error I don't know how to create more than 2 systems."
     sys.exit(1)
 
 m5.instantiate(root)
 
-#exit_event = m5.simulate(2600000000000)
-#if exit_event.getCause() != "user interrupt received":
-#    m5.checkpoint(root, 'cpt')
-#    exit_event = m5.simulate(300000000000)
-#    if exit_event.getCause() != "user interrupt received":
-#        m5.checkpoint(root, 'cptA')
-
-
 if options.maxtick:
-    exit_event = m5.simulate(options.maxtick)
+    maxtick = options.maxtick
 elif options.maxtime:
     simtime = int(options.maxtime * root.clock.value)
     print "simulating for: ", simtime
-    exit_event = m5.simulate(simtime)
+    maxtick = simtime
 else:
-    exit_event = m5.simulate()
+    maxtick = -1
+
+exit_event = m5.simulate(maxtick)
+
+while exit_event.getCause() == "checkpoint":
+    m5.checkpoint(root, "cpt.%d")
+    exit_event = m5.simulate(maxtick - m5.curTick())
 
 print 'Exiting @ cycle', m5.curTick(), 'because', exit_event.getCause()
