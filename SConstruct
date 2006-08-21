@@ -302,8 +302,6 @@ sticky_opts.AddOptions(
 # Non-sticky options only apply to the current build.
 nonsticky_opts = Options(args=ARGUMENTS)
 nonsticky_opts.AddOptions(
-    ListOption('TEST_CPU_MODELS', 'CPU models to test if regression is being run', '',
-               env['ALL_CPU_LIST']),
     BoolOption('update_ref', 'Update test reference outputs', False)
     )
 
@@ -498,7 +496,7 @@ for build_path in build_paths:
     # Set up the regression tests for each build.
     for e in envList:
         SConscript('tests/SConscript',
-                   build_dir = os.path.join(build_path, 'test', e.Label),
+                   build_dir = os.path.join(build_path, 'tests', e.Label),
                    exports = { 'env' : e }, duplicate = False)
 
 Help(help_text)

@@ -11,6 +11,8 @@ Nathan L. Binkert
 * Tru64 support
 * Ethernet (Link, NSGIGE, Sinic) device support
 * PCI device support
+* Checkpoint framework
+* Configuration system
 
 Steven K. Reinhardt
 -----------------------
@@ -23,6 +25,7 @@ Steven K. Reinhardt
 * PC sampling
 * Deprecated detailed CPU
 * Binary Loading
+* Configuration system
 
 Ali G. Saidi
 -----------------------
@@ -51,30 +54,33 @@ Ronald G. Dreslinski Jr
 Lisa R. Hsu
 -----------------------
 * DP83820 NIC device model
-* Kernel stats stuff
-* Linux Dist disk image building
+* Kernel stats
+* Linux Dist disk image building (current)
 
 Gabriel Black
 -----------------------
 * Multiple ISA support
-* Alpha support reorgization
+* SPARC ISA support
+* Alpha support reorganization
 * SPARC SE support
 
 Korey L. Sewell
 -----------------------
 * O3CPU SMT support
-* MIPS support
+* MIPS ISA support
+* Multiple ISA support in O3CPU
 
 Andrew L. Schultz
 -----------------------
 * IDE controller/disk model
 * PCI devices interface
-* Linux Dist disk image building
+* Linux Dist disk image building (deprecated)
 
 Erik G. Hallnor
 -----------------------
 * Caches
 * Trace reader support
+* Checkpoint framework
 
 Steve E. Raasch
 -----------------------
