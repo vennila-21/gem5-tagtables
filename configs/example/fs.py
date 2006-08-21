@@ -90,15 +90,18 @@ if len(bm) == 2:
     s1 = makeLinuxAlphaSystem(mem_mode, bm[0])
     s1.cpu = cpu
     cpu.connectMemPorts(s1.membus)
+    cpu.mem = s1.physmem
     s2 = makeLinuxAlphaSystem(mem_mode, bm[1])
     s2.cpu = cpu2
     cpu2.connectMemPorts(s2.membus)
+    cpu2.mem = s2.physmem
     root = makeDualRoot(s1, s2, options.etherdump)
 elif len(bm) == 1:
     root = Root(clock = '1THz',
                 system = makeLinuxAlphaSystem(mem_mode, bm[0]))
     root.system.cpu = cpu
     cpu.connectMemPorts(root.system.membus)
+    cpu.mem = root.system.physmem
 else:
     print "Error I don't know how to create more than 2 systems."
     sys.exit(1)
@@ -106,18 +109,18 @@ else:
 m5.instantiate(root)
 
 if options.maxtick:
-    arg = options.maxtick
+    maxtick = options.maxtick
 elif options.maxtime:
     simtime = int(options.maxtime * root.clock.value)
     print "simulating for: ", simtime
-    arg = simtime
+    maxtick = simtime
 else:
-    arg = -1
+    maxtick = -1
 
-exit_event = m5.simulate(arg)
+exit_event = m5.simulate(maxtick)
 
 while exit_event.getCause() == "checkpoint":
-        m5.checkpoint(root, "cpt.%d")
-        exit_event = m5.simulate(arg)
+    m5.checkpoint(root, "cpt.%d")
+    exit_event = m5.simulate(maxtick - m5.curTick())
 
 print 'Exiting @ cycle', m5.curTick(), 'because', exit_event.getCause()
