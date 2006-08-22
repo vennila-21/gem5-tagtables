@@ -41,20 +41,45 @@ decode OP default Unknown::unknown()
         0x0: Trap::illtrap({{fault = new IllegalInstruction;}});
         format BranchN
         {
-            0x1: decode BPCC
+            0x1: decode COND2
             {
-                0x0: bpcci(19, {{
-                    if(passesCondition(Ccr<3:0>, COND2))
+                //Branch Always
+                0x8: decode A
+                {
+                    0x0: b(19, {{
                         NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
-                0x2: bpccx(19, {{
-                    if(passesCondition(Ccr<7:4>, COND2))
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
+                    }});
+                    0x1: b(19, {{
+                        NPC = xc->readPC() + disp;
+                        NNPC = NPC + 4;
+                    }}, ',a');
+                }
+                //Branch Never
+                0x0: decode A
+                {
+                    0x0: bn(19, {{
+                        NNPC = NNPC;//Don't do anything
+                    }});
+                    0x1: bn(19, {{
+                        NPC = xc->readNextPC() + 4;
+                        NNPC = NPC + 4;
+                    }}, ',a');
+                }
+                default: decode BPCC
+                {
+                    0x0: bpcci(19, {{
+                        if(passesCondition(Ccr<3:0>, COND2))
+                            NNPC = xc->readPC() + disp;
+                        else
+                            handle_annul
+                    }});
+                    0x2: bpccx(19, {{
+                        if(passesCondition(Ccr<7:4>, COND2))
+                            NNPC = xc->readPC() + disp;
+                        else
+                            handle_annul
+                    }});
+                }
             }
             0x2: bicc(22, {{
                 if(passesCondition(Ccr<3:0>, COND2))
@@ -106,7 +131,7 @@ decode OP default Unknown::unknown()
             }
         }
         //SETHI (or NOP if rd == 0 and imm == 0)
-        0x4: SetHi::sethi({{Rd = imm;}});
+        0x4: SetHi::sethi({{Rd.udw = imm;}});
         0x5: Trap::fbpfcc({{fault = new FpDisabled;}});
         0x6: Trap::fbfcc({{fault = new FpDisabled;}});
     }
@@ -535,15 +560,15 @@ decode OP default Unknown::unknown()
                 0x10: Trap::array8({{fault = new IllegalInstruction;}});
                 0x12: Trap::array16({{fault = new IllegalInstruction;}});
                 0x14: Trap::array32({{fault = new IllegalInstruction;}});
-                0x18: BasicOperate::alignaddress({{
+                0x18: BasicOperate::alignaddr({{
                     uint64_t sum = Rs1 + Rs2;
-                    Frd = sum & ~7;
+                    Rd = sum & ~7;
                     Gsr = (Gsr & ~7) | (sum & 7);
                 }});
                 0x19: Trap::bmask({{fault = new IllegalInstruction;}});
                 0x1A: BasicOperate::alignaddresslittle({{
                     uint64_t sum = Rs1 + Rs2;
-                    Frd = sum & ~7;
+                    Rd = sum & ~7;
                     Gsr = (Gsr & ~7) | ((~sum + 1) & 7);
                 }});
                 0x20: Trap::fcmple16({{fault = new IllegalInstruction;}});
