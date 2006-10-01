@@ -24,6 +24,9 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Nathan Binkert
+ *          Ali Saidi
  */
 
 #ifndef __M5OP_H__
@@ -50,5 +53,7 @@ void m5_debugbreak(void);
 void m5_switchcpu(void);
 void m5_addsymbol(uint64_t addr, char *symbol);
 void m5_panic(void);
+void m5_anbegin(uint64_t s);
+void m5_anwait(uint64_t s, uint64_t w);
 
 #endif // __M5OP_H__

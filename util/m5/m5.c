@@ -24,6 +24,8 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Nathan Binkert
  */
 
 #include <inttypes.h>
@@ -48,6 +50,7 @@ usage()
            "       m5 dumpstats [delay [period]]\n"
            "       m5 dumpresetstats [delay [period]]\n"
            "       m5 checkpoint [delay [period]]\n"
+           "       m5 readfile\n"
            "\n"
            "All times in nanoseconds!\n");
     exit(1);
@@ -202,6 +205,20 @@ main(int argc, char *argv[])
     if (COMPARE("loadsymbol")) {
         m5_loadsymbol(arg1);
         return 0;
+    if (COMPARE("readfile")) {
+            char buf[256*1024];
+            int offset = 0;
+            int len;
+
+            if (argc != 2)
+                    usage();
+
+            while ((len = m5_readfile(buf, sizeof(buf), offset)) > 0) {
+                    write(STDOUT_FILENO, buf, len);
+                    offset += len;
+            }
+
+            return 0;
     }
 
     usage();
