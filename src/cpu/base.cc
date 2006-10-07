@@ -41,12 +41,16 @@
 #include "cpu/cpuevent.hh"
 #include "cpu/thread_context.hh"
 #include "cpu/profile.hh"
+#include "sim/sim_exit.hh"
 #include "sim/param.hh"
 #include "sim/process.hh"
 #include "sim/sim_events.hh"
 #include "sim/system.hh"
 
 #include "base/trace.hh"
+
+// Hack
+#include "sim/stat_control.hh"
 
 using namespace std;
 
@@ -56,6 +60,39 @@ vector<BaseCPU *> BaseCPU::cpuList;
 // careful to only use it once all the CPUs that you care about have
 // been initialized
 int maxThreadsPerCPU = 1;
+
+CPUProgressEvent::CPUProgressEvent(EventQueue *q, Tick ival,
+                                   BaseCPU *_cpu)
+    : Event(q, Event::Stat_Event_Pri), interval(ival),
+      lastNumInst(0), cpu(_cpu)
+{
+    if (interval)
+        schedule(curTick + interval);
+}
+
+void
+CPUProgressEvent::process()
+{
+    Counter temp = cpu->totalInstructions();
+#ifndef NDEBUG
+    double ipc = double(temp - lastNumInst) / (interval / cpu->cycles(1));
+
+    DPRINTFN("%s progress event, instructions committed: %lli, IPC: %0.8d\n",
+             cpu->name(), temp - lastNumInst, ipc);
+    ipc = 0.0;
+#else
+    cprintf("%lli: %s progress event, instructions committed: %lli\n",
+            curTick, cpu->name(), temp - lastNumInst);
+#endif
+    lastNumInst = temp;
+    schedule(curTick + interval);
+}
+
+const char *
+CPUProgressEvent::description()
+{
+    return "CPU Progress event";
+}
 
 #if FULL_SYSTEM
 BaseCPU::BaseCPU(Params *p)
@@ -67,6 +104,7 @@ BaseCPU::BaseCPU(Params *p)
       number_of_threads(p->numberOfThreads), system(p->system)
 #endif
 {
+//    currentTick = curTick;
     DPRINTF(FullCPU, "BaseCPU: Creating object, mem address %#x.\n", this);
 
     // add self to global list of CPUs
@@ -88,8 +126,9 @@ BaseCPU::BaseCPU(Params *p)
     //
     if (p->max_insts_any_thread != 0)
         for (int i = 0; i < number_of_threads; ++i)
-            new SimLoopExitEvent(comInstEventQueue[i], p->max_insts_any_thread,
-                                 "a thread reached the max instruction count");
+            schedExitSimLoop("a thread reached the max instruction count",
+                             p->max_insts_any_thread, 0,
+                             comInstEventQueue[i]);
 
     if (p->max_insts_all_threads != 0) {
         // allocate & initialize shared downcounter: each event will
@@ -113,8 +152,9 @@ BaseCPU::BaseCPU(Params *p)
     //
     if (p->max_loads_any_thread != 0)
         for (int i = 0; i < number_of_threads; ++i)
-            new SimLoopExitEvent(comLoadEventQueue[i], p->max_loads_any_thread,
-                                 "a thread reached the max load count");
+            schedExitSimLoop("a thread reached the max load count",
+                             p->max_loads_any_thread, 0,
+                             comLoadEventQueue[i]);
 
     if (p->max_loads_all_threads != 0) {
         // allocate & initialize shared downcounter: each event will
@@ -153,7 +193,6 @@ BaseCPU::BaseCPU(Params *p)
     if (params->profile)
         profileEvent = new ProfileEvent(this, params->profile);
 #endif
-
 }
 
 BaseCPU::Params::Params()
@@ -188,6 +227,11 @@ BaseCPU::startup()
     if (!params->deferRegistration && profileEvent)
         profileEvent->schedule(curTick);
 #endif
+
+    if (params->progress_interval) {
+        new CPUProgressEvent(&mainEventQueue, params->progress_interval,
+                             this);
+    }
 }
 
 
@@ -238,7 +282,11 @@ BaseCPU::registerThreadContexts()
 void
 BaseCPU::switchOut()
 {
-    panic("This CPU doesn't support sampling!");
+//    panic("This CPU doesn't support sampling!");
+#if FULL_SYSTEM
+    if (profileEvent && profileEvent->scheduled())
+        profileEvent->deschedule();
+#endif
 }
 
 void
@@ -261,18 +309,22 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
         assert(newTC->getProcessPtr() == oldTC->getProcessPtr());
         newTC->getProcessPtr()->replaceThreadContext(newTC, newTC->readCpuId());
 #endif
+
+//    TheISA::compareXCs(oldXC, newXC);
     }
 
 #if FULL_SYSTEM
     for (int i = 0; i < TheISA::NumInterruptLevels; ++i)
         interrupts[i] = oldCPU->interrupts[i];
     intstatus = oldCPU->intstatus;
+    checkInterrupts = oldCPU->checkInterrupts;
 
     for (int i = 0; i < threadContexts.size(); ++i)
         threadContexts[i]->profileClear();
 
-    if (profileEvent)
-        profileEvent->schedule(curTick);
+    // The Sampler must take care of this!
+//    if (profileEvent)
+//        profileEvent->schedule(curTick);
 #endif
 }
 
