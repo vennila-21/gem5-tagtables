@@ -128,6 +128,7 @@ MSHR*
 MSHRQueue::allocate(Packet * &pkt, int size)
 {
     Addr aligned_addr = pkt->getAddr() & ~((Addr)size - 1);
+    assert(!freeList.empty());
     MSHR *mshr = freeList.front();
     assert(mshr->getNumTargets() == 0);
     freeList.pop_front();
@@ -251,7 +252,7 @@ MSHRQueue::squash(int threadNum)
                 Packet * target = mshr->getTarget();
                 mshr->popTarget();
 
-                assert(target->req->getThreadNum() == threadNum);
+                assert(0/*target->req->getThreadNum()*/ == threadNum);
                 target = NULL;
             }
             assert(!mshr->hasTargets());
