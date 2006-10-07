@@ -96,6 +96,15 @@ void
 BaseCache::CachePort::recvRetry()
 {
     Packet *pkt;
+    if (!drainList.empty()) {
+        //We have some responses to drain first
+        bool result = true;
+        while (result && !drainList.empty()) {
+            result = sendTiming(drainList.front());
+            if (result)
+                drainList.pop_front();
+        }
+    }
 
     if (!isCpuSide)
     {
@@ -199,8 +208,17 @@ BaseCache::CacheEvent::process()
         return;
     }
     //Response
-    //Know the packet to send, no need to mark in service (must succed)
-    assert(cachePort->sendTiming(pkt));
+    //Know the packet to send
+    pkt->result = Packet::Success;
+    pkt->makeTimingResponse();
+    if (!cachePort->drainList.empty()) {
+        //Already blocked waiting for bus, just append
+        cachePort->drainList.push_back(pkt);
+    }
+    else if (!cachePort->sendTiming(pkt)) {
+        //It failed, save it to list of drain events
+        cachePort->drainList.push_back(pkt);
+    }
 }
 
 const char *
