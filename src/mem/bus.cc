@@ -118,44 +118,32 @@ Bus::recvTiming(Packet *pkt)
     DPRINTF(Bus, "recvTiming: packet src %d dest %d addr 0x%x cmd %s\n",
             pkt->getSrc(), pkt->getDest(), pkt->getAddr(), pkt->cmdString());
 
-    Port *pktPort = interfaces[pkt->getSrc()];
-
-    // If the bus is busy, or other devices are in line ahead of the current one,
-    // put this device on the retry list.
-    if (tickNextIdle > curTick || (retryList.size() && pktPort != retryingPort)) {
-        addToRetryList(pktPort);
-        return false;
-    }
-
-    // If the bus is blocked, make the device wait.
-    if (!(port = findDestPort(pkt, pkt->getSrc()))) {
-        addToRetryList(pktPort);
-        return false;
-    }
-
-    // The packet will be sent. Figure out how long it occupies the bus.
-    int numCycles = 0;
-    // Requests need one cycle to send an address
-    if (pkt->isRequest())
-        numCycles++;
-    else if (pkt->isResponse() || pkt->hasData()) {
-        // If a packet has data, it needs ceil(size/width) cycles to send it
-        // We're using the "adding instead of dividing" trick again here
-        if (pkt->hasData()) {
-            int dataSize = pkt->getSize();
-            for (int transmitted = 0; transmitted < dataSize;
-                    transmitted += width) {
-                numCycles++;
+    short dest = pkt->getDest();
+    if (dest == Packet::Broadcast) {
+        if ( timingSnoopPhase1(pkt) )
+        if (timingSnoop(pkt))
+        {
+            timingSnoopPhase2(pkt);
+            pkt->flags |= SNOOP_COMMIT;
+            bool success = timingSnoop(pkt);
+            assert(success);
+            if (pkt->flags & SATISFIED) {
+                //Cache-Cache transfer occuring
+                return true;
             }
-        } else {
-            // If the packet didn't have data, it must have been a response.
-            // Those use the bus for one cycle to send their data.
-            numCycles++;
+            port = findPort(pkt->getAddr(), pkt->getSrc());
         }
+        else
+        {
+            //Snoop didn't succeed
+            retryList.push_back(interfaces[pkt->getSrc()]);
+            return false;
+        }
+    } else {
+        assert(dest >= 0 && dest < interfaces.size());
+        assert(dest != pkt->getSrc()); // catch infinite loops
+        port = interfaces[dest];
     }
-
-    occupyBus(numCycles);
-
     if (port->sendTiming(pkt))  {
         // Packet was successfully sent. Return true.
         // Also take care of retries
@@ -278,42 +266,20 @@ Bus::atomicSnoop(Packet *pkt)
 }
 
 bool
-Bus::timingSnoopPhase1(Packet *pkt)
+Bus::timingSnoop(Packet *pkt)
 {
     std::vector<int> ports = findSnoopPorts(pkt->getAddr(), pkt->getSrc());
     bool success = true;
 
     while (!ports.empty() && success)
     {
-        snoopCallbacks.push_back(ports.back());
         success = interfaces[ports.back()]->sendTiming(pkt);
         ports.pop_back();
     }
-    if (!success)
-    {
-        while (!snoopCallbacks.empty())
-        {
-            interfaces[snoopCallbacks.back()]->sendStatusChange(Port::SnoopSquash);
-            snoopCallbacks.pop_back();
-        }
-        return false;
-    }
-    return true;
+
+    return success;
 }
 
-void
-Bus::timingSnoopPhase2(Packet *pkt)
-{
-    bool success;
-    pkt->flags |= SNOOP_COMMIT;
-    while (!snoopCallbacks.empty())
-    {
-        success = interfaces[snoopCallbacks.back()]->sendTiming(pkt);
-        //We should not fail on snoop callbacks
-        assert(success);
-        snoopCallbacks.pop_back();
-    }
-}
 
 /** Function called by the port when the bus is receiving a Atomic
  * transaction.*/

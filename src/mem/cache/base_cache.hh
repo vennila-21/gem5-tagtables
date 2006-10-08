@@ -165,10 +165,6 @@ class BaseCache : public MemObject
                 memSidePort->sendStatusChange(Port::RangeChange);
             }
         }
-        else if (status == Port::SnoopSquash) {
-            assert(snoopPhase2);
-            snoopPhase2 = false;
-        }
     }
 
     virtual Packet *getPacket()
@@ -214,9 +210,6 @@ class BaseCache : public MemObject
     /** True if this cache is connected to the CPU. */
     bool topLevelCache;
 
-
-    /** True if we are now in phase 2 of the snoop process. */
-    bool snoopPhase2;
 
     /** Stores time the cache blocked for statistics. */
     Tick blockedCycle;
@@ -523,8 +516,10 @@ class BaseCache : public MemObject
      */
     void respond(Packet *pkt, Tick time)
     {
-        CacheEvent *reqCpu = new CacheEvent(cpuSidePort, pkt);
-        reqCpu->schedule(time);
+        if (pkt->needsResponse()) {
+            CacheEvent *reqCpu = new CacheEvent(cpuSidePort, pkt);
+            reqCpu->schedule(time);
+        }
     }
 
     /**
@@ -537,8 +532,10 @@ class BaseCache : public MemObject
         if (!pkt->req->isUncacheable()) {
             missLatency[pkt->cmdToIndex()][0/*pkt->req->getThreadNum()*/] += time - pkt->time;
         }
-        CacheEvent *reqCpu = new CacheEvent(cpuSidePort, pkt);
-        reqCpu->schedule(time);
+        if (pkt->needsResponse()) {
+            CacheEvent *reqCpu = new CacheEvent(cpuSidePort, pkt);
+            reqCpu->schedule(time);
+        }
     }
 
     /**
@@ -549,6 +546,7 @@ class BaseCache : public MemObject
     {
 //        assert("Implement\n" && 0);
 //	mi->respond(pkt,curTick + hitLatency);
+        assert (pkt->needsResponse());
         CacheEvent *reqMem = new CacheEvent(memSidePort, pkt);
         reqMem->schedule(time);
     }

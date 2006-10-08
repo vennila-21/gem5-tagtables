@@ -60,7 +60,7 @@ doTimingAccess(Packet *pkt, CachePort *cachePort, bool isCpuSide)
 {
     if (isCpuSide)
     {
-        if (pkt->isWrite() && (pkt->req->getFlags() & LOCKED)) {
+        if (pkt->isWrite() && (pkt->req->isLocked())) {
             pkt->req->setScResult(1);
         }
         if (!(pkt->flags & SATISFIED)) {
@@ -72,16 +72,9 @@ doTimingAccess(Packet *pkt, CachePort *cachePort, bool isCpuSide)
         if (pkt->isResponse())
             handleResponse(pkt);
         else {
-            //Check if we are in phase1
-            if (!snoopPhase2) {
-                snoopPhase2 = true;
-            }
-            else {
-                //Check if we should do the snoop
-                if (pkt->flags && SNOOP_COMMIT)
-                    snoop(pkt);
-                snoopPhase2 = false;
-            }
+            //Check if we should do the snoop
+            if (pkt->flags && SNOOP_COMMIT)
+                snoop(pkt);
         }
     }
     return true;
@@ -95,7 +88,7 @@ doAtomicAccess(Packet *pkt, bool isCpuSide)
     if (isCpuSide)
     {
         //Temporary solution to LL/SC
-        if (pkt->isWrite() && (pkt->req->getFlags() & LOCKED)) {
+        if (pkt->isWrite() && (pkt->req->isLocked())) {
             pkt->req->setScResult(1);
         }
 
@@ -125,7 +118,7 @@ doFunctionalAccess(Packet *pkt, bool isCpuSide)
         pkt->req->setThreadContext(0,0);
 
         //Temporary solution to LL/SC
-        if (pkt->isWrite() && (pkt->req->getFlags() & LOCKED)) {
+        if (pkt->isWrite() && (pkt->req->isLocked())) {
             assert("Can't handle LL/SC on functional path\n");
         }
 
