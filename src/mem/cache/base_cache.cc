@@ -106,8 +106,7 @@ BaseCache::CachePort::recvRetry()
         }
         if (!result) return;
     }
-
-    if (!isCpuSide)
+    else if (!isCpuSide)
     {
         if (!cache->doMasterRequest()) return;
         pkt = cache->getPacket();
