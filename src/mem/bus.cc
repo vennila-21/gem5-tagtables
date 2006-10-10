@@ -68,45 +68,16 @@ Bus::init()
 }
 
 Bus::BusFreeEvent::BusFreeEvent(Bus *_bus) : Event(&mainEventQueue), bus(_bus)
-{
-    assert(!scheduled());
-}
+{}
 
 void Bus::BusFreeEvent::process()
 {
-    bus->recvRetry(0);
+    bus->recvRetry(-1);
 }
 
 const char * Bus::BusFreeEvent::description()
 {
     return "bus became available";
-}
-
-void
-Bus::occupyBus(int numCycles)
-{
-    //Move up when the bus will next be free
-    //We avoid the use of divide by adding repeatedly
-    //This should be faster if the value is updated frequently, but should
-    //be may be slower otherwise.
-
-    //Bring tickNextIdle up to the present tick
-    //There is some potential ambiguity where a cycle starts, which might make
-    //a difference when devices are acting right around a cycle boundary. Using
-    //a < allows things which happen exactly on a cycle boundary to take up only
-    //the following cycle. Anthing that happens later will have to "wait" for the
-    //end of that cycle, and then start using the bus after that.
-    while (tickNextIdle < curTick)
-        tickNextIdle += clock;
-    //Advance it numCycles bus cycles.
-    //XXX Should this use the repeating add trick as well?
-    tickNextIdle += (numCycles * clock);
-    if (!busIdle.scheduled()) {
-        busIdle.schedule(tickNextIdle);
-    } else {
-        busIdle.reschedule(tickNextIdle);
-    }
-    DPRINTF(Bus, "The bus is now occupied from tick %d to %d\n", curTick, tickNextIdle);
 }
 
 /** Function called by the port when the bus is receiving a Timing
@@ -120,6 +91,14 @@ Bus::recvTiming(Packet *pkt)
 
     Port *pktPort = interfaces[pkt->getSrc()];
 
+    // If the bus is busy, or other devices are in line ahead of the current
+    // one, put this device on the retry list.
+    if (tickNextIdle > curTick ||
+            (retryList.size() && (!inRetry || pktPort != retryList.front()))) {
+        addToRetryList(pktPort);
+        return false;
+    }
+
     short dest = pkt->getDest();
     if (dest == Packet::Broadcast) {
         if (timingSnoop(pkt)) {
@@ -128,9 +107,9 @@ Bus::recvTiming(Packet *pkt)
             assert(success);
             if (pkt->flags & SATISFIED) {
                 //Cache-Cache transfer occuring
-                if (retryingPort) {
+                if (inRetry) {
                     retryList.pop_front();
-                    retryingPort = NULL;
+                    inRetry = false;
                 }
                 return true;
             }
@@ -146,7 +125,17 @@ Bus::recvTiming(Packet *pkt)
         port = interfaces[dest];
     }
 
-    // The packet will be sent. Figure out how long it occupies the bus.
+    //Bring tickNextIdle up to the present tick
+    //There is some potential ambiguity where a cycle starts, which might make
+    //a difference when devices are acting right around a cycle boundary. Using
+    //a < allows things which happen exactly on a cycle boundary to take up only
+    //the following cycle. Anthing that happens later will have to "wait" for
+    //the end of that cycle, and then start using the bus after that.
+    while (tickNextIdle < curTick)
+        tickNextIdle += clock;
+
+    // The packet will be sent. Figure out how long it occupies the bus, and
+    // how much of that time is for the first "word", aka bus width.
     int numCycles = 0;
     // Requests need one cycle to send an address
     if (pkt->isRequest())
@@ -167,14 +156,33 @@ Bus::recvTiming(Packet *pkt)
         }
     }
 
-    occupyBus(numCycles);
+    // The first word will be delivered after the current tick, the delivery
+    // of the address if any, and one bus cycle to deliver the data
+    pkt->firstWordTime =
+        tickNextIdle +
+        pkt->isRequest() ? clock : 0 +
+        clock;
+
+    //Advance it numCycles bus cycles.
+    //XXX Should this use the repeated addition trick as well?
+    tickNextIdle += (numCycles * clock);
+    if (!busIdle.scheduled()) {
+        busIdle.schedule(tickNextIdle);
+    } else {
+        busIdle.reschedule(tickNextIdle);
+    }
+    DPRINTF(Bus, "The bus is now occupied from tick %d to %d\n",
+            curTick, tickNextIdle);
+
+    // The bus will become idle once the current packet is delivered.
+    pkt->finishTime = tickNextIdle;
 
     if (port->sendTiming(pkt))  {
         // Packet was successfully sent. Return true.
         // Also take care of retries
-        if (retryingPort) {
+        if (inRetry) {
             retryList.pop_front();
-            retryingPort = NULL;
+            inRetry = false;
         }
         return true;
     }
@@ -189,14 +197,14 @@ Bus::recvRetry(int id)
 {
     // If there's anything waiting...
     if (retryList.size()) {
-        retryingPort = retryList.front();
-        retryingPort->sendRetry();
-        // If the retryingPort pointer isn't null, sendTiming wasn't called
-        if (retryingPort) {
-            warn("sendRetry didn't call sendTiming\n");
-            retryList.pop_front();
-            retryingPort = NULL;
-        }
+        //retryingPort = retryList.front();
+        inRetry = true;
+        retryList.front()->sendRetry();
+        // If inRetry is still true, sendTiming wasn't called
+        if (inRetry)
+            panic("Port %s didn't call sendTiming in it's recvRetry\n",\
+                    retryList.front()->getPeer()->name());
+        //assert(!inRetry);
     }
 }
 
