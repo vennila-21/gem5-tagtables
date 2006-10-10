@@ -103,6 +103,7 @@ TimingSimpleCPU::TimingSimpleCPU(Params *p)
     ifetch_pkt = dcache_pkt = NULL;
     drainEvent = NULL;
     fetchEvent = NULL;
+    previousTick = 0;
     changeState(SimObject::Running);
 }
 
@@ -161,6 +162,7 @@ TimingSimpleCPU::resume()
 
     assert(system->getMemoryMode() == System::Timing);
     changeState(SimObject::Running);
+    previousTick = curTick;
 }
 
 void
@@ -168,6 +170,7 @@ TimingSimpleCPU::switchOut()
 {
     assert(status() == Running || status() == Idle);
     _status = SwitchedOut;
+    numCycles += curTick - previousTick;
 
     // If we've been scheduled to resume but are then told to switch out,
     // we'll need to cancel it.
@@ -190,6 +193,27 @@ TimingSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
             break;
         }
     }
+
+    if (_status != Running) {
+        _status = Idle;
+    }
+
+    Port *peer;
+    if (icachePort.getPeer() == NULL) {
+        peer = oldCPU->getPort("icache_port")->getPeer();
+        icachePort.setPeer(peer);
+    } else {
+        peer = icachePort.getPeer();
+    }
+    peer->setPeer(&icachePort);
+
+    if (dcachePort.getPeer() == NULL) {
+        peer = oldCPU->getPort("dcache_port")->getPeer();
+        dcachePort.setPeer(peer);
+    } else {
+        peer = dcachePort.getPeer();
+    }
+    peer->setPeer(&dcachePort);
 }
 
 
@@ -424,6 +448,9 @@ TimingSimpleCPU::fetch()
         // fetch fault: advance directly to next instruction (fault handler)
         advanceInst(fault);
     }
+
+    numCycles += curTick - previousTick;
+    previousTick = curTick;
 }
 
 
@@ -453,6 +480,9 @@ TimingSimpleCPU::completeIfetch(Packet *pkt)
 
     delete pkt->req;
     delete pkt;
+
+    numCycles += curTick - previousTick;
+    previousTick = curTick;
 
     if (getState() == SimObject::Draining) {
         completeDrain();
@@ -533,14 +563,8 @@ TimingSimpleCPU::completeDataAccess(Packet *pkt)
     assert(_status == DcacheWaitResponse);
     _status = Running;
 
-    if (getState() == SimObject::Draining) {
-        completeDrain();
-
-        delete pkt->req;
-        delete pkt;
-
-        return;
-    }
+    numCycles += curTick - previousTick;
+    previousTick = curTick;
 
     Fault fault = curStaticInst->completeAcc(pkt, this, traceData);
 
@@ -552,6 +576,14 @@ TimingSimpleCPU::completeDataAccess(Packet *pkt)
     delete pkt;
 
     postExecute();
+
+    if (getState() == SimObject::Draining) {
+        advancePC(fault);
+        completeDrain();
+
+        return;
+    }
+
     advanceInst(fault);
 }
 
