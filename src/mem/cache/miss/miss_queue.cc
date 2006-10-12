@@ -352,7 +352,7 @@ MissQueue::setPrefetcher(BasePrefetcher *_prefetcher)
 MSHR*
 MissQueue::allocateMiss(Packet * &pkt, int size, Tick time)
 {
-    MSHR* mshr = mq.allocate(pkt, blkSize);
+    MSHR* mshr = mq.allocate(pkt, size);
     mshr->order = order++;
     if (!pkt->req->isUncacheable() ){//&& !pkt->isNoAllocate()) {
         // Mark this as a cache line fill
@@ -515,6 +515,14 @@ MissQueue::setBusCmd(Packet * &pkt, Packet::Command cmd)
     assert(pkt->senderState != 0);
     MSHR * mshr = (MSHR*)pkt->senderState;
     mshr->originalCmd = pkt->cmd;
+    if (cmd == Packet::UpgradeReq || cmd == Packet::InvalidateReq) {
+        pkt->flags |= NO_ALLOCATE;
+        pkt->flags &= ~CACHE_LINE_FILL;
+    }
+    else if (!pkt->req->isUncacheable() && !pkt->isNoAllocate() &&
+             (cmd & (1 << 6)/*NeedsResponse*/)) {
+        pkt->flags |= CACHE_LINE_FILL;
+    }
     if (pkt->isCacheFill() || pkt->isNoAllocate())
         pkt->cmd = cmd;
 }

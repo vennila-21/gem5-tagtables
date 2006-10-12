@@ -71,7 +71,11 @@ MemTest::CpuPort::recvAtomic(Packet *pkt)
 void
 MemTest::CpuPort::recvFunctional(Packet *pkt)
 {
-    memtest->completeRequest(pkt);
+    //Do nothing if we see one come through
+    if (curTick != 0)//Supress warning durring initialization
+        warn("Functional Writes not implemented in MemTester\n");
+    //Need to find any response values that intersect and update
+    return;
 }
 
 void
@@ -89,6 +93,20 @@ MemTest::CpuPort::recvRetry()
     memtest->doRetry();
 }
 
+void
+MemTest::sendPkt(Packet *pkt) {
+    if (atomic) {
+        cachePort.sendAtomic(pkt);
+        pkt->makeAtomicResponse();
+        completeRequest(pkt);
+    }
+    else if (!cachePort.sendTiming(pkt)) {
+        accessRetry = true;
+        retryPkt = pkt;
+    }
+
+}
+
 MemTest::MemTest(const string &name,
 //		 MemInterface *_cache_interface,
 //		 PhysicalMemory *main_mem,
@@ -101,7 +119,8 @@ MemTest::MemTest(const string &name,
                  unsigned _percentSourceUnaligned,
                  unsigned _percentDestUnaligned,
                  Addr _traceAddr,
-                 Counter _max_loads)
+                 Counter _max_loads,
+                 bool _atomic)
     : MemObject(name),
       tickEvent(this),
       cachePort("test", this),
@@ -117,7 +136,8 @@ MemTest::MemTest(const string &name,
       nextProgressMessage(_progressInterval),
       percentSourceUnaligned(_percentSourceUnaligned),
       percentDestUnaligned(percentDestUnaligned),
-      maxLoads(_max_loads)
+      maxLoads(_max_loads),
+      atomic(_atomic)
 {
     vector<string> cmd;
     cmd.push_back("/bin/ls");
@@ -325,7 +345,7 @@ MemTest::tick()
     } else {
         paddr = ((base) ? baseAddr1 : baseAddr2) + offset;
     }
-    // bool probe = (random() % 2 == 1) && !req->isUncacheable();
+    //bool probe = (random() % 2 == 1) && !req->isUncacheable();
     bool probe = false;
 
     paddr &= ~((1 << access_size) - 1);
@@ -340,7 +360,11 @@ MemTest::tick()
         //For now we only allow one outstanding request per addreess per tester
         //This means we assume CPU does write forwarding to reads that alias something
         //in the cpu store buffer.
-        if (outstandingAddrs.find(paddr) != outstandingAddrs.end()) return;
+        if (outstandingAddrs.find(paddr) != outstandingAddrs.end()) {
+            delete result;
+            delete req;
+            return;
+        }
         else outstandingAddrs.insert(paddr);
 
         // ***** NOTE FOR RON: I'm not sure how to access checkMem. - Kevin
@@ -364,13 +388,10 @@ MemTest::tick()
 
         if (probe) {
             cachePort.sendFunctional(pkt);
-//	    completeRequest(pkt, result);
+            completeRequest(pkt);
         } else {
 //	    req->completionEvent = new MemCompleteEvent(req, result, this);
-            if (!cachePort.sendTiming(pkt)) {
-                accessRetry = true;
-                retryPkt = pkt;
-            }
+            sendPkt(pkt);
         }
     } else {
         // write
@@ -378,7 +399,12 @@ MemTest::tick()
         //For now we only allow one outstanding request per addreess per tester
         //This means we assume CPU does write forwarding to reads that alias something
         //in the cpu store buffer.
-        if (outstandingAddrs.find(paddr) != outstandingAddrs.end()) return;
+        if (outstandingAddrs.find(paddr) != outstandingAddrs.end()) {
+            delete [] result;
+            delete req;
+            return;
+        }
+
         else outstandingAddrs.insert(paddr);
 
 /*
@@ -405,13 +431,10 @@ MemTest::tick()
 
         if (probe) {
             cachePort.sendFunctional(pkt);
-//	    completeRequest(req, NULL);
+            completeRequest(pkt);
         } else {
 //	    req->completionEvent = new MemCompleteEvent(req, NULL, this);
-            if (!cachePort.sendTiming(pkt)) {
-                accessRetry = true;
-                retryPkt = pkt;
-            }
+            sendPkt(pkt);
         }
     }
 /*    else {
@@ -483,6 +506,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(MemTest)
     Param<unsigned> percent_dest_unaligned;
     Param<Addr> trace_addr;
     Param<Counter> max_loads;
+    Param<bool> atomic;
 
 END_DECLARE_SIM_OBJECT_PARAMS(MemTest)
 
@@ -502,7 +526,8 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(MemTest)
     INIT_PARAM(percent_dest_unaligned,
                "percent of copy dest address that are unaligned"),
     INIT_PARAM(trace_addr, "address to trace"),
-    INIT_PARAM(max_loads, "terminate when we have reached this load count")
+                              INIT_PARAM(max_loads, "terminate when we have reached this load count"),
+    INIT_PARAM(atomic, "Is the tester testing atomic mode (or timing)")
 
 END_INIT_SIM_OBJECT_PARAMS(MemTest)
 
@@ -513,7 +538,7 @@ CREATE_SIM_OBJECT(MemTest)
                        /*check_mem,*/ memory_size, percent_reads, /*percent_copies,*/
                        percent_uncacheable, progress_interval,
                        percent_source_unaligned, percent_dest_unaligned,
-                       trace_addr, max_loads);
+                       trace_addr, max_loads, atomic);
 }
 
 REGISTER_SIM_OBJECT("MemTest", MemTest)

@@ -112,6 +112,8 @@ class BaseCache : public MemObject
 
         bool isCpuSide;
 
+        bool waitingOnRetry;
+
         std::list<Packet *> drainList;
 
         Packet *cshrRetry;
@@ -209,10 +211,6 @@ class BaseCache : public MemObject
     uint8_t slaveRequests;
 
   protected:
-
-    /** True if this cache is connected to the CPU. */
-    bool topLevelCache;
-
 
     /** Stores time the cache blocked for statistics. */
     Tick blockedCycle;
@@ -335,7 +333,7 @@ class BaseCache : public MemObject
      */
     BaseCache(const std::string &name, Params &params)
         : MemObject(name), blocked(0), blockedSnoop(0), masterRequests(0),
-          slaveRequests(0), topLevelCache(false),  blkSize(params.blkSize),
+          slaveRequests(0), blkSize(params.blkSize),
           missCount(params.maxMisses)
     {
         //Start ports at null if more than one is created we should panic
@@ -353,15 +351,6 @@ class BaseCache : public MemObject
     int getBlockSize() const
     {
         return blkSize;
-    }
-
-    /**
-     * Returns true if this cache is connect to the CPU.
-     * @return True if this is a L1 cache.
-     */
-    bool isTopLevel()
-    {
-        return topLevelCache;
     }
 
     /**
@@ -392,11 +381,13 @@ class BaseCache : public MemObject
             blocked_causes[cause]++;
             blockedCycle = curTick;
         }
+        int old_state = blocked;
         if (!(blocked & flag)) {
             //Wasn't already blocked for this cause
             blocked |= flag;
             DPRINTF(Cache,"Blocking for cause %s\n", cause);
-            cpuSidePort->setBlocked();
+            if (!old_state)
+                cpuSidePort->setBlocked();
         }
     }
 
@@ -408,10 +399,12 @@ class BaseCache : public MemObject
     void setBlockedForSnoop(BlockedCause cause)
     {
         uint8_t flag = 1 << cause;
-        if (!(blocked & flag)) {
+        uint8_t old_state = blockedSnoop;
+        if (!(blockedSnoop & flag)) {
             //Wasn't already blocked for this cause
             blockedSnoop |= flag;
-            memSidePort->setBlocked();
+            if (!old_state)
+                memSidePort->setBlocked();
         }
     }
 
@@ -461,7 +454,7 @@ class BaseCache : public MemObject
      */
     void setMasterRequest(RequestCause cause, Tick time)
     {
-        if (!doMasterRequest())
+        if (!doMasterRequest() && !memSidePort->waitingOnRetry)
         {
             BaseCache::CacheEvent * reqCpu = new BaseCache::CacheEvent(memSidePort);
             reqCpu->schedule(time);
@@ -523,6 +516,10 @@ class BaseCache : public MemObject
             CacheEvent *reqCpu = new CacheEvent(cpuSidePort, pkt);
             reqCpu->schedule(time);
         }
+        else {
+            if (pkt->cmd == Packet::Writeback) delete pkt->req;
+            delete pkt;
+        }
     }
 
     /**
@@ -539,6 +536,10 @@ class BaseCache : public MemObject
             CacheEvent *reqCpu = new CacheEvent(cpuSidePort, pkt);
             reqCpu->schedule(time);
         }
+        else {
+            if (pkt->cmd == Packet::Writeback) delete pkt->req;
+            delete pkt;
+        }
     }
 
     /**
@@ -547,8 +548,6 @@ class BaseCache : public MemObject
      */
     void respondToSnoop(Packet *pkt, Tick time)
     {
-//        assert("Implement\n" && 0);
-//	mi->respond(pkt,curTick + hitLatency);
         assert (pkt->needsResponse());
         CacheEvent *reqMem = new CacheEvent(memSidePort, pkt);
         reqMem->schedule(time);
@@ -571,15 +570,7 @@ class BaseCache : public MemObject
         {
             //This is where snoops get updated
             AddrRangeList dummy;
-//            if (!topLevelCache)
-//            {
-                cpuSidePort->getPeerAddressRanges(dummy, snoop);
-//            }
-//            else
-//            {
-//                snoop.push_back(RangeSize(0,-1));
-//            }
-
+            cpuSidePort->getPeerAddressRanges(dummy, snoop);
             return;
         }
     }

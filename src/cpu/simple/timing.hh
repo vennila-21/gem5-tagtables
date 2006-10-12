@@ -167,6 +167,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
     Packet *dcache_pkt;
 
     int cpu_id;
+    Tick previousTick;
 
   public:
 
