@@ -61,7 +61,8 @@ class MemTest : public MemObject
             unsigned _percentSourceUnaligned,
             unsigned _percentDestUnaligned,
             Addr _traceAddr,
-            Counter _max_loads);
+            Counter _max_loads,
+            bool _atomic);
 
     virtual void init();
 
@@ -113,7 +114,7 @@ class MemTest : public MemObject
 
         virtual void getDeviceAddressRanges(AddrRangeList &resp,
             AddrRangeList &snoop)
-        { resp.clear(); snoop.clear(); }
+        { resp.clear(); snoop.clear(); snoop.push_back(RangeSize(0,-1)); }
     };
 
     CpuPort cachePort;
@@ -175,12 +176,17 @@ class MemTest : public MemObject
 
     uint64_t numReads;
     uint64_t maxLoads;
+
+    bool atomic;
+
     Stats::Scalar<> numReadsStat;
     Stats::Scalar<> numWritesStat;
     Stats::Scalar<> numCopiesStat;
 
     // called by MemCompleteEvent::process()
     void completeRequest(Packet *pkt);
+
+    void sendPkt(Packet *pkt);
 
     void doRetry();
 

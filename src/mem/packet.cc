@@ -34,14 +34,26 @@
  * Definition of the Packet Class, a packet is a transaction occuring
  * between a single level of the memory heirarchy (ie L1->L2).
  */
+
+#include <iostream>
 #include "base/misc.hh"
 #include "mem/packet.hh"
+#include "base/trace.hh"
 
 static const std::string ReadReqString("ReadReq");
 static const std::string WriteReqString("WriteReq");
-static const std::string WriteReqNoAckString("WriteReqNoAck");
+static const std::string WriteReqNoAckString("WriteReqNoAck|Writeback");
 static const std::string ReadRespString("ReadResp");
 static const std::string WriteRespString("WriteResp");
+static const std::string SoftPFReqString("SoftPFReq");
+static const std::string SoftPFRespString("SoftPFResp");
+static const std::string HardPFReqString("HardPFReq");
+static const std::string HardPFRespString("HardPFResp");
+static const std::string InvalidateReqString("InvalidateReq");
+static const std::string WriteInvalidateReqString("WriteInvalidateReq");
+static const std::string UpgradeReqString("UpgradeReq");
+static const std::string ReadExReqString("ReadExReq");
+static const std::string ReadExRespString("ReadExResp");
 static const std::string OtherCmdString("<other>");
 
 const std::string &
@@ -53,6 +65,15 @@ Packet::cmdString() const
       case WriteReqNoAck:   return WriteReqNoAckString;
       case ReadResp:        return ReadRespString;
       case WriteResp:       return WriteRespString;
+      case SoftPFReq:       return SoftPFReqString;
+      case SoftPFResp:      return SoftPFRespString;
+      case HardPFReq:       return HardPFReqString;
+      case HardPFResp:      return HardPFRespString;
+      case InvalidateReq:   return InvalidateReqString;
+      case WriteInvalidateReq:return WriteInvalidateReqString;
+      case UpgradeReq:      return UpgradeReqString;
+      case ReadExReq:       return ReadExReqString;
+      case ReadExResp:      return ReadExRespString;
       default:              return OtherCmdString;
     }
 }
@@ -66,6 +87,15 @@ Packet::cmdIdxToString(Packet::Command idx)
       case WriteReqNoAck:   return WriteReqNoAckString;
       case ReadResp:        return ReadRespString;
       case WriteResp:       return WriteRespString;
+      case SoftPFReq:       return SoftPFReqString;
+      case SoftPFResp:      return SoftPFRespString;
+      case HardPFReq:       return HardPFReqString;
+      case HardPFResp:      return HardPFRespString;
+      case InvalidateReq:   return InvalidateReqString;
+      case WriteInvalidateReq:return WriteInvalidateReqString;
+      case UpgradeReq:      return UpgradeReqString;
+      case ReadExReq:       return ReadExReqString;
+      case ReadExResp:      return ReadExRespString;
       default:              return OtherCmdString;
     }
 }
@@ -102,19 +132,103 @@ bool
 Packet::intersect(Packet *p)
 {
     Addr s1 = getAddr();
-    Addr e1 = getAddr() + getSize();
+    Addr e1 = getAddr() + getSize() - 1;
     Addr s2 = p->getAddr();
-    Addr e2 = p->getAddr() + p->getSize();
+    Addr e2 = p->getAddr() + p->getSize() - 1;
 
-    if (s1 >= s2 && s1 < e2)
-        return true;
-    if (e1 >= s2 && e1 < e2)
-        return true;
-    return false;
+    return !(s1 > e2 || e1 < s2);
 }
 
 bool
 fixPacket(Packet *func, Packet *timing)
 {
-    panic("Need to implement!");
+    Addr funcStart      = func->getAddr();
+    Addr funcEnd        = func->getAddr() + func->getSize() - 1;
+    Addr timingStart    = timing->getAddr();
+    Addr timingEnd      = timing->getAddr() + timing->getSize() - 1;
+
+    assert(!(funcStart > timingEnd || timingStart < funcEnd));
+
+    if (DTRACE(FunctionalAccess)) {
+       DebugOut() << func;
+       DebugOut() << timing;
+    }
+
+    // this packet can't solve our problem, continue on
+    if (!timing->hasData())
+        return true;
+
+    if (func->isRead()) {
+        if (funcStart >= timingStart && funcEnd <= timingEnd) {
+            func->allocate();
+            memcpy(func->getPtr<uint8_t>(), timing->getPtr<uint8_t>() +
+                    funcStart - timingStart, func->getSize());
+            func->result = Packet::Success;
+            return false;
+        } else {
+            // In this case the timing packet only partially satisfies the
+            // requset, so we would need more information to make this work.
+            // Like bytes valid in the packet or something, so the request could
+            // continue and get this bit of possibly newer data along with the
+            // older data not written to yet.
+            panic("Timing packet only partially satisfies the functional"
+                    "request. Now what?");
+        }
+    } else if (func->isWrite()) {
+        if (funcStart >= timingStart) {
+            memcpy(timing->getPtr<uint8_t>() + (funcStart - timingStart),
+                   func->getPtr<uint8_t>(),
+                   funcStart - std::min(funcEnd, timingEnd));
+        } else { // timingStart > funcStart
+            memcpy(timing->getPtr<uint8_t>(),
+                   func->getPtr<uint8_t>() + (timingStart - funcStart),
+                   timingStart - std::min(funcEnd, timingEnd));
+        }
+        // we always want to keep going with a write
+        return true;
+    } else
+        panic("Don't know how to handle command type %#x\n",
+                func->cmdToIndex());
+
 }
+
+
+std::ostream &
+operator<<(std::ostream &o, const Packet &p)
+{
+
+    o << "[0x";
+    o.setf(std::ios_base::hex, std::ios_base::showbase);
+    o <<  p.getAddr();
+    o.unsetf(std::ios_base::hex| std::ios_base::showbase);
+    o <<  ":";
+    o.setf(std::ios_base::hex, std::ios_base::showbase);
+    o <<  p.getAddr() + p.getSize() - 1 << "] ";
+    o.unsetf(std::ios_base::hex| std::ios_base::showbase);
+
+    if (p.result == Packet::Success)
+        o << "Successful ";
+    if (p.result == Packet::BadAddress)
+        o << "BadAddress ";
+    if (p.result == Packet::Nacked)
+        o << "Nacked ";
+    if (p.result == Packet::Unknown)
+        o << "Inflight ";
+
+    if (p.isRead())
+        o << "Read ";
+    if (p.isWrite())
+        o << "Read ";
+    if (p.isInvalidate())
+        o << "Read ";
+    if (p.isRequest())
+        o << "Request ";
+    if (p.isResponse())
+        o << "Response ";
+    if (p.hasData())
+        o << "w/Data ";
+
+    o << std::endl;
+    return o;
+}
+

@@ -195,18 +195,22 @@ PhysicalMemory::checkLockedAddrList(Request *req)
 void
 PhysicalMemory::doFunctionalAccess(Packet *pkt)
 {
-    assert(pkt->getAddr() + pkt->getSize() < params()->addrRange.size());
+    assert(pkt->getAddr() + pkt->getSize() <= params()->addrRange.size());
 
     if (pkt->isRead()) {
         if (pkt->req->isLocked()) {
             trackLoadLocked(pkt->req);
         }
+        DPRINTF(MemoryAccess, "Performing Read of size %i on address 0x%x\n",
+                pkt->getSize(), pkt->getAddr());
         memcpy(pkt->getPtr<uint8_t>(),
                pmemAddr + pkt->getAddr() - params()->addrRange.start,
                pkt->getSize());
     }
     else if (pkt->isWrite()) {
         if (writeOK(pkt->req)) {
+            DPRINTF(MemoryAccess, "Performing Write of size %i on address 0x%x\n",
+                    pkt->getSize(), pkt->getAddr());
             memcpy(pmemAddr + pkt->getAddr() - params()->addrRange.start,
                    pkt->getPtr<uint8_t>(), pkt->getSize());
         }

@@ -46,13 +46,20 @@
 #include "mem/packet.hh"
 #include "mem/port.hh"
 #include "mem/request.hh"
+#include "sim/eventq.hh"
 
 class Bus : public MemObject
 {
     /** a globally unique id for this bus. */
     int busId;
+    /** the clock speed for the bus */
+    int clock;
+    /** the width of the bus in bytes */
+    int width;
+    /** the next tick at which the bus will be idle */
+    Tick tickNextIdle;
 
-    static const int defaultId = -1;
+    static const int defaultId = -3; //Make it unique from Broadcast
 
     struct DevMap {
         int portId;
@@ -100,7 +107,7 @@ class Bus : public MemObject
     std::vector<int> findSnoopPorts(Addr addr, int id);
 
     /** Snoop all relevant ports atomicly. */
-    void atomicSnoop(Packet *pkt);
+    Tick atomicSnoop(Packet *pkt);
 
     /** Snoop all relevant ports functionally. */
     void functionalSnoop(Packet *pkt);
@@ -118,11 +125,15 @@ class Bus : public MemObject
      */
     void addressRanges(AddrRangeList &resp, AddrRangeList &snoop, int id);
 
+    /** Occupy the bus with transmitting the packet pkt */
+    void occupyBus(PacketPtr pkt);
 
     /** Declaration of the buses port type, one will be instantiated for each
         of the interfaces connecting to the bus. */
     class BusPort : public Port
     {
+        bool _onRetryList;
+
         /** A pointer to the bus to which this port belongs. */
         Bus *bus;
 
@@ -133,8 +144,14 @@ class Bus : public MemObject
 
         /** Constructor for the BusPort.*/
         BusPort(const std::string &_name, Bus *_bus, int _id)
-            : Port(_name), bus(_bus), id(_id)
+            : Port(_name), _onRetryList(false), bus(_bus), id(_id)
         { }
+
+        bool onRetryList()
+        { return _onRetryList; }
+
+        void onRetryList(bool newVal)
+        { _onRetryList = newVal; }
 
       protected:
 
@@ -176,16 +193,52 @@ class Bus : public MemObject
 
     };
 
+    class BusFreeEvent : public Event
+    {
+        Bus * bus;
+
+      public:
+        BusFreeEvent(Bus * _bus);
+        void process();
+        const char *description();
+    };
+
+    BusFreeEvent busIdle;
+
+    bool inRetry;
+
     /** An array of pointers to the peer port interfaces
         connected to this bus.*/
-    std::vector<Port*> interfaces;
+    std::vector<BusPort*> interfaces;
 
     /** An array of pointers to ports that retry should be called on because the
      * original send failed for whatever reason.*/
-    std::list<Port*> retryList;
+    std::list<BusPort*> retryList;
+
+    void addToRetryList(BusPort * port)
+    {
+        if (!inRetry) {
+            // The device wasn't retrying a packet, or wasn't at an appropriate
+            // time.
+            assert(!port->onRetryList());
+            port->onRetryList(true);
+            retryList.push_back(port);
+        } else {
+            if (port->onRetryList()) {
+                // The device was retrying a packet. It didn't work, so we'll leave
+                // it at the head of the retry list.
+                assert(port == retryList.front());
+                inRetry = false;
+            }
+            else {
+                port->onRetryList(true);
+                retryList.push_back(port);
+            }
+        }
+    }
 
     /** Port that handles requests that don't match any of the interfaces.*/
-    Port *defaultPort;
+    BusPort *defaultPort;
 
   public:
 
@@ -194,8 +247,16 @@ class Bus : public MemObject
 
     virtual void init();
 
-    Bus(const std::string &n, int bus_id)
-        : MemObject(n), busId(bus_id), defaultPort(NULL)  {}
+    Bus(const std::string &n, int bus_id, int _clock, int _width)
+        : MemObject(n), busId(bus_id), clock(_clock), width(_width),
+        tickNextIdle(0), busIdle(this), inRetry(false), defaultPort(NULL)
+    {
+        //Both the width and clock period must be positive
+        if (width <= 0)
+            fatal("Bus width must be positive\n");
+        if (clock <= 0)
+            fatal("Bus clock period must be positive\n");
+    }
 
 };
 

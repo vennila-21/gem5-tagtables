@@ -58,10 +58,8 @@ typedef std::list<PacketPtr> PacketList;
 #define NO_ALLOCATE 1 << 5
 #define SNOOP_COMMIT 1 << 6
 
-//For statistics we need max number of commands, hard code it at
-//20 for now.  @todo fix later
-#define NUM_MEM_CMDS 1 << 9
-
+//for now.  @todo fix later
+#define NUM_MEM_CMDS 1 << 11
 /**
  * A Packet is used to encapsulate a transfer between two objects in
  * the memory system (e.g., the L1 and L2 cache).  (In contrast, a
@@ -94,7 +92,6 @@ class Packet
      *   be called on it rather than simply delete.*/
     bool arrayData;
 
-
     /** The address of the request.  This address could be virtual or
      *   physical, depending on the system configuration. */
     Addr addr;
@@ -125,6 +122,12 @@ class Packet
 
     /** Used to calculate latencies for each packet.*/
     Tick time;
+
+    /** The time at which the packet will be fully transmitted */
+    Tick finishTime;
+
+    /** The time at which the first chunk of the packet will be transmitted */
+    Tick firstWordTime;
 
     /** The special destination address indicating that the packet
      *   should be routed based on its address. */
@@ -164,17 +167,21 @@ class Packet
 
   private:
     /** List of command attributes. */
+    // If you add a new CommandAttribute, make sure to increase NUM_MEM_CMDS
+    // as well.
     enum CommandAttribute
     {
-        IsRead		= 1 << 0,
-        IsWrite		= 1 << 1,
-        IsPrefetch	= 1 << 2,
-        IsInvalidate	= 1 << 3,
-        IsRequest	= 1 << 4,
-        IsResponse 	= 1 << 5,
-        NeedsResponse	= 1 << 6,
+        IsRead                = 1 << 0,
+        IsWrite                = 1 << 1,
+        IsPrefetch        = 1 << 2,
+        IsInvalidate        = 1 << 3,
+        IsRequest        = 1 << 4,
+        IsResponse         = 1 << 5,
+        NeedsResponse        = 1 << 6,
         IsSWPrefetch    = 1 << 7,
-        IsHWPrefetch    = 1 << 8
+        IsHWPrefetch    = 1 << 8,
+        IsUpgrade       = 1 << 9,
+        HasData                = 1 << 10
     };
 
   public:
@@ -182,22 +189,24 @@ class Packet
     enum Command
     {
         InvalidCmd      = 0,
-        ReadReq		= IsRead  | IsRequest | NeedsResponse,
-        WriteReq	= IsWrite | IsRequest | NeedsResponse,
-        WriteReqNoAck	= IsWrite | IsRequest,
-        ReadResp	= IsRead  | IsResponse | NeedsResponse,
-        WriteResp	= IsWrite | IsResponse | NeedsResponse,
-        Writeback       = IsWrite | IsRequest,
+        ReadReq                = IsRead  | IsRequest | NeedsResponse,
+        WriteReq        = IsWrite | IsRequest | NeedsResponse | HasData,
+        WriteReqNoAck        = IsWrite | IsRequest | HasData,
+        ReadResp        = IsRead  | IsResponse | NeedsResponse | HasData,
+        WriteResp        = IsWrite | IsResponse | NeedsResponse,
+        Writeback       = IsWrite | IsRequest | HasData,
         SoftPFReq       = IsRead  | IsRequest | IsSWPrefetch | NeedsResponse,
         HardPFReq       = IsRead  | IsRequest | IsHWPrefetch | NeedsResponse,
-        SoftPFResp      = IsRead  | IsResponse | IsSWPrefetch | NeedsResponse,
-        HardPFResp      = IsRead  | IsResponse | IsHWPrefetch | NeedsResponse,
+        SoftPFResp      = IsRead  | IsResponse | IsSWPrefetch
+                                | NeedsResponse | HasData,
+        HardPFResp      = IsRead  | IsResponse | IsHWPrefetch
+                                    | NeedsResponse | HasData,
         InvalidateReq   = IsInvalidate | IsRequest,
-        WriteInvalidateReq = IsWrite | IsInvalidate | IsRequest,
-        UpgradeReq      = IsInvalidate | IsRequest | NeedsResponse,
-        UpgradeResp     = IsInvalidate | IsResponse | NeedsResponse,
+        WriteInvalidateReq = IsWrite | IsInvalidate | IsRequest | HasData,
+        UpgradeReq      = IsInvalidate | IsRequest | IsUpgrade,
         ReadExReq       = IsRead | IsInvalidate | IsRequest | NeedsResponse,
-        ReadExResp      = IsRead | IsInvalidate | IsResponse | NeedsResponse
+        ReadExResp      = IsRead | IsInvalidate | IsResponse
+                                | NeedsResponse | HasData
     };
 
     /** Return the string name of the cmd field (for debugging and
@@ -213,16 +222,17 @@ class Packet
     /** The command field of the packet. */
     Command cmd;
 
-    bool isRead() 	 { return (cmd & IsRead)  != 0; }
-    bool isWrite()       { return (cmd & IsWrite) != 0; }
-    bool isRequest()	 { return (cmd & IsRequest)  != 0; }
-    bool isResponse()	 { return (cmd & IsResponse) != 0; }
-    bool needsResponse() { return (cmd & NeedsResponse) != 0; }
-    bool isInvalidate()  { return (cmd & IsInvalidate) != 0; }
+    bool isRead() const         { return (cmd & IsRead)  != 0; }
+    bool isWrite()  const       { return (cmd & IsWrite) != 0; }
+    bool isRequest() const      { return (cmd & IsRequest)  != 0; }
+    bool isResponse() const     { return (cmd & IsResponse) != 0; }
+    bool needsResponse() const  { return (cmd & NeedsResponse) != 0; }
+    bool isInvalidate() const   { return (cmd & IsInvalidate) != 0; }
+    bool hasData() const        { return (cmd & HasData) != 0; }
 
-    bool isCacheFill() { return (flags & CACHE_LINE_FILL) != 0; }
-    bool isNoAllocate() { return (flags & NO_ALLOCATE) != 0; }
-    bool isCompressed() { return (flags & COMPRESSED) != 0; }
+    bool isCacheFill() const    { return (flags & CACHE_LINE_FILL) != 0; }
+    bool isNoAllocate() const   { return (flags & NO_ALLOCATE) != 0; }
+    bool isCompressed() const   { return (flags & COMPRESSED) != 0; }
 
     bool nic_pkt() { assert("Unimplemented\n" && 0); return false; }
 
@@ -320,6 +330,10 @@ class Packet
         int icmd = (int)cmd;
         icmd &= ~(IsRequest);
         icmd |= IsResponse;
+        if (isRead())
+            icmd |= HasData;
+        if (isWrite())
+            icmd &= ~HasData;
         cmd = (Command)icmd;
         dest = src;
         srcValid = false;
@@ -334,6 +348,10 @@ class Packet
         int icmd = (int)cmd;
         icmd &= ~(IsRequest);
         icmd |= IsResponse;
+        if (isRead())
+            icmd |= HasData;
+        if (isWrite())
+            icmd &= ~HasData;
         cmd = (Command)icmd;
     }
 
@@ -383,5 +401,14 @@ class Packet
     bool intersect(Packet *p);
 };
 
+
+/** This function given a functional packet and a timing packet either satisfies
+ * the timing packet, or updates the timing packet to reflect the updated state
+ * in the timing packet. It returns if the functional packet should continue to
+ * traverse the memory hierarchy or not.
+ */
 bool fixPacket(Packet *func, Packet *timing);
+
+std::ostream & operator<<(std::ostream &o, const Packet &p);
+
 #endif //__MEM_PACKET_HH
