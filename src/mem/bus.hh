@@ -59,7 +59,7 @@ class Bus : public MemObject
     /** the next tick at which the bus will be idle */
     Tick tickNextIdle;
 
-    static const int defaultId = -1;
+    static const int defaultId = -3; //Make it unique from Broadcast
 
     struct DevMap {
         int portId;
@@ -107,7 +107,7 @@ class Bus : public MemObject
     std::vector<int> findSnoopPorts(Addr addr, int id);
 
     /** Snoop all relevant ports atomicly. */
-    void atomicSnoop(Packet *pkt);
+    Tick atomicSnoop(Packet *pkt);
 
     /** Snoop all relevant ports functionally. */
     void functionalSnoop(Packet *pkt);
@@ -224,18 +224,21 @@ class Bus : public MemObject
             port->onRetryList(true);
             retryList.push_back(port);
         } else {
-            // The device was retrying a packet. It didn't work, so we'll leave
-            // it at the head of the retry list.
-            inRetry = false;
-
-/*	    // We shouldn't be receiving a packet from one port when a different
-            // one is retrying.
-            assert(port == retryingPort);*/
+            if (port->onRetryList()) {
+                // The device was retrying a packet. It didn't work, so we'll leave
+                // it at the head of the retry list.
+                assert(port == retryList.front());
+                inRetry = false;
+            }
+            else {
+                port->onRetryList(true);
+                retryList.push_back(port);
+            }
         }
     }
 
     /** Port that handles requests that don't match any of the interfaces.*/
-    Port *defaultPort;
+    BusPort *defaultPort;
 
   public:
 
