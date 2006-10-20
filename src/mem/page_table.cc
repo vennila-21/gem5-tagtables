@@ -167,12 +167,16 @@ void
 PageTable::serialize(std::ostream &os)
 {
     paramOut(os, "ptable.size", pTable.size());
+
     int count = 0;
 
-    m5::hash_map<Addr,Addr>::iterator iter;
-    while (iter != pTable.end()) {
-        paramOut(os, csprintf("ptable.entry%dvaddr", count),iter->first);
-        paramOut(os, csprintf("ptable.entry%dpaddr", count),iter->second);
+    m5::hash_map<Addr,Addr>::iterator iter = pTable.begin();
+    m5::hash_map<Addr,Addr>::iterator end = pTable.end();
+    while (iter != end) {
+        paramOut(os, csprintf("ptable.entry%dvaddr", count), iter->first);
+        paramOut(os, csprintf("ptable.entry%dpaddr", count), iter->second);
+
+        ++iter;
         ++count;
     }
     assert(count == pTable.size());

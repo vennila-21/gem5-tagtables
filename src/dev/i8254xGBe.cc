@@ -78,7 +78,7 @@ IGbE::IGbE(Params *p)
 
 
 Tick
-IGbE::writeConfig(Packet *pkt)
+IGbE::writeConfig(PacketPtr pkt)
 {
     int offset = pkt->getAddr() & PCI_CONFIG_SIZE;
     if (offset < PCI_DEVICE_SPECIFIC)
@@ -94,7 +94,7 @@ IGbE::writeConfig(Packet *pkt)
 }
 
 Tick
-IGbE::read(Packet *pkt)
+IGbE::read(PacketPtr pkt)
 {
     int bar;
     Addr daddr;
@@ -153,7 +153,7 @@ IGbE::read(Packet *pkt)
 }
 
 Tick
-IGbE::write(Packet *pkt)
+IGbE::write(PacketPtr pkt)
 {
     int bar;
     Addr daddr;

@@ -38,42 +38,42 @@
 
 #include "base/misc.hh"
 #include "base/statistics.hh"
-//#include "cpu/simple_thread.hh"
 #include "cpu/memtest/memtest.hh"
+//#include "cpu/simple_thread.hh"
 //#include "mem/cache/base_cache.hh"
+#include "mem/mem_object.hh"
+#include "mem/port.hh"
+#include "mem/packet.hh"
 //#include "mem/physical.hh"
+#include "mem/request.hh"
 #include "sim/builder.hh"
 #include "sim/sim_events.hh"
 #include "sim/stats.hh"
-#include "mem/packet.hh"
-#include "mem/request.hh"
-#include "mem/port.hh"
-#include "mem/mem_object.hh"
 
 using namespace std;
 
 int TESTER_ALLOCATOR=0;
 
 bool
-MemTest::CpuPort::recvTiming(Packet *pkt)
+MemTest::CpuPort::recvTiming(PacketPtr pkt)
 {
     memtest->completeRequest(pkt);
     return true;
 }
 
 Tick
-MemTest::CpuPort::recvAtomic(Packet *pkt)
+MemTest::CpuPort::recvAtomic(PacketPtr pkt)
 {
     panic("MemTest doesn't expect recvAtomic callback!");
     return curTick;
 }
 
 void
-MemTest::CpuPort::recvFunctional(Packet *pkt)
+MemTest::CpuPort::recvFunctional(PacketPtr pkt)
 {
     //Do nothing if we see one come through
-    if (curTick != 0)//Supress warning durring initialization
-        warn("Functional Writes not implemented in MemTester\n");
+//    if (curTick != 0)//Supress warning durring initialization
+//        warn("Functional Writes not implemented in MemTester\n");
     //Need to find any response values that intersect and update
     return;
 }
@@ -94,7 +94,7 @@ MemTest::CpuPort::recvRetry()
 }
 
 void
-MemTest::sendPkt(Packet *pkt) {
+MemTest::sendPkt(PacketPtr pkt) {
     if (atomic) {
         cachePort.sendAtomic(pkt);
         pkt->makeAtomicResponse();
@@ -204,7 +204,7 @@ printData(ostream &os, uint8_t *data, int nbytes)
 }
 
 void
-MemTest::completeRequest(Packet *pkt)
+MemTest::completeRequest(PacketPtr pkt)
 {
     MemTestSenderState *state =
         dynamic_cast<MemTestSenderState *>(pkt->senderState);
@@ -345,8 +345,8 @@ MemTest::tick()
     } else {
         paddr = ((base) ? baseAddr1 : baseAddr2) + offset;
     }
-    //bool probe = (random() % 2 == 1) && !req->isUncacheable();
-    bool probe = false;
+    bool probe = (random() % 2 == 1) && !(flags & UNCACHEABLE);
+    //bool probe = false;
 
     paddr &= ~((1 << access_size) - 1);
     req->setPhys(paddr, 1 << access_size, flags);
@@ -381,13 +381,14 @@ MemTest::tick()
                  << dec << curTick << endl;
         }
 
-        Packet *pkt = new Packet(req, Packet::ReadReq, Packet::Broadcast);
+        PacketPtr pkt = new Packet(req, Packet::ReadReq, Packet::Broadcast);
         pkt->dataDynamicArray(new uint8_t[req->getSize()]);
         MemTestSenderState *state = new MemTestSenderState(result);
         pkt->senderState = state;
 
         if (probe) {
             cachePort.sendFunctional(pkt);
+            pkt->makeAtomicResponse();
             completeRequest(pkt);
         } else {
 //	    req->completionEvent = new MemCompleteEvent(req, result, this);
@@ -420,7 +421,7 @@ MemTest::tick()
                  << dec << curTick << endl;
         }
 */
-        Packet *pkt = new Packet(req, Packet::WriteReq, Packet::Broadcast);
+        PacketPtr pkt = new Packet(req, Packet::WriteReq, Packet::Broadcast);
         uint8_t *pkt_data = new uint8_t[req->getSize()];
         pkt->dataDynamicArray(pkt_data);
         memcpy(pkt_data, &data, req->getSize());
@@ -431,6 +432,7 @@ MemTest::tick()
 
         if (probe) {
             cachePort.sendFunctional(pkt);
+            pkt->makeAtomicResponse();
             completeRequest(pkt);
         } else {
 //	    req->completionEvent = new MemCompleteEvent(req, NULL, this);

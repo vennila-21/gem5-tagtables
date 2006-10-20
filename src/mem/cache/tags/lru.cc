@@ -184,7 +184,7 @@ LRU::findBlock(Addr addr, int &lat)
 }
 
 LRUBlk*
-LRU::findBlock(Packet * &pkt, int &lat)
+LRU::findBlock(PacketPtr &pkt, int &lat)
 {
     Addr addr = pkt->getAddr();
 
@@ -215,7 +215,7 @@ LRU::findBlock(Addr addr) const
 }
 
 LRUBlk*
-LRU::findReplacement(Packet * &pkt, PacketList &writebacks,
+LRU::findReplacement(PacketPtr &pkt, PacketList &writebacks,
                      BlkList &compress_blocks)
 {
     unsigned set = extractSet(pkt->getAddr());
@@ -246,6 +246,7 @@ LRU::invalidateBlk(Addr addr)
     if (blk) {
         blk->status = 0;
         blk->isTouched = false;
+        blk->clearLoadLocks();
         tagsInUse--;
     }
 }
