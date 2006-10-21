@@ -36,9 +36,10 @@
  */
 
 #include <iostream>
+
 #include "base/misc.hh"
-#include "mem/packet.hh"
 #include "base/trace.hh"
+#include "mem/packet.hh"
 
 static const std::string ReadReqString("ReadReq");
 static const std::string WriteReqString("WriteReq");
@@ -132,7 +133,7 @@ Packet::allocate()
 
 /** Do the packet modify the same addresses. */
 bool
-Packet::intersect(Packet *p)
+Packet::intersect(PacketPtr p)
 {
     Addr s1 = getAddr();
     Addr e1 = getAddr() + getSize() - 1;
@@ -143,14 +144,14 @@ Packet::intersect(Packet *p)
 }
 
 bool
-fixPacket(Packet *func, Packet *timing)
+fixPacket(PacketPtr func, PacketPtr timing)
 {
     Addr funcStart      = func->getAddr();
     Addr funcEnd        = func->getAddr() + func->getSize() - 1;
     Addr timingStart    = timing->getAddr();
     Addr timingEnd      = timing->getAddr() + timing->getSize() - 1;
 
-    assert(!(funcStart > timingEnd || timingStart < funcEnd));
+    assert(!(funcStart > timingEnd || timingStart > funcEnd));
 
     if (DTRACE(FunctionalAccess)) {
        DebugOut() << func;
