@@ -26,7 +26,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Authors: Korey Sewell
+// Authors: Gabe Black
 
 ////////////////////////////////////////////////////////////////////
 //
@@ -55,7 +55,7 @@ namespace SparcISA;
 ##include "base.isa"
 
 //Include the definitions for the instruction formats
-##include "formats.isa"
+##include "formats/formats.isa"
 
 //Include the decoder definition
 ##include "decoder.isa"

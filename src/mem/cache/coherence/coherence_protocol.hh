@@ -89,7 +89,7 @@ class CoherenceProtocol : public SimObject
      * @param oldState The current block state.
      * @return The new state.
      */
-    CacheBlk::State getNewState(Packet * &pkt,
+    CacheBlk::State getNewState(PacketPtr &pkt,
                                 CacheBlk::State oldState);
 
     /**
@@ -101,12 +101,12 @@ class CoherenceProtocol : public SimObject
      * @param new_state The new coherence state of the block.
      * @return True if the request should be satisfied locally.
      */
-    bool handleBusRequest(BaseCache *cache, Packet * &pkt, CacheBlk *blk,
+    bool handleBusRequest(BaseCache *cache, PacketPtr &pkt, CacheBlk *blk,
                           MSHR *mshr, CacheBlk::State &new_state);
 
   protected:
     /** Snoop function type. */
-    typedef bool (*SnoopFuncType)(BaseCache *, Packet *&, CacheBlk *,
+    typedef bool (*SnoopFuncType)(BaseCache *, PacketPtr &, CacheBlk *,
                                   MSHR *, CacheBlk::State&);
 
     //
@@ -116,49 +116,49 @@ class CoherenceProtocol : public SimObject
     /**
      * Do nothing transition.
      */
-    static bool nullTransition(BaseCache *, Packet *&, CacheBlk *,
+    static bool nullTransition(BaseCache *, PacketPtr &, CacheBlk *,
                                MSHR *, CacheBlk::State&);
 
     /**
      * Invalid transition, basically panic.
      */
-    static bool invalidTransition(BaseCache *, Packet *&, CacheBlk *,
+    static bool invalidTransition(BaseCache *, PacketPtr &, CacheBlk *,
                                   MSHR *, CacheBlk::State&);
 
     /**
      * Invalidate block, move to Invalid state.
      */
-    static bool invalidateTrans(BaseCache *, Packet *&, CacheBlk *,
+    static bool invalidateTrans(BaseCache *, PacketPtr &, CacheBlk *,
                                 MSHR *, CacheBlk::State&);
 
     /**
      * Supply data, no state transition.
      */
-    static bool supplyTrans(BaseCache *, Packet *&, CacheBlk *,
+    static bool supplyTrans(BaseCache *, PacketPtr &, CacheBlk *,
                             MSHR *, CacheBlk::State&);
 
     /**
      * Supply data and go to Shared state.
      */
-    static bool supplyAndGotoSharedTrans(BaseCache *, Packet *&, CacheBlk *,
+    static bool supplyAndGotoSharedTrans(BaseCache *, PacketPtr &, CacheBlk *,
                                          MSHR *, CacheBlk::State&);
 
     /**
      * Supply data and go to Owned state.
      */
-    static bool supplyAndGotoOwnedTrans(BaseCache *, Packet *&, CacheBlk *,
+    static bool supplyAndGotoOwnedTrans(BaseCache *, PacketPtr &, CacheBlk *,
                                         MSHR *, CacheBlk::State&);
 
     /**
      * Invalidate block, supply data, and go to Invalid state.
      */
-    static bool supplyAndInvalidateTrans(BaseCache *, Packet *&, CacheBlk *,
+    static bool supplyAndInvalidateTrans(BaseCache *, PacketPtr &, CacheBlk *,
                                          MSHR *, CacheBlk::State&);
 
     /**
      * Assert the shared line for a block that is shared/exclusive.
      */
-    static bool assertShared(BaseCache *, Packet *&, CacheBlk *,
+    static bool assertShared(BaseCache *, PacketPtr &, CacheBlk *,
                                          MSHR *, CacheBlk::State&);
 
     /**
@@ -211,31 +211,25 @@ class CoherenceProtocol : public SimObject
     friend class CoherenceProtocol::StateTransition;
 
     /** Mask to select status bits relevant to coherence protocol. */
-    const static CacheBlk::State
-        stateMask = BlkValid | BlkWritable | BlkDirty;
+    static const int stateMask = BlkValid | BlkWritable | BlkDirty;
 
     /** The Modified (M) state. */
-    const static CacheBlk::State
-        Modified = BlkValid | BlkWritable | BlkDirty;
+    static const int Modified = BlkValid | BlkWritable | BlkDirty;
     /** The Owned (O) state. */
-    const static CacheBlk::State
-        Owned = BlkValid | BlkDirty;
+    static const int Owned = BlkValid | BlkDirty;
     /** The Exclusive (E) state. */
-    const static CacheBlk::State
-        Exclusive = BlkValid | BlkWritable;
+    static const int Exclusive = BlkValid | BlkWritable;
     /** The Shared (S) state. */
-    const static CacheBlk::State
-        Shared = BlkValid;
+    static const int Shared = BlkValid;
     /** The Invalid (I) state. */
-    const static CacheBlk::State
-        Invalid = 0;
+    static const int Invalid = 0;
 
     /**
      * Maximum state encoding value (used to size transition lookup
      * table).  Could be more than number of states, depends on
      * encoding of status bits.
      */
-    const static int stateMax = stateMask;
+    static const int stateMax = stateMask;
 
     /**
      * The table of all possible transitions, organized by starting state and

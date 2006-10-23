@@ -38,28 +38,29 @@
 #ifndef __MEM_PACKET_HH__
 #define __MEM_PACKET_HH__
 
+#include <cassert>
+#include <list>
+
 #include "mem/request.hh"
 #include "sim/host.hh"
 #include "sim/root.hh"
-#include <list>
-#include <cassert>
 
 struct Packet;
-typedef Packet* PacketPtr;
+typedef Packet *PacketPtr;
 typedef uint8_t* PacketDataPtr;
 typedef std::list<PacketPtr> PacketList;
 
 //Coherence Flags
-#define NACKED_LINE 1 << 0
-#define SATISFIED 1 << 1
-#define SHARED_LINE 1 << 2
-#define CACHE_LINE_FILL 1 << 3
-#define COMPRESSED 1 << 4
-#define NO_ALLOCATE 1 << 5
-#define SNOOP_COMMIT 1 << 6
+#define NACKED_LINE     (1 << 0)
+#define SATISFIED       (1 << 1)
+#define SHARED_LINE     (1 << 2)
+#define CACHE_LINE_FILL (1 << 3)
+#define COMPRESSED      (1 << 4)
+#define NO_ALLOCATE     (1 << 5)
+#define SNOOP_COMMIT    (1 << 6)
 
 //for now.  @todo fix later
-#define NUM_MEM_CMDS 1 << 11
+#define NUM_MEM_CMDS    (1 << 11)
 /**
  * A Packet is used to encapsulate a transfer between two objects in
  * the memory system (e.g., the L1 and L2 cache).  (In contrast, a
@@ -102,7 +103,7 @@ class Packet
     /** Device address (e.g., bus ID) of the source of the
      *   transaction. The source is not responsible for setting this
      *   field; it is set implicitly by the interconnect when the
-     *   packet * is first sent.  */
+     *   packet is first sent.  */
     short src;
 
     /** Device address (e.g., bus ID) of the destination of the
@@ -171,17 +172,17 @@ class Packet
     // as well.
     enum CommandAttribute
     {
-        IsRead                = 1 << 0,
-        IsWrite                = 1 << 1,
-        IsPrefetch        = 1 << 2,
-        IsInvalidate        = 1 << 3,
-        IsRequest        = 1 << 4,
-        IsResponse         = 1 << 5,
-        NeedsResponse        = 1 << 6,
+        IsRead          = 1 << 0,
+        IsWrite         = 1 << 1,
+        IsPrefetch      = 1 << 2,
+        IsInvalidate    = 1 << 3,
+        IsRequest       = 1 << 4,
+        IsResponse      = 1 << 5,
+        NeedsResponse   = 1 << 6,
         IsSWPrefetch    = 1 << 7,
         IsHWPrefetch    = 1 << 8,
         IsUpgrade       = 1 << 9,
-        HasData                = 1 << 10
+        HasData         = 1 << 10
     };
 
   public:
@@ -189,26 +190,27 @@ class Packet
     enum Command
     {
         InvalidCmd      = 0,
-        ReadReq                = IsRead  | IsRequest | NeedsResponse,
+        ReadReq         = IsRead  | IsRequest | NeedsResponse,
         WriteReq        = IsWrite | IsRequest | NeedsResponse | HasData,
-        WriteReqNoAck        = IsWrite | IsRequest | HasData,
+        WriteReqNoAck   = IsWrite | IsRequest | HasData,
         ReadResp        = IsRead  | IsResponse | NeedsResponse | HasData,
-        WriteResp        = IsWrite | IsResponse | NeedsResponse,
+        WriteResp       = IsWrite | IsResponse | NeedsResponse,
         Writeback       = IsWrite | IsRequest | HasData,
         SoftPFReq       = IsRead  | IsRequest | IsSWPrefetch | NeedsResponse,
         HardPFReq       = IsRead  | IsRequest | IsHWPrefetch | NeedsResponse,
         SoftPFResp      = IsRead  | IsResponse | IsSWPrefetch
-                                | NeedsResponse | HasData,
+                                  | NeedsResponse | HasData,
         HardPFResp      = IsRead  | IsResponse | IsHWPrefetch
-                                    | NeedsResponse | HasData,
+                                  | NeedsResponse | HasData,
         InvalidateReq   = IsInvalidate | IsRequest,
-        WriteInvalidateReq = IsWrite | IsInvalidate | IsRequest
-                                   | HasData | NeedsResponse,
-        WriteInvalidateResp = IsWrite | IsInvalidate | IsRequest | NeedsResponse,
+        WriteInvalidateReq  = IsWrite | IsInvalidate | IsRequest
+                                      | HasData | NeedsResponse,
+        WriteInvalidateResp = IsWrite | IsInvalidate | IsRequest
+                                      | NeedsResponse | IsResponse,
         UpgradeReq      = IsInvalidate | IsRequest | IsUpgrade,
         ReadExReq       = IsRead | IsInvalidate | IsRequest | NeedsResponse,
         ReadExResp      = IsRead | IsInvalidate | IsResponse
-                                | NeedsResponse | HasData
+                                 | NeedsResponse | HasData
     };
 
     /** Return the string name of the cmd field (for debugging and
@@ -308,6 +310,7 @@ class Packet
      *   multiple transactions. */
     void reinitFromRequest() {
         assert(req->validPaddr);
+        flags = 0;
         addr = req->paddr;
         size = req->size;
         time = req->time;
@@ -341,10 +344,12 @@ class Packet
         srcValid = false;
     }
 
-    /** Take a request packet and modify it in place to be suitable
-     *   for returning as a response to that request.
+    /**
+     * Take a request packet and modify it in place to be suitable for
+     * returning as a response to that request.
      */
-    void makeAtomicResponse() {
+    void makeAtomicResponse()
+    {
         assert(needsResponse());
         assert(isRequest());
         int icmd = (int)cmd;
@@ -357,50 +362,90 @@ class Packet
         cmd = (Command)icmd;
     }
 
-    /** Take a request packet that has been returned as NACKED and modify it so
-     * that it can be sent out again. Only packets that need a response can be
-     * NACKED, so verify that that is true. */
-    void reinitNacked() {
+    /**
+     * Take a request packet that has been returned as NACKED and
+     * modify it so that it can be sent out again. Only packets that
+     * need a response can be NACKED, so verify that that is true.
+     */
+    void
+    reinitNacked()
+    {
         assert(needsResponse() && result == Nacked);
         dest =  Broadcast;
         result = Unknown;
     }
 
 
-    /** Set the data pointer to the following value that should not be freed. */
-    template <typename T>
-    void dataStatic(T *p);
-
-    /** Set the data pointer to a value that should have delete [] called on it.
+    /**
+     * Set the data pointer to the following value that should not be
+     * freed.
      */
     template <typename T>
-    void dataDynamicArray(T *p);
+    void
+    dataStatic(T *p)
+    {
+        if(dynamicData)
+            dynamicData = false;
+        data = (PacketDataPtr)p;
+        staticData = true;
+    }
 
-    /** set the data pointer to a value that should have delete called on it. */
+    /**
+     * Set the data pointer to a value that should have delete []
+     * called on it.
+     */
     template <typename T>
-    void dataDynamic(T *p);
+    void
+    dataDynamicArray(T *p)
+    {
+        assert(!staticData && !dynamicData);
+        data = (PacketDataPtr)p;
+        dynamicData = true;
+        arrayData = true;
+    }
+
+    /**
+     * set the data pointer to a value that should have delete called
+     * on it.
+     */
+    template <typename T>
+    void
+    dataDynamic(T *p)
+    {
+        assert(!staticData && !dynamicData);
+        data = (PacketDataPtr)p;
+        dynamicData = true;
+        arrayData = false;
+    }
+
+    /** get a pointer to the data ptr. */
+    template <typename T>
+    T*
+    getPtr()
+    {
+        assert(staticData || dynamicData);
+        return (T*)data;
+    }
 
     /** return the value of what is pointed to in the packet. */
     template <typename T>
     T get();
 
-    /** get a pointer to the data ptr. */
-    template <typename T>
-    T* getPtr();
-
     /** set the value in the data pointer to v. */
     template <typename T>
     void set(T v);
 
-    /** delete the data pointed to in the data pointer. Ok to call to matter how
-     * data was allocted. */
+    /**
+     * delete the data pointed to in the data pointer. Ok to call to
+     * matter how data was allocted.
+     */
     void deleteData();
 
     /** If there isn't data in the packet, allocate some. */
     void allocate();
 
     /** Do the packet modify the same addresses. */
-    bool intersect(Packet *p);
+    bool intersect(PacketPtr p);
 };
 
 
@@ -409,7 +454,7 @@ class Packet
  * in the timing packet. It returns if the functional packet should continue to
  * traverse the memory hierarchy or not.
  */
-bool fixPacket(Packet *func, Packet *timing);
+bool fixPacket(PacketPtr func, PacketPtr timing);
 
 std::ostream & operator<<(std::ostream &o, const Packet &p);
 

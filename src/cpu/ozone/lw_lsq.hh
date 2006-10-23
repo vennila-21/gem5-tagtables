@@ -222,7 +222,7 @@ class OzoneLWLSQ {
     void writeback(DynInstPtr &inst, PacketPtr pkt);
 
     /** Handles completing the send of a store to memory. */
-    void storePostSend(Packet *pkt, DynInstPtr &inst);
+    void storePostSend(PacketPtr pkt, DynInstPtr &inst);
 
     /** Completes the store at the specified index. */
     void completeStore(DynInstPtr &inst);
@@ -260,7 +260,7 @@ class OzoneLWLSQ {
 
         virtual void getDeviceAddressRanges(AddrRangeList &resp,
                                             AddrRangeList &snoop)
-        { resp.clear(); snoop.clear(); snoop.push_back(RangeSize(0,-1); }
+        { resp.clear(); snoop.clear(); snoop.push_back(RangeSize(0,-1)); }
 
         virtual bool recvTiming(PacketPtr pkt);
 
