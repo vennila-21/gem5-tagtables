@@ -47,10 +47,10 @@ string SparcTraceChild::regNames[numregs] = {
     //Input registers
     "i0", "i1", "i2", "i3", "i4", "i5", "i6", "i7",
     //Floating point
-    "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
-    "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
-    "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
-    "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
+    "f0", "f2", "f4", "f6", "f8", "f10", "f12", "f14",
+    "f16", "f18", "f20", "f22", "f24", "f26", "f28", "f30",
+    "f32", "f34", "f36", "f38", "f40", "f42", "f44", "f46",
+    "f48", "f50", "f52", "f54", "f56", "f58", "f60", "f62",
     //Miscelaneous
     "fsr", "fprs", "pc", "npc", "y", "cwp", "pstate", "asi", "ccr"};
 
@@ -98,37 +98,37 @@ int64_t getRegs(regs & myregs, fpu & myfpu,
         case SparcTraceChild::I7: return inputs[7];
         //Floating point
         case SparcTraceChild::F0: return myfpu.f_fpstatus.fpu_fr[0];
-        case SparcTraceChild::F1: return myfpu.f_fpstatus.fpu_fr[1];
-        case SparcTraceChild::F2: return myfpu.f_fpstatus.fpu_fr[2];
-        case SparcTraceChild::F3: return myfpu.f_fpstatus.fpu_fr[3];
-        case SparcTraceChild::F4: return myfpu.f_fpstatus.fpu_fr[4];
-        case SparcTraceChild::F5: return myfpu.f_fpstatus.fpu_fr[5];
-        case SparcTraceChild::F6: return myfpu.f_fpstatus.fpu_fr[6];
-        case SparcTraceChild::F7: return myfpu.f_fpstatus.fpu_fr[7];
-        case SparcTraceChild::F8: return myfpu.f_fpstatus.fpu_fr[8];
-        case SparcTraceChild::F9: return myfpu.f_fpstatus.fpu_fr[9];
-        case SparcTraceChild::F10: return myfpu.f_fpstatus.fpu_fr[10];
-        case SparcTraceChild::F11: return myfpu.f_fpstatus.fpu_fr[11];
-        case SparcTraceChild::F12: return myfpu.f_fpstatus.fpu_fr[12];
-        case SparcTraceChild::F13: return myfpu.f_fpstatus.fpu_fr[13];
-        case SparcTraceChild::F14: return myfpu.f_fpstatus.fpu_fr[14];
-        case SparcTraceChild::F15: return myfpu.f_fpstatus.fpu_fr[15];
-        case SparcTraceChild::F16: return myfpu.f_fpstatus.fpu_fr[16];
-        case SparcTraceChild::F17: return myfpu.f_fpstatus.fpu_fr[17];
-        case SparcTraceChild::F18: return myfpu.f_fpstatus.fpu_fr[18];
-        case SparcTraceChild::F19: return myfpu.f_fpstatus.fpu_fr[19];
-        case SparcTraceChild::F20: return myfpu.f_fpstatus.fpu_fr[20];
-        case SparcTraceChild::F21: return myfpu.f_fpstatus.fpu_fr[21];
-        case SparcTraceChild::F22: return myfpu.f_fpstatus.fpu_fr[22];
-        case SparcTraceChild::F23: return myfpu.f_fpstatus.fpu_fr[23];
-        case SparcTraceChild::F24: return myfpu.f_fpstatus.fpu_fr[24];
-        case SparcTraceChild::F25: return myfpu.f_fpstatus.fpu_fr[25];
-        case SparcTraceChild::F26: return myfpu.f_fpstatus.fpu_fr[26];
-        case SparcTraceChild::F27: return myfpu.f_fpstatus.fpu_fr[27];
-        case SparcTraceChild::F28: return myfpu.f_fpstatus.fpu_fr[28];
-        case SparcTraceChild::F29: return myfpu.f_fpstatus.fpu_fr[29];
-        case SparcTraceChild::F30: return myfpu.f_fpstatus.fpu_fr[30];
-        case SparcTraceChild::F31: return myfpu.f_fpstatus.fpu_fr[31];
+        case SparcTraceChild::F2: return myfpu.f_fpstatus.fpu_fr[1];
+        case SparcTraceChild::F4: return myfpu.f_fpstatus.fpu_fr[2];
+        case SparcTraceChild::F6: return myfpu.f_fpstatus.fpu_fr[3];
+        case SparcTraceChild::F8: return myfpu.f_fpstatus.fpu_fr[4];
+        case SparcTraceChild::F10: return myfpu.f_fpstatus.fpu_fr[5];
+        case SparcTraceChild::F12: return myfpu.f_fpstatus.fpu_fr[6];
+        case SparcTraceChild::F14: return myfpu.f_fpstatus.fpu_fr[7];
+        case SparcTraceChild::F16: return myfpu.f_fpstatus.fpu_fr[8];
+        case SparcTraceChild::F18: return myfpu.f_fpstatus.fpu_fr[9];
+        case SparcTraceChild::F20: return myfpu.f_fpstatus.fpu_fr[10];
+        case SparcTraceChild::F22: return myfpu.f_fpstatus.fpu_fr[11];
+        case SparcTraceChild::F24: return myfpu.f_fpstatus.fpu_fr[12];
+        case SparcTraceChild::F26: return myfpu.f_fpstatus.fpu_fr[13];
+        case SparcTraceChild::F28: return myfpu.f_fpstatus.fpu_fr[14];
+        case SparcTraceChild::F30: return myfpu.f_fpstatus.fpu_fr[15];
+        case SparcTraceChild::F32: return myfpu.f_fpstatus.fpu_fr[16];
+        case SparcTraceChild::F34: return myfpu.f_fpstatus.fpu_fr[17];
+        case SparcTraceChild::F36: return myfpu.f_fpstatus.fpu_fr[18];
+        case SparcTraceChild::F38: return myfpu.f_fpstatus.fpu_fr[19];
+        case SparcTraceChild::F40: return myfpu.f_fpstatus.fpu_fr[20];
+        case SparcTraceChild::F42: return myfpu.f_fpstatus.fpu_fr[21];
+        case SparcTraceChild::F44: return myfpu.f_fpstatus.fpu_fr[22];
+        case SparcTraceChild::F46: return myfpu.f_fpstatus.fpu_fr[23];
+        case SparcTraceChild::F48: return myfpu.f_fpstatus.fpu_fr[24];
+        case SparcTraceChild::F50: return myfpu.f_fpstatus.fpu_fr[25];
+        case SparcTraceChild::F52: return myfpu.f_fpstatus.fpu_fr[26];
+        case SparcTraceChild::F54: return myfpu.f_fpstatus.fpu_fr[27];
+        case SparcTraceChild::F56: return myfpu.f_fpstatus.fpu_fr[28];
+        case SparcTraceChild::F58: return myfpu.f_fpstatus.fpu_fr[29];
+        case SparcTraceChild::F60: return myfpu.f_fpstatus.fpu_fr[30];
+        case SparcTraceChild::F62: return myfpu.f_fpstatus.fpu_fr[31];
         //Miscelaneous
         case SparcTraceChild::FSR: return myfpu.f_fpstatus.Fpu_fsr;
         case SparcTraceChild::FPRS: return myregs.r_fprs;
@@ -188,46 +188,110 @@ bool SparcTraceChild::step()
     //being breakpointed should be word (64bit) aligned, and that both the
     //next instruction and the instruction after that need to be breakpointed
     //so that annulled branches will still stop as well.
+
+    /*
+     * Useful constants
+     */
     const static uint64_t breakInst = 0x91d02001;
     const static uint64_t breakWord = breakInst | (breakInst << 32);
-    const static uint64_t lowMask = (uint64_t)(0xFFFFFFFF);
+    const static uint64_t lowMask = 0xFFFFFFFFULL;
     const static uint64_t highMask = lowMask << 32;
+
+    /*
+     * storage for the original contents of the child process's memory
+     */
     uint64_t originalInst, originalAnnulInst;
+
+    /*
+     * Get information about where the process is and is headed next.
+     */
+    uint64_t currentPC = getRegVal(PC);
+    bool unalignedPC = currentPC & 7;
+    uint64_t alignedPC = currentPC & (~7);
     uint64_t nextPC = getRegVal(NPC);
-    bool unaligned = nextPC & 7;
-    uint64_t alignedPC = nextPC & (~7);
-    originalInst = ptrace(PTRACE_PEEKTEXT, pid, alignedPC, 0);
-    if(unaligned)
+    bool unalignedNPC = nextPC & 7;
+    uint64_t alignedNPC = nextPC & (~7);
+
+    /*
+     * Store the original contents of the child process's memory
+     */
+    originalInst = ptrace(PTRACE_PEEKTEXT, pid, alignedNPC, 0);
+    //Save a ptrace call if we can
+    if(unalignedNPC)
     {
-        originalAnnulInst = ptrace(PTRACE_PEEKTEXT, pid, alignedPC+8, 0);
+        originalAnnulInst = ptrace(PTRACE_PEEKTEXT, pid, alignedNPC+8, 0);
     }
-    uint64_t newInst;
-    if(unaligned)
+
+    /*
+     * Prepare breakpointed copies of child processes memory
+     */
+    uint64_t newInst, newAnnulInst;
+    //If the current instruction is in the same word as the npc
+    if(alignedPC == alignedNPC)
     {
-        newInst = (originalInst & highMask) | (breakInst << 0);
-        if(ptrace(PTRACE_POKETEXT, pid, alignedPC, newInst) != 0)
-            cerr << "Poke failed" << endl;
-        newInst = (originalAnnulInst & lowMask) | (breakInst << 32);
-        if(ptrace(PTRACE_POKETEXT, pid, alignedPC+8, newInst) != 0)
-            cerr << "Poke failed" << endl;
+        //Make sure we only replace the other part
+        if(unalignedPC)
+            newInst = (originalInst & lowMask) | (breakWord & highMask);
+        else
+            newInst = (originalInst & highMask) | (breakWord & lowMask);
     }
     else
     {
-        if(ptrace(PTRACE_POKETEXT, pid, alignedPC, breakWord) != 0)
+        //otherwise replace the whole thing
+        newInst = breakWord;
+    }
+    //If the current instruction is in the same word as the word after
+    //the npc
+    if(alignedPC == alignedNPC+8)
+    {
+        //Make sure we only replace the other part
+        if(unalignedPC)
+            newAnnulInst = (originalAnnulInst & lowMask) | (breakWord & highMask);
+        else
+            newAnnulInst = (originalAnnulInst & highMask) | (breakWord & lowMask);
+    }
+    else
+    {
+        //otherwise replace the whole thing
+        newAnnulInst = breakWord;
+    }
+
+    /*
+     * Stuff the breakpoint instructions into the child's address space.
+     */
+    //Replace the word at npc
+    if(ptrace(PTRACE_POKETEXT, pid, alignedNPC, newInst) != 0)
+        cerr << "Poke failed" << endl;
+    //Replace the next word, if necessary
+    if(unalignedNPC)
+    {
+        if(ptrace(PTRACE_POKETEXT, pid, alignedNPC+8, newAnnulInst) != 0)
             cerr << "Poke failed" << endl;
     }
+
+    /*
+     * Restart the child process
+     */
     //Note that the "addr" parameter is supposed to be ignored, but in at
     //least one version of the kernel, it must be 1 or it will set what
     //pc to continue from
-    if(ptrace(PTRACE_CONT, pid, /*nextPC - 4*/ 1, 0) != 0)
+    if(ptrace(PTRACE_CONT, pid, 1, 0) != 0)
         cerr << "Cont failed" << endl;
     doWait();
+
+    /*
+     * Update our record of the child's state
+     */
     update(pid);
-    if(ptrace(PTRACE_POKETEXT, pid, alignedPC, originalInst) != 0)
+
+    /*
+     * Put back the original contents of the childs address space
+     */
+    if(ptrace(PTRACE_POKETEXT, pid, alignedNPC, originalInst) != 0)
         cerr << "Repoke failed" << endl;
-    if(unaligned)
+    if(unalignedNPC)
     {
-        if(ptrace(PTRACE_POKETEXT, pid, alignedPC+8, originalAnnulInst) != 0)
+        if(ptrace(PTRACE_POKETEXT, pid, alignedNPC+8, originalAnnulInst) != 0)
             cerr << "Repoke failed" << endl;
     }
     return true;

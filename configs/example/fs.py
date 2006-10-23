@@ -95,6 +95,7 @@ class MyCache(BaseCache):
     latency = 1
     mshrs = 10
     tgts_per_mshr = 5
+    protocol = CoherenceProtocol(protocol='moesi')
 
 # driver system CPU is always simple... note this is an assignment of
 # a class, not an instance.

@@ -40,6 +40,7 @@
 #include "base/trace.hh"
 #include "dev/isa_fake.hh"
 #include "mem/packet.hh"
+#include "mem/packet_access.hh"
 #include "sim/builder.hh"
 #include "sim/system.hh"
 
@@ -52,7 +53,7 @@ IsaFake::IsaFake(Params *p)
 }
 
 Tick
-IsaFake::read(Packet *pkt)
+IsaFake::read(PacketPtr pkt)
 {
     assert(pkt->result == Packet::Unknown);
     assert(pkt->getAddr() >= pioAddr && pkt->getAddr() < pioAddr + pioSize);
@@ -60,6 +61,7 @@ IsaFake::read(Packet *pkt)
     DPRINTF(Tsunami, "read  va=%#x size=%d\n", pkt->getAddr(), pkt->getSize());
 
     switch (pkt->getSize()) {
+      case sizeof(uint64_t):
          pkt->set(0xFFFFFFFFFFFFFFFFULL);
          break;
       case sizeof(uint32_t):
@@ -79,7 +81,7 @@ IsaFake::read(Packet *pkt)
 }
 
 Tick
-IsaFake::write(Packet *pkt)
+IsaFake::write(PacketPtr pkt)
 {
     DPRINTF(Tsunami, "write - va=%#x size=%d \n", pkt->getAddr(), pkt->getSize());
     pkt->result = Packet::Success;
