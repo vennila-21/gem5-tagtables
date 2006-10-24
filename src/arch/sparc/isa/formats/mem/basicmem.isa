@@ -1,3 +1,32 @@
+// Copyright (c) 2006 The Regents of The University of Michigan
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Ali Saidi
+//          Gabe Black
+
 ////////////////////////////////////////////////////////////////////
 //
 // Mem instructions
@@ -30,15 +59,13 @@ output header {{
 
             // Constructor
             MemImm(const char *mnem, ExtMachInst _machInst, OpClass __opClass) :
-                Mem(mnem, _machInst, __opClass)
-            {
-                imm = sign_ext(SIMM13, 13);
-            }
+                Mem(mnem, _machInst, __opClass), imm(sext<13>(SIMM13))
+            {}
 
             std::string generateDisassembly(Addr pc,
                     const SymbolTable *symtab) const;
 
-            int32_t imm;
+            const int32_t imm;
         };
 }};
 
@@ -99,73 +126,69 @@ output decoder {{
         }
 }};
 
-def template MemExecute {{
-        Fault %(class_name)s::execute(%(CPU_exec_context)s *xc,
-                Trace::InstRecord *traceData) const
+def template MemDeclare {{
+        /**
+         * Static instruction class for "%(mnemonic)s".
+         */
+        class %(class_name)s : public %(base_class)s
         {
-            Fault fault = NoFault;
-            Addr EA;
-            %(op_decl)s;
-            %(op_rd)s;
-            %(ea_code)s;
-            DPRINTF(Sparc, "The address is 0x%x\n", EA);
-            %(load)s;
-            %(code)s;
+          public:
 
-            if(fault == NoFault)
-            {
-                %(store)s;
-                //Write the resulting state to the execution context
-                %(op_wb)s;
-            }
+            /// Constructor.
+            %(class_name)s(ExtMachInst machInst);
 
-            return fault;
-        }
+            %(BasicExecDeclare)s
+
+            %(InitiateAccDeclare)s
+
+            %(CompleteAccDeclare)s
+        };
 }};
 
 let {{
-    # Leave memAccessFlags at 0 for now
-    loadString = "xc->read(EA, (uint%(width)s_t&)Mem, 0);"
-    storeString = "uint64_t write_result = 0; \
-    xc->write((uint%(width)s_t)Mem, EA, 0, &write_result);"
-
-    def doMemFormat(code, load, store, name, Name, opt_flags):
+    def doMemFormat(code, execute, faultCode, name, Name, opt_flags):
         addrCalcReg = 'EA = Rs1 + Rs2;'
         addrCalcImm = 'EA = Rs1 + imm;'
         iop = InstObjParams(name, Name, 'Mem', code,
-                opt_flags, ("ea_code", addrCalcReg),
-                ("load", load), ("store", store))
-        iop_imm = InstObjParams(name, Name + 'Imm', 'MemImm', code,
-                opt_flags, ("ea_code", addrCalcImm),
-                ("load", load), ("store", store))
-        header_output = BasicDeclare.subst(iop) + BasicDeclare.subst(iop_imm)
+                opt_flags, {"fault_check": faultCode, "ea_code": addrCalcReg})
+        iop_imm = InstObjParams(name, Name + "Imm", 'MemImm', code,
+                opt_flags, {"fault_check": faultCode, "ea_code": addrCalcImm})
+        header_output = MemDeclare.subst(iop) + MemDeclare.subst(iop_imm)
         decoder_output = BasicConstructor.subst(iop) + BasicConstructor.subst(iop_imm)
         decode_block = ROrImmDecode.subst(iop)
-        exec_output = MemExecute.subst(iop) + MemExecute.subst(iop_imm)
+        exec_output = doSplitExecute(code, addrCalcReg, addrCalcImm, execute,
+                faultCode, name, name + "Imm", Name, Name + "Imm", opt_flags)
         return (header_output, decoder_output, exec_output, decode_block)
 }};
 
-def format Load(code, width, *opt_flags) {{
+def format LoadAlt(code, *opt_flags) {{
+        (header_output,
+         decoder_output,
+         exec_output,
+         decode_block) = doMemFormat(code, LoadExecute,
+            AlternateAsiPrivFaultCheck, name, Name, opt_flags)
+}};
+
+def format StoreAlt(code, *opt_flags) {{
+        (header_output,
+         decoder_output,
+         exec_output,
+         decode_block) = doMemFormat(code, StoreExecute,
+            AlternateAsiPrivFaultCheck, name, Name, opt_flags)
+}};
+
+def format Load(code, *opt_flags) {{
         (header_output,
          decoder_output,
          exec_output,
          decode_block) = doMemFormat(code,
-             loadString % {"width":width}, '', name, Name, opt_flags)
+             LoadExecute, '', name, Name, opt_flags)
 }};
 
-def format Store(code, width, *opt_flags) {{
-        (header_output,
-         decoder_output,
-         exec_output,
-         decode_block) = doMemFormat(code, '',
-             storeString % {"width":width}, name, Name, opt_flags)
-}};
-
-def format LoadStore(code, width, *opt_flags) {{
+def format Store(code, *opt_flags) {{
         (header_output,
          decoder_output,
          exec_output,
          decode_block) = doMemFormat(code,
-             loadString % {"width":width}, storeString % {"width":width},
-             name, Name, opt_flags)
+             StoreExecute, '', name, Name, opt_flags)
 }};
