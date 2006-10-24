@@ -33,6 +33,14 @@ def template BasicExecDeclare {{
         Fault execute(%(CPU_exec_context)s *, Trace::InstRecord *) const;
 }};
 
+// Definitions of execute methods that panic.
+def template BasicExecPanic {{
+        Fault execute(%(CPU_exec_context)s *, Trace::InstRecord *) const
+        {
+            panic("Execute method called when it shouldn't!");
+        }
+}};
+
 // Basic instruction class declaration template.
 def template BasicDeclare {{
         /**
@@ -42,14 +50,14 @@ def template BasicDeclare {{
         {
           public:
             // Constructor.
-            %(class_name)s(MachInst machInst);
+            %(class_name)s(ExtMachInst machInst);
             %(BasicExecDeclare)s
         };
 }};
 
 // Basic instruction class constructor template.
 def template BasicConstructor {{
-        inline %(class_name)s::%(class_name)s(MachInst machInst)
+        inline %(class_name)s::%(class_name)s(ExtMachInst machInst)
             : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s)
         {
                 %(constructor)s;
@@ -78,6 +86,11 @@ def template BasicExecute {{
 // Basic decode template.
 def template BasicDecode {{
         return new %(class_name)s(machInst);
+}};
+
+// Basic decode template, passing mnemonic in as string arg to constructor.
+def template BasicDecodeWithMnemonic {{
+    return new %(class_name)s("%(mnemonic)s", machInst);
 }};
 
 // The most basic instruction format... used only for a few misc. insts
