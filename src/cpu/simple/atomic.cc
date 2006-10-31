@@ -179,8 +179,11 @@ AtomicSimpleCPU::resume()
 
         changeState(SimObject::Running);
         if (thread->status() == ThreadContext::Active) {
-            if (!tickEvent.scheduled())
-                tickEvent.schedule(curTick);
+            if (!tickEvent.scheduled()) {
+                Tick nextTick = curTick + cycles(1) - 1;
+                nextTick -= (nextTick % (cycles(1)));
+                tickEvent.schedule(nextTick);
+            }
         }
     }
 }
@@ -208,7 +211,9 @@ AtomicSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
         ThreadContext *tc = threadContexts[i];
         if (tc->status() == ThreadContext::Active && _status != Running) {
             _status = Running;
-            tickEvent.schedule(curTick);
+            Tick nextTick = curTick + cycles(1) - 1;
+            nextTick -= (nextTick % (cycles(1)));
+            tickEvent.schedule(nextTick);
             break;
         }
     }
@@ -225,7 +230,10 @@ AtomicSimpleCPU::activateContext(int thread_num, int delay)
     assert(!tickEvent.scheduled());
 
     notIdleFraction++;
-    tickEvent.schedule(curTick + cycles(delay));
+    //Make sure ticks are still on multiples of cycles
+    Tick nextTick = curTick + cycles(delay + 1) - 1;
+    nextTick -= (nextTick % (cycles(1)));
+    tickEvent.schedule(nextTick);
     _status = Running;
 }
 

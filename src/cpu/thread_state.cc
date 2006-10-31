@@ -66,6 +66,8 @@ ThreadState::serialize(std::ostream &os)
     // thread_num and cpu_id are deterministic from the config
     SERIALIZE_SCALAR(funcExeInst);
     SERIALIZE_SCALAR(inst);
+    SERIALIZE_SCALAR(microPC);
+    SERIALIZE_SCALAR(nextMicroPC);
 
 #if FULL_SYSTEM
     Tick quiesceEndTick = 0;
@@ -85,6 +87,8 @@ ThreadState::unserialize(Checkpoint *cp, const std::string &section)
     // thread_num and cpu_id are deterministic from the config
     UNSERIALIZE_SCALAR(funcExeInst);
     UNSERIALIZE_SCALAR(inst);
+    UNSERIALIZE_SCALAR(microPC);
+    UNSERIALIZE_SCALAR(nextMicroPC);
 
 #if FULL_SYSTEM
     Tick quiesceEndTick;
