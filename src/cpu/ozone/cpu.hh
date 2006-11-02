@@ -51,8 +51,11 @@
 #if FULL_SYSTEM
 #include "arch/alpha/tlb.hh"
 
-class AlphaITB;
-class AlphaDTB;
+namespace TheISA
+{
+    class ITB;
+    class DTB;
+}
 class PhysicalMemory;
 class MemoryController;
 
@@ -120,9 +123,9 @@ class OzoneCPU : public BaseCPU
 
         PhysicalMemory *getPhysMemPtr() { return cpu->physmem; }
 
-        AlphaITB *getITBPtr() { return cpu->itb; }
+        TheISA::ITB *getITBPtr() { return cpu->itb; }
 
-        AlphaDTB * getDTBPtr() { return cpu->dtb; }
+        TheISA::DTB * getDTBPtr() { return cpu->dtb; }
 
         Kernel::Statistics *getKernelStats()
         { return thread->getKernelStats(); }
@@ -224,11 +227,11 @@ class OzoneCPU : public BaseCPU
         // ISA stuff:
         MiscReg readMiscReg(int misc_reg);
 
-        MiscReg readMiscRegWithEffect(int misc_reg, Fault &fault);
+        MiscReg readMiscRegWithEffect(int misc_reg);
 
-        Fault setMiscReg(int misc_reg, const MiscReg &val);
+        void setMiscReg(int misc_reg, const MiscReg &val);
 
-        Fault setMiscRegWithEffect(int misc_reg, const MiscReg &val);
+        void setMiscRegWithEffect(int misc_reg, const MiscReg &val);
 
         unsigned readStCondFailures()
         { return thread->storeCondFailures; }
@@ -581,8 +584,6 @@ class OzoneCPU : public BaseCPU
 
 #if FULL_SYSTEM
     Fault hwrei();
-    int readIntrFlag() { return thread.intrflag; }
-    void setIntrFlag(int val) { thread.intrflag = val; }
     bool inPalMode() { return AlphaISA::PcPAL(thread.PC); }
     bool inPalMode(Addr pc) { return AlphaISA::PcPAL(pc); }
     bool simPalCheck(int palFunc);

@@ -31,8 +31,9 @@
 #ifndef __ARCH_ALPHA_REGFILE_HH__
 #define __ARCH_ALPHA_REGFILE_HH__
 
-#include "arch/alpha/types.hh"
 #include "arch/alpha/isa_traits.hh"
+#include "arch/alpha/ipr.hh"
+#include "arch/alpha/types.hh"
 #include "sim/faults.hh"
 
 #include <string>
@@ -109,21 +110,28 @@ namespace AlphaISA
         uint64_t	uniq;		// process-unique register
         bool		lock_flag;	// lock flag for LL/SC
         Addr		lock_addr;	// lock address for LL/SC
+        int		intr_flag;
 
       public:
+        MiscRegFile()
+        {
+#if FULL_SYSTEM
+            initializeIprTable();
+#endif
+        }
+
         MiscReg readReg(int misc_reg);
 
-        MiscReg readRegWithEffect(int misc_reg, Fault &fault,
-                ThreadContext *tc);
+        MiscReg readRegWithEffect(int misc_reg, ThreadContext *tc);
 
         //These functions should be removed once the simplescalar cpu model
         //has been replaced.
         int getInstAsid();
         int getDataAsid();
 
-        Fault setReg(int misc_reg, const MiscReg &val);
+        void setReg(int misc_reg, const MiscReg &val);
 
-        Fault setRegWithEffect(int misc_reg, const MiscReg &val,
+        void setRegWithEffect(int misc_reg, const MiscReg &val,
                 ThreadContext *tc);
 
         void clear()
@@ -131,6 +139,7 @@ namespace AlphaISA
             fpcr = uniq = 0;
             lock_flag = 0;
             lock_addr = 0;
+            intr_flag = 0;
         }
 
         void serialize(std::ostream &os);
@@ -143,9 +152,9 @@ namespace AlphaISA
         InternalProcReg ipr[NumInternalProcRegs]; // Internal processor regs
 
       private:
-        InternalProcReg readIpr(int idx, Fault &fault, ThreadContext *tc);
+        InternalProcReg readIpr(int idx, ThreadContext *tc);
 
-        Fault setIpr(int idx, InternalProcReg val, ThreadContext *tc);
+        void setIpr(int idx, InternalProcReg val, ThreadContext *tc);
 #endif
         friend class RegFile;
     };
@@ -215,22 +224,20 @@ namespace AlphaISA
             return miscRegFile.readReg(miscReg);
         }
 
-        MiscReg readMiscRegWithEffect(int miscReg,
-                Fault &fault, ThreadContext *tc)
+        MiscReg readMiscRegWithEffect(int miscReg, ThreadContext *tc)
         {
-            fault = NoFault;
-            return miscRegFile.readRegWithEffect(miscReg, fault, tc);
+            return miscRegFile.readRegWithEffect(miscReg, tc);
         }
 
-        Fault setMiscReg(int miscReg, const MiscReg &val)
+        void setMiscReg(int miscReg, const MiscReg &val)
         {
-            return miscRegFile.setReg(miscReg, val);
+            miscRegFile.setReg(miscReg, val);
         }
 
-        Fault setMiscRegWithEffect(int miscReg, const MiscReg &val,
+        void setMiscRegWithEffect(int miscReg, const MiscReg &val,
                 ThreadContext * tc)
         {
-            return miscRegFile.setRegWithEffect(miscReg, val, tc);
+            miscRegFile.setRegWithEffect(miscReg, val, tc);
         }
 
         FloatReg readFloatReg(int floatReg)
@@ -253,26 +260,24 @@ namespace AlphaISA
             return readFloatRegBits(floatReg);
         }
 
-        Fault setFloatReg(int floatReg, const FloatReg &val)
+        void setFloatReg(int floatReg, const FloatReg &val)
         {
             floatRegFile.d[floatReg] = val;
-            return NoFault;
         }
 
-        Fault setFloatReg(int floatReg, const FloatReg &val, int width)
+        void setFloatReg(int floatReg, const FloatReg &val, int width)
         {
-            return setFloatReg(floatReg, val);
+            setFloatReg(floatReg, val);
         }
 
-        Fault setFloatRegBits(int floatReg, const FloatRegBits &val)
+        void setFloatRegBits(int floatReg, const FloatRegBits &val)
         {
             floatRegFile.q[floatReg] = val;
-            return NoFault;
         }
 
-        Fault setFloatRegBits(int floatReg, const FloatRegBits &val, int width)
+        void setFloatRegBits(int floatReg, const FloatRegBits &val, int width)
         {
-            return setFloatRegBits(floatReg, val);
+            setFloatRegBits(floatReg, val);
         }
 
         IntReg readIntReg(int intReg)
@@ -280,9 +285,9 @@ namespace AlphaISA
             return intRegFile.readReg(intReg);
         }
 
-        Fault setIntReg(int intReg, const IntReg &val)
+        void setIntReg(int intReg, const IntReg &val)
         {
-            return intRegFile.setReg(intReg, val);
+            intRegFile.setReg(intReg, val);
         }
 
         void serialize(std::ostream &os);

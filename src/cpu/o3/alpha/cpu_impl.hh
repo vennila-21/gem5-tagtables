@@ -184,25 +184,24 @@ AlphaO3CPU<Impl>::readMiscReg(int misc_reg, unsigned tid)
 
 template <class Impl>
 TheISA::MiscReg
-AlphaO3CPU<Impl>::readMiscRegWithEffect(int misc_reg, Fault &fault,
-                                        unsigned tid)
+AlphaO3CPU<Impl>::readMiscRegWithEffect(int misc_reg, unsigned tid)
 {
-    return this->regFile.readMiscRegWithEffect(misc_reg, fault, tid);
+    return this->regFile.readMiscRegWithEffect(misc_reg, tid);
 }
 
 template <class Impl>
-Fault
+void
 AlphaO3CPU<Impl>::setMiscReg(int misc_reg, const MiscReg &val, unsigned tid)
 {
-    return this->regFile.setMiscReg(misc_reg, val, tid);
+    this->regFile.setMiscReg(misc_reg, val, tid);
 }
 
 template <class Impl>
-Fault
+void
 AlphaO3CPU<Impl>::setMiscRegWithEffect(int misc_reg, const MiscReg &val,
                                        unsigned tid)
 {
-    return this->regFile.setMiscRegWithEffect(misc_reg, val, tid);
+    this->regFile.setMiscRegWithEffect(misc_reg, val, tid);
 }
 
 template <class Impl>
@@ -225,20 +224,6 @@ AlphaO3CPU<Impl>::post_interrupt(int int_num, int index)
         DPRINTF(IPI,"Suspended Processor awoke\n");
         this->threadContexts[0]->activate();
     }
-}
-
-template <class Impl>
-int
-AlphaO3CPU<Impl>::readIntrFlag()
-{
-    return this->regFile.readIntrFlag();
-}
-
-template <class Impl>
-void
-AlphaO3CPU<Impl>::setIntrFlag(int val)
-{
-    this->regFile.setIntrFlag(val);
 }
 
 template <class Impl>
