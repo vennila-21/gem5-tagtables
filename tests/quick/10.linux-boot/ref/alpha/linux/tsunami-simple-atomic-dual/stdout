@@ -1,0 +1,12 @@
+M5 Simulator System
+
+Copyright (c) 2001-2006
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Nov  5 2006 19:41:29
+M5 started Sun Nov  5 20:03:49 2006
+M5 executing on zizzer.eecs.umich.edu
+command line: build/ALPHA_FS/m5.opt -d build/ALPHA_FS/tests/opt/quick/10.linux-boot/alpha/linux/tsunami-simple-atomic-dual tests/run.py quick/10.linux-boot/alpha/linux/tsunami-simple-atomic-dual
+Exiting @ tick 3718155709 because m5_exit instruction encountered
