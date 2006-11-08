@@ -47,12 +47,12 @@
 #if FULL_SYSTEM
 #include "arch/faults.hh"
 #include "arch/alpha/osfpal.hh"
-#include "arch/alpha/tlb.hh"
-#include "arch/alpha/types.hh"
+#include "arch/tlb.hh"
+#include "arch/types.hh"
+#include "arch/kernel_stats.hh"
 #include "arch/vtophys.hh"
 #include "base/callback.hh"
 #include "cpu/profile.hh"
-#include "kern/kernel_stats.hh"
 #include "mem/physical.hh"
 #include "sim/faults.hh"
 #include "sim/sim_events.hh"
@@ -891,7 +891,7 @@ void
 OzoneCPU<Impl>::OzoneTC::regStats(const std::string &name)
 {
 #if FULL_SYSTEM
-    thread->kernelStats = new Kernel::Statistics(cpu->system);
+    thread->kernelStats = new TheISA::Kernel::Statistics(cpu->system);
     thread->kernelStats->regStats(name + ".kern");
 #endif
 }
