@@ -1,0 +1,87 @@
+/*
+ * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met: redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer;
+ * redistributions in binary form must reproduce the above copyright
+ * notice, this list of conditions and the following disclaimer in the
+ * documentation and/or other materials provided with the distribution;
+ * neither the name of the copyright holders nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Nathan Binkert
+ */
+
+#ifndef __ARCH_ALPHA_REMOTE_GDB_HH__
+#define __ARCH_ALPHA_REMOTE_GDB_HH__
+
+#include <map>
+
+#include "arch/types.hh"
+#include "base/remote_gdb.hh"
+#include "cpu/pc_event.hh"
+#include "base/pollevent.hh"
+
+class System;
+class ThreadContext;
+class PhysicalMemory;
+
+namespace SparcISA
+{
+    class RemoteGDB : public BaseRemoteGDB
+    {
+      protected:
+        enum RegisterConstants
+        {
+            RegG0, RegG1, RegG2, RegG3, RegG4, RegG5, RegG6, RegG7,
+            RegO0, RegO1, RegO2, RegO3, RegO4, RegO5, RegO6, RegO7,
+            RegL0, RegL1, RegL2, RegL3, RegL4, RegL5, RegL6, RegL7,
+            RegI0, RegI1, RegI2, RegI3, RegI4, RegI5, RegI6, RegI7,
+            RegF0, RegF1, RegF2, RegF3, RegF4, RegF5, RegF6, RegF7,
+            RegF8, RegF9, RegF10, RegF11, RegF12, RegF13, RegF14, RegF15,
+            RegF16, RegF17, RegF18, RegF19, RegF20, RegF21, RegF22, RegF23,
+            RegF24, RegF25, RegF26, RegF27, RegF28, RegF29, RegF30, RegF31,
+            RegY,
+            RegPsr,
+            RegWim,
+            RegTbr,
+            RegPc,
+            RegNpc,
+            RegFpsr,
+            RegCpsr,
+            NumGDBRegs
+        };
+
+      public:
+        RemoteGDB(System *system, ThreadContext *context);
+
+        bool acc(Addr addr, size_t len);
+
+      protected:
+        void getregs();
+        void setregs();
+
+        void clearSingleStep();
+        void setSingleStep();
+
+        Addr singleStepBreaks[2];
+    };
+}
+
+#endif /* __ARCH_ALPHA_REMOTE_GDB_H__ */
