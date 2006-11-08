@@ -31,16 +31,16 @@
 
 #include "arch/alpha/faults.hh"
 #include "arch/alpha/isa_traits.hh"
+#include "arch/alpha/kernel_stats.hh"
 #include "arch/alpha/osfpal.hh"
 #include "arch/alpha/tlb.hh"
-#include "base/kgdb.h"
+#include "arch/alpha/kgdb.h"
 #include "base/remote_gdb.hh"
 #include "base/stats/events.hh"
 #include "config/full_system.hh"
 #include "cpu/base.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/thread_context.hh"
-#include "kern/kernel_stats.hh"
 #include "sim/debug.hh"
 #include "sim/sim_exit.hh"
 
@@ -147,7 +147,7 @@ AlphaISA::zeroRegisters(CPU *cpu)
 Fault
 SimpleThread::hwrei()
 {
-    if (!inPalMode())
+    if (!(readPC() & 0x3))
         return new UnimplementedOpcodeFault;
 
     setNextPC(readMiscReg(AlphaISA::IPR_EXC_ADDR));
@@ -379,10 +379,10 @@ AlphaISA::MiscRegFile::setIpr(int idx, uint64_t val, ThreadContext *tc)
       case AlphaISA::IPR_DTB_CM:
         if (val & 0x18) {
             if (tc->getKernelStats())
-                tc->getKernelStats()->mode(Kernel::user, tc);
+                tc->getKernelStats()->mode(TheISA::Kernel::user, tc);
         } else {
             if (tc->getKernelStats())
-                tc->getKernelStats()->mode(Kernel::kernel, tc);
+                tc->getKernelStats()->mode(TheISA::Kernel::kernel, tc);
         }
 
       case AlphaISA::IPR_ICM:

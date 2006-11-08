@@ -46,7 +46,7 @@ class SparcSystem : public System
     struct Params : public System::Params
     {
         std::string reset_bin;
-        std::string hypervison_bin;
+        std::string hypervisor_bin;
         std::string openboot_bin;
         std::string boot_osflags;
         uint64_t system_type;
@@ -111,8 +111,11 @@ class SparcSystem : public System
         return addFuncEvent<T>(openbootSymtab, lbl);
     }
 
-    virtual Addr fixFuncEventAddr(Addr addr);
-
+    virtual Addr fixFuncEventAddr(Addr addr)
+    {
+        //XXX This may eventually have to do something useful.
+        return addr;
+    }
 };
 
 #endif
