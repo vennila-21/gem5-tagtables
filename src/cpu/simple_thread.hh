@@ -55,8 +55,10 @@ class ProfileNode;
 class FunctionalPort;
 class PhysicalPort;
 
-namespace Kernel {
-    class Statistics;
+namespace TheISA {
+    namespace Kernel {
+        class Statistics;
+    };
 };
 
 #else // !FULL_SYSTEM
@@ -439,10 +441,6 @@ class SimpleThread : public ThreadState
 
     void setStCondFailures(unsigned sc_failures)
     { storeCondFailures = sc_failures; }
-
-#if FULL_SYSTEM
-    bool inPalMode() { return AlphaISA::PcPAL(regs.readPC()); }
-#endif
 
 #if !FULL_SYSTEM
     TheISA::IntReg getSyscallArg(int i)
