@@ -82,8 +82,13 @@ TimingSimpleCPU::CpuPort::recvFunctional(PacketPtr pkt)
 void
 TimingSimpleCPU::CpuPort::recvStatusChange(Status status)
 {
-    if (status == RangeChange)
+    if (status == RangeChange) {
+        if (!snoopRangeSent) {
+            snoopRangeSent = true;
+            sendStatusChange(Port::RangeChange);
+        }
         return;
+    }
 
     panic("TimingSimpleCPU doesn't expect recvStatusChange callback!");
 }
@@ -101,6 +106,10 @@ TimingSimpleCPU::TimingSimpleCPU(Params *p)
       cpu_id(p->cpu_id)
 {
     _status = Idle;
+
+    icachePort.snoopRangeSent = false;
+    dcachePort.snoopRangeSent = false;
+
     ifetch_pkt = dcache_pkt = NULL;
     drainEvent = NULL;
     fetchEvent = NULL;
@@ -160,7 +169,7 @@ TimingSimpleCPU::resume()
 
         fetchEvent =
             new EventWrapper<TimingSimpleCPU, &TimingSimpleCPU::fetch>(this, false);
-        fetchEvent->schedule(curTick);
+        fetchEvent->schedule(nextCycle());
     }
 
     changeState(SimObject::Running);
@@ -232,7 +241,7 @@ TimingSimpleCPU::activateContext(int thread_num, int delay)
     // kick things off by initiating the fetch of the next instruction
     fetchEvent =
         new EventWrapper<TimingSimpleCPU, &TimingSimpleCPU::fetch>(this, false);
-    fetchEvent->schedule(curTick + cycles(delay));
+    fetchEvent->schedule(nextCycle(curTick + cycles(delay)));
 }
 
 
@@ -683,6 +692,7 @@ BEGIN_DECLARE_SIM_OBJECT_PARAMS(TimingSimpleCPU)
 #endif // FULL_SYSTEM
 
     Param<int> clock;
+    Param<int> phase;
 
     Param<bool> defer_registration;
     Param<int> width;
@@ -718,6 +728,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(TimingSimpleCPU)
 #endif // FULL_SYSTEM
 
     INIT_PARAM(clock, "clock speed"),
+    INIT_PARAM_DFLT(phase, "clock phase", 0),
     INIT_PARAM(defer_registration, "defer system registration (for sampling)"),
     INIT_PARAM(width, "cpu width"),
     INIT_PARAM(function_trace, "Enable function trace"),
@@ -739,6 +750,7 @@ CREATE_SIM_OBJECT(TimingSimpleCPU)
     params->progress_interval = progress_interval;
     params->deferRegistration = defer_registration;
     params->clock = clock;
+    params->phase = phase;
     params->functionTrace = function_trace;
     params->functionTraceStart = function_trace_start;
     params->system = system;
