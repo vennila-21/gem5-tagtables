@@ -62,6 +62,11 @@ string SparcISA::getMiscRegName(RegIndex index)
     return miscRegName[index];
 }
 
+enum RegMask
+{
+        PSTATE_MASK = (((1 << 4) - 1) << 1) | (((1 << 4) - 1) << 6) | (1 << 12)
+};
+
 void MiscRegFile::reset()
 {
     y = 0;
@@ -88,12 +93,14 @@ void MiscRegFile::reset()
     otherwin = 0;
     wstate = 0;
     gl = 0;
-    hpstate = 0;
+    //In a T1, bit 11 is apparently always 1
+    hpstate = (1 << 11);
     memset(htstate, 0, sizeof(htstate));
     hintp = 0;
     htba = 0;
     hstick_cmpr = 0;
-    strandStatusReg = 0;
+    //This is set this way in Legion for some reason
+    strandStatusReg = 0x50000;
     fsr = 0;
     implicitInstAsi = ASI_PRIMARY;
     implicitDataAsi = ASI_PRIMARY;
@@ -273,7 +280,7 @@ void MiscRegFile::setReg(int miscReg, const MiscReg &val)
           tba = val & ULL(~0x7FFF);
           break;
         case MISCREG_PSTATE:
-          pstate = val;
+          pstate = (val & PSTATE_MASK);
           break;
         case MISCREG_TL:
           tl = val;
@@ -375,7 +382,7 @@ void MiscRegFile::setRegWithEffect(int miscReg,
           //Set up performance counting based on pcr value
           break;
         case MISCREG_PSTATE:
-          pstate = val;
+          pstate = val & PSTATE_MASK;
           setImplicitAsis();
           return;
         case MISCREG_TL:
