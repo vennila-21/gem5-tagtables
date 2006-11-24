@@ -1,0 +1,1286 @@
+// Copyright (c) 2006 The Regents of The University of Michigan
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Ali Saidi
+//          Gabe Black
+//          Steve Reinhardt
+
+////////////////////////////////////////////////////////////////////
+//
+// The actual decoder specification
+//
+
+decode OP default Unknown::unknown()
+{
+    0x0: decode OP2
+    {
+        //Throw an illegal instruction acception
+        0x0: Trap::illtrap({{fault = new IllegalInstruction;}});
+        format BranchN
+        {
+            //bpcc
+            0x1: decode COND2
+            {
+                //Branch Always
+                0x8: decode A
+                {
+                    0x0: bpa(19, {{
+                        NNPC = xc->readPC() + disp;
+                    }});
+                    0x1: bpa(19, {{
+                        NPC = xc->readPC() + disp;
+                        NNPC = NPC + 4;
+                    }}, ',a');
+                }
+                //Branch Never
+                0x0: decode A
+                {
+                    0x0: bpn(19, {{
+                        NNPC = NNPC;//Don't do anything
+                    }});
+                    0x1: bpn(19, {{
+                        NPC = xc->readNextPC() + 4;
+                        NNPC = NPC + 4;
+                    }}, ',a');
+                }
+                default: decode BPCC
+                {
+                    0x0: bpcci(19, {{
+                        if(passesCondition(Ccr<3:0>, COND2))
+                            NNPC = xc->readPC() + disp;
+                        else
+                            handle_annul
+                    }});
+                    0x2: bpccx(19, {{
+                        if(passesCondition(Ccr<7:4>, COND2))
+                            NNPC = xc->readPC() + disp;
+                        else
+                            handle_annul
+                    }});
+                }
+            }
+            //bicc
+            0x2: decode COND2
+            {
+                //Branch Always
+                0x8: decode A
+                {
+                    0x0: ba(22, {{
+                        NNPC = xc->readPC() + disp;
+                    }});
+                    0x1: ba(22, {{
+                        NPC = xc->readPC() + disp;
+                        NNPC = NPC + 4;
+                    }}, ',a');
+                }
+                //Branch Never
+                0x0: decode A
+                {
+                    0x0: bn(22, {{
+                        NNPC = NNPC;//Don't do anything
+                    }});
+                    0x1: bn(22, {{
+                        NPC = xc->readNextPC() + 4;
+                        NNPC = NPC + 4;
+                    }}, ',a');
+                }
+                default: bicc(22, {{
+                    if(passesCondition(Ccr<3:0>, COND2))
+                        NNPC = xc->readPC() + disp;
+                    else
+                        handle_annul
+                }});
+            }
+        }
+        0x3: decode RCOND2
+        {
+            format BranchSplit
+            {
+                0x1: bpreq({{
+                    if(Rs1.sdw == 0)
+                        NNPC = xc->readPC() + disp;
+                    else
+                        handle_annul
+                }});
+                0x2: bprle({{
+                    if(Rs1.sdw <= 0)
+                        NNPC = xc->readPC() + disp;
+                    else
+                        handle_annul
+                }});
+                0x3: bprl({{
+                    if(Rs1.sdw < 0)
+                        NNPC = xc->readPC() + disp;
+                    else
+                        handle_annul
+                }});
+                0x5: bprne({{
+                    if(Rs1.sdw != 0)
+                        NNPC = xc->readPC() + disp;
+                    else
+                        handle_annul
+                }});
+                0x6: bprg({{
+                    if(Rs1.sdw > 0)
+                        NNPC = xc->readPC() + disp;
+                    else
+                        handle_annul
+                }});
+                0x7: bprge({{
+                    if(Rs1.sdw >= 0)
+                        NNPC = xc->readPC() + disp;
+                    else
+                        handle_annul
+                }});
+            }
+        }
+        //SETHI (or NOP if rd == 0 and imm == 0)
+        0x4: SetHi::sethi({{Rd.udw = imm;}});
+        0x5: Trap::fbpfcc({{fault = new FpDisabled;}});
+        0x6: Trap::fbfcc({{fault = new FpDisabled;}});
+    }
+    0x1: BranchN::call(30, {{
+            R15 = xc->readPC();
+            NNPC = R15 + disp;
+    }});
+    0x2: decode OP3 {
+        format IntOp {
+            0x00: add({{Rd = Rs1.sdw + Rs2_or_imm13;}});
+            0x01: and({{Rd = Rs1.sdw & Rs2_or_imm13;}});
+            0x02: or({{Rd = Rs1.sdw | Rs2_or_imm13;}});
+            0x03: xor({{Rd = Rs1.sdw ^ Rs2_or_imm13;}});
+            0x04: sub({{Rd = Rs1.sdw - Rs2_or_imm13;}});
+            0x05: andn({{Rd = Rs1.sdw & ~Rs2_or_imm13;}});
+            0x06: orn({{Rd = Rs1.sdw | ~Rs2_or_imm13;}});
+            0x07: xnor({{Rd = ~(Rs1.sdw ^ Rs2_or_imm13);}});
+            0x08: addc({{Rd = Rs1.sdw + Rs2_or_imm13 + Ccr<0:0>;}});
+            0x09: mulx({{Rd = Rs1.sdw * Rs2_or_imm13;}});
+            0x0A: umul({{
+                Rd = Rs1.udw<31:0> * Rs2_or_imm13<31:0>;
+                Y = Rd<63:32>;
+            }});
+            0x0B: smul({{
+                Rd.sdw = Rs1.sdw<31:0> * Rs2_or_imm13<31:0>;
+                Y = Rd.sdw;
+            }});
+            0x0C: subc({{Rd.sdw = Rs1.sdw + (~Rs2_or_imm13) + 1 - Ccr<0:0>}});
+            0x0D: udivx({{
+                if(Rs2_or_imm13 == 0) fault = new DivisionByZero;
+                else Rd.udw = Rs1.udw / Rs2_or_imm13;
+            }});
+            0x0E: udiv({{
+                if(Rs2_or_imm13 == 0) fault = new DivisionByZero;
+                else
+                {
+                    Rd.udw = ((Y << 32) | Rs1.udw<31:0>) / Rs2_or_imm13;
+                    if(Rd.udw >> 32 != 0)
+                        Rd.udw = 0xFFFFFFFF;
+                }
+            }});
+            0x0F: sdiv({{
+                if(Rs2_or_imm13.sdw == 0)
+                    fault = new DivisionByZero;
+                else
+                {
+                    Rd.udw = ((int64_t)((Y << 32) | Rs1.sdw<31:0>)) / Rs2_or_imm13.sdw;
+                    if(Rd.udw<63:31> != 0)
+                        Rd.udw = 0x7FFFFFFF;
+                    else if(Rd.udw<63:> && Rd.udw<62:31> != 0xFFFFFFFF)
+                        Rd.udw = 0xFFFFFFFF80000000ULL;
+                }
+            }});
+        }
+        format IntOpCc {
+            0x10: addcc({{
+                int64_t resTemp, val2 = Rs2_or_imm13;
+                Rd = resTemp = Rs1 + val2;}},
+                {{(Rs1<31:0> + val2<31:0>)<32:>}},
+                {{Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>}},
+                {{(Rs1<63:1> + val2<63:1> + (Rs1 & val2)<0:>)<63:>}},
+                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
+            );
+            0x11: IntOpCcRes::andcc({{Rd = Rs1 & Rs2_or_imm13;}});
+            0x12: IntOpCcRes::orcc({{Rd = Rs1 | Rs2_or_imm13;}});
+            0x13: IntOpCcRes::xorcc({{Rd = Rs1 ^ Rs2_or_imm13;}});
+            0x14: subcc({{
+                int64_t val2 = Rs2_or_imm13;
+                Rd = Rs1 - val2;}},
+                {{(~(Rs1<31:0> + (~val2)<31:0> + 1))<32:>}},
+                {{(Rs1<31:> != val2<31:>) && (Rs1<31:> != Rd<31:>)}},
+                {{(~(Rs1<63:1> + (~val2)<63:1> +
+                    (Rs1 | ~val2)<0:>))<63:>}},
+                {{Rs1<63:> != val2<63:> && Rs1<63:> != Rd<63:>}}
+            );
+            0x15: IntOpCcRes::andncc({{Rd = Rs1 & ~Rs2_or_imm13;}});
+            0x16: IntOpCcRes::orncc({{Rd = Rs1 | ~Rs2_or_imm13;}});
+            0x17: IntOpCcRes::xnorcc({{Rd = ~(Rs1 ^ Rs2_or_imm13);}});
+            0x18: addccc({{
+                int64_t resTemp, val2 = Rs2_or_imm13;
+                int64_t carryin = Ccr<0:0>;
+                Rd = resTemp = Rs1 + val2 + carryin;}},
+                {{(Rs1<31:0> + val2<31:0> + carryin)<32:>}},
+                {{Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>}},
+                {{(Rs1<63:1> + val2<63:1> +
+                    ((Rs1 & val2) | (carryin & (Rs1 | val2)))<0:>)<63:>}},
+                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
+            );
+            0x1A: umulcc({{
+                uint64_t resTemp;
+                Rd = resTemp = Rs1.udw<31:0> * Rs2_or_imm13.udw<31:0>;
+                Y = resTemp<63:32>;}},
+                {{0}},{{0}},{{0}},{{0}});
+            0x1B: smulcc({{
+                int64_t resTemp;
+                Rd = resTemp = Rs1.sdw<31:0> * Rs2_or_imm13.sdw<31:0>;
+                Y = resTemp<63:32>;}},
+                {{0}},{{0}},{{0}},{{0}});
+            0x1C: subccc({{
+                int64_t resTemp, val2 = Rs2_or_imm13;
+                int64_t carryin = Ccr<0:0>;
+                Rd = resTemp = Rs1 + ~val2 + 1 - carryin;}},
+                {{(~((Rs1<31:0> + (~(val2 + carryin))<31:0> + 1))<32:>)}},
+                {{Rs1<31:> != val2<31:> && Rs1<31:> != resTemp<31:>}},
+                {{(~((Rs1<63:1> + (~(val2 + carryin))<63:1>) + (Rs1<0:> + (~(val2+carryin))<0:> + 1)<63:1>))<63:>}},
+                {{Rs1<63:> != val2<63:> && Rs1<63:> != resTemp<63:>}}
+            );
+            0x1D: udivxcc({{
+                if(Rs2_or_imm13.udw == 0) fault = new DivisionByZero;
+                else Rd = Rs1.udw / Rs2_or_imm13.udw;}}
+                ,{{0}},{{0}},{{0}},{{0}});
+            0x1E: udivcc({{
+                uint32_t resTemp, val2 = Rs2_or_imm13.udw;
+                int32_t overflow = 0;
+                if(val2 == 0) fault = new DivisionByZero;
+                else
+                {
+                    resTemp = (uint64_t)((Y << 32) | Rs1.udw<31:0>) / val2;
+                    overflow = (resTemp<63:32> != 0);
+                    if(overflow) Rd = resTemp = 0xFFFFFFFF;
+                    else Rd = resTemp;
+                } }},
+                {{0}},
+                {{overflow}},
+                {{0}},
+                {{0}}
+            );
+            0x1F: sdivcc({{
+                int64_t val2 = Rs2_or_imm13.sdw<31:0>;
+                bool overflow = false, underflow = false;
+                if(val2 == 0) fault = new DivisionByZero;
+                else
+                {
+                    Rd = (int64_t)((Y << 32) | Rs1.sdw<31:0>) / val2;
+                    overflow = (Rd<63:31> != 0);
+                    underflow = (Rd<63:> && Rd<62:31> != 0xFFFFFFFF);
+                    if(overflow) Rd = 0x7FFFFFFF;
+                    else if(underflow) Rd = 0xFFFFFFFF80000000ULL;
+                } }},
+                {{0}},
+                {{overflow || underflow}},
+                {{0}},
+                {{0}}
+            );
+            0x20: taddcc({{
+                int64_t resTemp, val2 = Rs2_or_imm13;
+                Rd = resTemp = Rs1 + val2;
+                int32_t overflow = Rs1<1:0> || val2<1:0> || (Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>);}},
+                {{((Rs1<31:0> + val2<31:0>)<32:0>)}},
+                {{overflow}},
+                {{((Rs1 >> 1) + (val2 >> 1) + (Rs1 & val2 & 0x1))<63:>}},
+                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
+            );
+            0x21: tsubcc({{
+                int64_t resTemp, val2 = Rs2_or_imm13;
+                Rd = resTemp = Rs1 + val2;
+                int32_t overflow = Rs1<1:0> || val2<1:0> || (Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>);}},
+                {{(Rs1<31:0> + val2<31:0>)<32:0>}},
+                {{overflow}},
+                {{((Rs1 >> 1) + (val2 >> 1) + (Rs1 & val2 & 0x1))<63:>}},
+                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
+            );
+            0x22: taddcctv({{
+                int64_t val2 = Rs2_or_imm13;
+                Rd = Rs1 + val2;
+                int32_t overflow = Rs1<1:0> || val2<1:0> ||
+                        (Rs1<31:> == val2<31:> && val2<31:> != Rd<31:>);
+                if(overflow) fault = new TagOverflow;}},
+                {{((Rs1<31:0> + val2<31:0>)<32:0>)}},
+                {{overflow}},
+                {{((Rs1 >> 1) + (val2 >> 1) + (Rs1 & val2 & 0x1))<63:>}},
+                {{Rs1<63:> == val2<63:> && val2<63:> != Rd<63:>}}
+            );
+            0x23: tsubcctv({{
+                int64_t resTemp, val2 = Rs2_or_imm13;
+                Rd = resTemp = Rs1 + val2;
+                int32_t overflow = Rs1<1:0> || val2<1:0> || (Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>);
+                if(overflow) fault = new TagOverflow;}},
+                {{((Rs1<31:0> + val2<31:0>)<32:0>)}},
+                {{overflow}},
+                {{((Rs1 >> 1) + (val2 >> 1) + (Rs1 & val2 & 0x1))<63:>}},
+                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
+            );
+            0x24: mulscc({{
+                int64_t resTemp, multiplicand = Rs2_or_imm13;
+                int32_t multiplier = Rs1<31:0>;
+                int32_t savedLSB = Rs1<0:>;
+                multiplier = multiplier<31:1> |
+                    ((Ccr<3:3> ^ Ccr<1:1>) << 32);
+                if(!Y<0:>)
+                    multiplicand = 0;
+                Rd = resTemp = multiplicand + multiplier;
+                Y = Y<31:1> | (savedLSB << 31);}},
+                {{((multiplicand<31:0> + multiplier<31:0>)<32:0>)}},
+                {{multiplicand<31:> == multiplier<31:> && multiplier<31:> != resTemp<31:>}},
+                {{((multiplicand >> 1) + (multiplier >> 1) + (multiplicand & multiplier & 0x1))<63:>}},
+                {{multiplicand<63:> == multiplier<63:> && multiplier<63:> != resTemp<63:>}}
+            );
+        }
+        format IntOp
+        {
+            0x25: decode X {
+                0x0: sll({{Rd = Rs1 << (I ? SHCNT32 : Rs2<4:0>);}});
+                0x1: sllx({{Rd = Rs1 << (I ? SHCNT64 : Rs2<5:0>);}});
+            }
+            0x26: decode X {
+                0x0: srl({{Rd = Rs1.uw >> (I ? SHCNT32 : Rs2<4:0>);}});
+                0x1: srlx({{Rd = Rs1.udw >> (I ? SHCNT64 : Rs2<5:0>);}});
+            }
+            0x27: decode X {
+                0x0: sra({{Rd = Rs1.sw >> (I ? SHCNT32 : Rs2<4:0>);}});
+                0x1: srax({{Rd = Rs1.sdw >> (I ? SHCNT64 : Rs2<5:0>);}});
+            }
+            0x28: decode RS1 {
+                0x00: NoPriv::rdy({{Rd = Y;}});
+                //1 should cause an illegal instruction exception
+                0x02: NoPriv::rdccr({{Rd = Ccr;}});
+                0x03: NoPriv::rdasi({{Rd = Asi;}});
+                0x04: PrivCheck::rdtick({{Rd = Tick;}}, {{Tick<63:>}});
+                0x05: NoPriv::rdpc({{
+                    if(Pstate<3:>)
+                        Rd = (xc->readPC())<31:0>;
+                    else
+                        Rd = xc->readPC();}});
+                0x06: NoPriv::rdfprs({{
+                    //Wait for all fpops to finish.
+                    Rd = Fprs;
+                }});
+                //7-14 should cause an illegal instruction exception
+                0x0F: decode I {
+                    0x0: Nop::stbar({{/*stuff*/}});
+                    0x1: Nop::membar({{/*stuff*/}});
+                }
+                0x10: Priv::rdpcr({{Rd = Pcr;}});
+                0x11: PrivCheck::rdpic({{Rd = Pic;}}, {{Pcr<0:>}});
+                //0x12 should cause an illegal instruction exception
+                0x13: NoPriv::rdgsr({{
+                    if(Fprs<2:> == 0 || Pstate<4:> == 0)
+                        Rd = Gsr;
+                    else
+                        fault = new FpDisabled;
+                }});
+                //0x14-0x15 should cause an illegal instruction exception
+                0x16: Priv::rdsoftint({{Rd = Softint;}});
+                0x17: Priv::rdtick_cmpr({{Rd = TickCmpr;}});
+                0x18: PrivCheck::rdstick({{Rd = Stick}}, {{Stick<63:>}});
+                0x19: Priv::rdstick_cmpr({{Rd = StickCmpr;}});
+                0x1A: Priv::rdstrand_sts_reg({{
+                    if(Pstate<2:> && !Hpstate<2:>)
+                        Rd = StrandStsReg<0:>;
+                    else
+                        Rd = StrandStsReg;
+                }});
+                //0x1A is supposed to be reserved, but it reads the strand
+                //status register.
+                //0x1B-0x1F should cause an illegal instruction exception
+            }
+            0x29: decode RS1 {
+                0x00: HPriv::rdhprhpstate({{Rd = Hpstate;}});
+                0x01: HPriv::rdhprhtstate({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    Rd = Htstate;
+                }});
+                //0x02 should cause an illegal instruction exception
+                0x03: HPriv::rdhprhintp({{Rd = Hintp;}});
+                //0x04 should cause an illegal instruction exception
+                0x05: HPriv::rdhprhtba({{Rd = Htba;}});
+                0x06: HPriv::rdhprhver({{Rd = Hver;}});
+                //0x07-0x1E should cause an illegal instruction exception
+                0x1F: HPriv::rdhprhstick_cmpr({{Rd = HstickCmpr;}});
+            }
+            0x2A: decode RS1 {
+                0x00: Priv::rdprtpc({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    Rd = Tpc;
+                }});
+                0x01: Priv::rdprtnpc({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    Rd = Tnpc;
+                }});
+                0x02: Priv::rdprtstate({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    Rd = Tstate;
+                }});
+                0x03: Priv::rdprtt({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    Rd = Tt;
+                }});
+                0x04: Priv::rdprtick({{Rd = Tick;}});
+                0x05: Priv::rdprtba({{Rd = Tba;}});
+                0x06: Priv::rdprpstate({{Rd = Pstate;}});
+                0x07: Priv::rdprtl({{Rd = Tl;}});
+                0x08: Priv::rdprpil({{Rd = Pil;}});
+                0x09: Priv::rdprcwp({{Rd = Cwp;}});
+                0x0A: Priv::rdprcansave({{Rd = Cansave;}});
+                0x0B: Priv::rdprcanrestore({{Rd = Canrestore;}});
+                0x0C: Priv::rdprcleanwin({{Rd = Cleanwin;}});
+                0x0D: Priv::rdprotherwin({{Rd = Otherwin;}});
+                0x0E: Priv::rdprwstate({{Rd = Wstate;}});
+                //0x0F should cause an illegal instruction exception
+                0x10: Priv::rdprgl({{Rd = Gl;}});
+                //0x11-0x1F should cause an illegal instruction exception
+            }
+            0x2B: BasicOperate::flushw({{
+                if(NWindows - 2 - Cansave == 0)
+                {
+                    if(Otherwin)
+                        fault = new SpillNOther(Wstate<5:3>);
+                    else
+                        fault = new SpillNNormal(Wstate<2:0>);
+                }
+            }});
+            0x2C: decode MOVCC3
+            {
+                0x0: Trap::movccfcc({{fault = new FpDisabled;}});
+                0x1: decode CC
+                {
+                    0x0: movcci({{
+                        if(passesCondition(Ccr<3:0>, COND4))
+                            Rd = Rs2_or_imm11;
+                        else
+                            Rd = Rd;
+                    }});
+                    0x2: movccx({{
+                        if(passesCondition(Ccr<7:4>, COND4))
+                            Rd = Rs2_or_imm11;
+                        else
+                            Rd = Rd;
+                    }});
+                }
+            }
+            0x2D: sdivx({{
+                if(Rs2_or_imm13.sdw == 0) fault = new DivisionByZero;
+                else Rd.sdw = Rs1.sdw / Rs2_or_imm13.sdw;
+            }});
+            0x2E: decode RS1 {
+                0x0: IntOp::popc({{
+                    int64_t count = 0;
+                    uint64_t temp = Rs2_or_imm13;
+                    //Count the 1s in the front 4bits until none are left
+                    uint8_t oneBits[] = {0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4};
+                    while(temp)
+                    {
+                            count += oneBits[temp & 0xF];
+                            temp = temp >> 4;
+                    }
+                    Rd = count;
+                }});
+            }
+            0x2F: decode RCOND3
+            {
+                0x1: movreq({{Rd = (Rs1.sdw == 0) ? Rs2_or_imm10 : Rd;}});
+                0x2: movrle({{Rd = (Rs1.sdw <= 0) ? Rs2_or_imm10 : Rd;}});
+                0x3: movrl({{Rd = (Rs1.sdw < 0) ? Rs2_or_imm10 : Rd;}});
+                0x5: movrne({{Rd = (Rs1.sdw != 0) ? Rs2_or_imm10 : Rd;}});
+                0x6: movrg({{Rd = (Rs1.sdw > 0) ? Rs2_or_imm10 : Rd;}});
+                0x7: movrge({{Rd = (Rs1.sdw >= 0) ? Rs2_or_imm10 : Rd;}});
+            }
+            0x30: decode RD {
+                0x00: NoPriv::wry({{Y = Rs1 ^ Rs2_or_imm13;}});
+                //0x01 should cause an illegal instruction exception
+                0x02: NoPriv::wrccr({{Ccr = Rs1 ^ Rs2_or_imm13;}});
+                0x03: NoPriv::wrasi({{Ccr = Rs1 ^ Rs2_or_imm13;}});
+                //0x04-0x05 should cause an illegal instruction exception
+                0x06: NoPriv::wrfprs({{Fprs = Rs1 ^ Rs2_or_imm13;}});
+                //0x07-0x0E should cause an illegal instruction exception
+                0x0F: Trap::softreset({{fault = new SoftwareInitiatedReset;}});
+                0x10: Priv::wrpcr({{Pcr = Rs1 ^ Rs2_or_imm13;}});
+                0x11: PrivCheck::wrpic({{Pic = Rs1 ^ Rs2_or_imm13;}}, {{Pcr<0:>}});
+                //0x12 should cause an illegal instruction exception
+                0x13: NoPriv::wrgsr({{
+                    if(Fprs<2:> == 0 || Pstate<4:> == 0)
+                        return new FpDisabled;
+                    Gsr = Rs1 ^ Rs2_or_imm13;
+                }});
+                0x14: Priv::wrsoftint_set({{SoftintSet = Rs1 ^ Rs2_or_imm13;}});
+                0x15: Priv::wrsoftint_clr({{SoftintClr = Rs1 ^ Rs2_or_imm13;}});
+                0x16: Priv::wrsoftint({{Softint = Rs1 ^ Rs2_or_imm13;}});
+                0x17: Priv::wrtick_cmpr({{TickCmpr = Rs1 ^ Rs2_or_imm13;}});
+                0x18: NoPriv::wrstick({{
+                    if(!Hpstate<2:>)
+                        return new IllegalInstruction;
+                    Stick = Rs1 ^ Rs2_or_imm13;
+                }});
+                0x19: Priv::wrstick_cmpr({{StickCmpr = Rs1 ^ Rs2_or_imm13;}});
+                0x1A: Priv::wrstrand_sts_reg({{
+                    if(Pstate<2:> && !Hpstate<2:>)
+                        StrandStsReg = StrandStsReg<63:1> |
+                                (Rs1 ^ Rs2_or_imm13)<0:>;
+                    else
+                        StrandStsReg = Rs1 ^ Rs2_or_imm13;
+                }});
+                //0x1A is supposed to be reserved, but it writes the strand
+                //status register.
+                //0x1B-0x1F should cause an illegal instruction exception
+            }
+            0x31: decode FCN {
+                0x0: Priv::saved({{
+                    assert(Cansave < NWindows - 2);
+                    assert(Otherwin || Canrestore);
+                    Cansave = Cansave + 1;
+                    if(Otherwin == 0)
+                        Canrestore = Canrestore - 1;
+                    else
+                        Otherwin = Otherwin - 1;
+                }});
+                0x1: Priv::restored({{
+                    assert(Cansave || Otherwin);
+                    assert(Canrestore < NWindows - 2);
+                    Canrestore = Canrestore + 1;
+                    if(Otherwin == 0)
+                        Cansave = Cansave - 1;
+                    else
+                        Otherwin = Otherwin - 1;
+                }});
+            }
+            0x32: decode RD {
+                0x00: Priv::wrprtpc({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    else
+                        Tpc = Rs1 ^ Rs2_or_imm13;
+                }});
+                0x01: Priv::wrprtnpc({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    else
+                        Tnpc = Rs1 ^ Rs2_or_imm13;
+                }});
+                0x02: Priv::wrprtstate({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    else
+                        Tstate = Rs1 ^ Rs2_or_imm13;
+                }});
+                0x03: Priv::wrprtt({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    else
+                        Tt = Rs1 ^ Rs2_or_imm13;
+                }});
+                0x04: HPriv::wrprtick({{Tick = Rs1 ^ Rs2_or_imm13;}});
+                0x05: Priv::wrprtba({{Tba = Rs1 ^ Rs2_or_imm13;}});
+                0x06: Priv::wrprpstate({{Pstate = Rs1 ^ Rs2_or_imm13;}});
+                0x07: Priv::wrprtl({{
+                    if(Pstate<2:> && !Hpstate<2:>)
+                        Tl = std::min<uint64_t>(Rs1 ^ Rs2_or_imm13, MaxPTL);
+                    else
+                        Tl = std::min<uint64_t>(Rs1 ^ Rs2_or_imm13, MaxTL);
+                }});
+                0x08: Priv::wrprpil({{Pil = Rs1 ^ Rs2_or_imm13;}});
+                0x09: Priv::wrprcwp({{Cwp = Rs1 ^ Rs2_or_imm13;}});
+                0x0A: Priv::wrprcansave({{Cansave = Rs1 ^ Rs2_or_imm13;}});
+                0x0B: Priv::wrprcanrestore({{Canrestore = Rs1 ^ Rs2_or_imm13;}});
+                0x0C: Priv::wrprcleanwin({{Cleanwin = Rs1 ^ Rs2_or_imm13;}});
+                0x0D: Priv::wrprotherwin({{Otherwin = Rs1 ^ Rs2_or_imm13;}});
+                0x0E: Priv::wrprwstate({{Wstate = Rs1 ^ Rs2_or_imm13;}});
+                //0x0F should cause an illegal instruction exception
+                0x10: Priv::wrprgl({{
+                    if(Pstate<2:> && !Hpstate<2:>)
+                        Gl = std::min<uint64_t>(Rs1 ^ Rs2_or_imm13, MaxPGL);
+                    else
+                        Gl = std::min<uint64_t>(Rs1 ^ Rs2_or_imm13, MaxGL);
+                }});
+                //0x11-0x1F should cause an illegal instruction exception
+            }
+            0x33: decode RD {
+                0x00: HPriv::wrhprhpstate({{Hpstate = Rs1 ^ Rs2_or_imm13;}});
+                0x01: HPriv::wrhprhtstate({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    Htstate = Rs1 ^ Rs2_or_imm13;
+                }});
+                //0x02 should cause an illegal instruction exception
+                0x03: HPriv::wrhprhintp({{Hintp = Rs1 ^ Rs2_or_imm13;}});
+                //0x04 should cause an illegal instruction exception
+                0x05: HPriv::wrhprhtba({{Htba = Rs1 ^ Rs2_or_imm13;}});
+                //0x06-0x01D should cause an illegal instruction exception
+                0x1F: HPriv::wrhprhstick_cmpr({{HstickCmpr = Rs1 ^ Rs2_or_imm13;}});
+            }
+            0x34: decode OPF{
+                format BasicOperate{
+                    0x01: fmovs({{
+                        Frds.uw = Frs2s.uw;
+                        //fsr.ftt = fsr.cexc = 0
+                        Fsr &= ~(7 << 14);
+                        Fsr &= ~(0x1F);
+                    }});
+                    0x02: fmovd({{
+                        Frd.udw = Frs2.udw;
+                        //fsr.ftt = fsr.cexc = 0
+                        Fsr &= ~(7 << 14);
+                        Fsr &= ~(0x1F);
+                    }});
+                    0x03: Trap::fmovq({{fault = new FpDisabled;}});
+                    0x05: fnegs({{
+                        Frds.uw = Frs2s.uw ^ (1UL << 31);
+                        //fsr.ftt = fsr.cexc = 0
+                        Fsr &= ~(7 << 14);
+                        Fsr &= ~(0x1F);
+                    }});
+                    0x06: fnegd({{
+                        Frd.udw = Frs2.udw ^ (1ULL << 63);
+                        //fsr.ftt = fsr.cexc = 0
+                        Fsr &= ~(7 << 14);
+                        Fsr &= ~(0x1F);
+                    }});
+                    0x07: Trap::fnegq({{fault = new FpDisabled;}});
+                    0x09: fabss({{
+                        Frds.uw = ((1UL << 31) - 1) & Frs2s.uw;
+                        //fsr.ftt = fsr.cexc = 0
+                        Fsr &= ~(7 << 14);
+                        Fsr &= ~(0x1F);
+                    }});
+                    0x0A: fabsd({{
+                        Frd.udw = ((1ULL << 63) - 1) & Frs2.udw;
+                        //fsr.ftt = fsr.cexc = 0
+                        Fsr &= ~(7 << 14);
+                        Fsr &= ~(0x1F);
+                    }});
+                    0x0B: Trap::fabsq({{fault = new FpDisabled;}});
+                    0x29: fsqrts({{Frds.sf = sqrt(Frs2s.sf);}});
+                    0x2A: fsqrtd({{Frd.df = sqrt(Frs2.df);}});
+                    0x2B: Trap::fsqrtq({{fault = new FpDisabled;}});
+                    0x41: fadds({{Frds.sf = Frs1s.sf + Frs2s.sf;}});
+                    0x42: faddd({{Frd.df = Frs1.df + Frs2.df;}});
+                    0x43: Trap::faddq({{fault = new FpDisabled;}});
+                    0x45: fsubs({{Frds.sf = Frs1s.sf - Frs2s.sf;}});
+                    0x46: fsubd({{Frd.df = Frs1.df - Frs2.df;}});
+                    0x47: Trap::fsubq({{fault = new FpDisabled;}});
+                    0x49: fmuls({{Frds.sf = Frs1s.sf * Frs2s.sf;}});
+                    0x4A: fmuld({{Frd.df = Frs1.df * Frs2.df;}});
+                    0x4B: Trap::fmulq({{fault = new FpDisabled;}});
+                    0x4D: fdivs({{Frds.sf = Frs1s.sf / Frs2s.sf;}});
+                    0x4E: fdivd({{Frd.df = Frs1.df / Frs2.df;}});
+                    0x4F: Trap::fdivq({{fault = new FpDisabled;}});
+                    0x69: fsmuld({{Frd.df = Frs1s.sf * Frs2s.sf;}});
+                    0x6E: Trap::fdmulq({{fault = new FpDisabled;}});
+                    0x81: fstox({{
+                            Frd.df = (double)static_cast<int64_t>(Frs2s.sf);
+                    }});
+                    0x82: fdtox({{
+                            Frd.df = (double)static_cast<int64_t>(Frs2.df);
+                    }});
+                    0x83: Trap::fqtox({{fault = new FpDisabled;}});
+                    0x84: fxtos({{
+                            Frds.sf = static_cast<float>((int64_t)Frs2.df);
+                    }});
+                    0x88: fxtod({{
+                            Frd.df = static_cast<double>((int64_t)Frs2.df);
+                    }});
+                    0x8C: Trap::fxtoq({{fault = new FpDisabled;}});
+                    0xC4: fitos({{
+                            Frds.sf = static_cast<float>((int32_t)Frs2s.sf);
+                    }});
+                    0xC6: fdtos({{Frds.sf = Frs2.df;}});
+                    0xC7: Trap::fqtos({{fault = new FpDisabled;}});
+                    0xC8: fitod({{
+                            Frd.df = static_cast<double>((int32_t)Frs2s.sf);
+                    }});
+                    0xC9: fstod({{Frd.df = Frs2s.sf;}});
+                    0xCB: Trap::fqtod({{fault = new FpDisabled;}});
+                    0xCC: Trap::fitoq({{fault = new FpDisabled;}});
+                    0xCD: Trap::fstoq({{fault = new FpDisabled;}});
+                    0xCE: Trap::fdtoq({{fault = new FpDisabled;}});
+                    0xD1: fstoi({{
+                            Frds.sf = (float)static_cast<int32_t>(Frs2s.sf);
+                    }});
+                    0xD2: fdtoi({{
+                            Frds.sf = (float)static_cast<int32_t>(Frs2.df);
+                    }});
+                    0xD3: Trap::fqtoi({{fault = new FpDisabled;}});
+                    default: Trap::fpop1({{fault = new FpDisabled;}});
+                }
+            }
+            0x35: Trap::fpop2({{fault = new FpDisabled;}});
+            //This used to be just impdep1, but now it's a whole bunch
+            //of instructions
+            0x36: decode OPF{
+                0x00: Trap::edge8({{fault = new IllegalInstruction;}});
+                0x01: Trap::edge8n({{fault = new IllegalInstruction;}});
+                0x02: Trap::edge8l({{fault = new IllegalInstruction;}});
+                0x03: Trap::edge8ln({{fault = new IllegalInstruction;}});
+                0x04: Trap::edge16({{fault = new IllegalInstruction;}});
+                0x05: Trap::edge16n({{fault = new IllegalInstruction;}});
+                0x06: Trap::edge16l({{fault = new IllegalInstruction;}});
+                0x07: Trap::edge16ln({{fault = new IllegalInstruction;}});
+                0x08: Trap::edge32({{fault = new IllegalInstruction;}});
+                0x09: Trap::edge32n({{fault = new IllegalInstruction;}});
+                0x0A: Trap::edge32l({{fault = new IllegalInstruction;}});
+                0x0B: Trap::edge32ln({{fault = new IllegalInstruction;}});
+                0x10: Trap::array8({{fault = new IllegalInstruction;}});
+                0x12: Trap::array16({{fault = new IllegalInstruction;}});
+                0x14: Trap::array32({{fault = new IllegalInstruction;}});
+                0x18: BasicOperate::alignaddr({{
+                    uint64_t sum = Rs1 + Rs2;
+                    Rd = sum & ~7;
+                    Gsr = (Gsr & ~7) | (sum & 7);
+                }});
+                0x19: Trap::bmask({{fault = new IllegalInstruction;}});
+                0x1A: BasicOperate::alignaddresslittle({{
+                    uint64_t sum = Rs1 + Rs2;
+                    Rd = sum & ~7;
+                    Gsr = (Gsr & ~7) | ((~sum + 1) & 7);
+                }});
+                0x20: Trap::fcmple16({{fault = new IllegalInstruction;}});
+                0x22: Trap::fcmpne16({{fault = new IllegalInstruction;}});
+                0x24: Trap::fcmple32({{fault = new IllegalInstruction;}});
+                0x26: Trap::fcmpne32({{fault = new IllegalInstruction;}});
+                0x28: Trap::fcmpgt16({{fault = new IllegalInstruction;}});
+                0x2A: Trap::fcmpeq16({{fault = new IllegalInstruction;}});
+                0x2C: Trap::fcmpgt32({{fault = new IllegalInstruction;}});
+                0x2E: Trap::fcmpeq32({{fault = new IllegalInstruction;}});
+                0x31: Trap::fmul8x16({{fault = new IllegalInstruction;}});
+                0x33: Trap::fmul8x16au({{fault = new IllegalInstruction;}});
+                0x35: Trap::fmul8x16al({{fault = new IllegalInstruction;}});
+                0x36: Trap::fmul8sux16({{fault = new IllegalInstruction;}});
+                0x37: Trap::fmul8ulx16({{fault = new IllegalInstruction;}});
+                0x38: Trap::fmuld8sux16({{fault = new IllegalInstruction;}});
+                0x39: Trap::fmuld8ulx16({{fault = new IllegalInstruction;}});
+                0x3A: Trap::fpack32({{fault = new IllegalInstruction;}});
+                0x3B: Trap::fpack16({{fault = new IllegalInstruction;}});
+                0x3D: Trap::fpackfix({{fault = new IllegalInstruction;}});
+                0x3E: Trap::pdist({{fault = new IllegalInstruction;}});
+                0x48: BasicOperate::faligndata({{
+                        uint64_t msbX = Frs1.udw;
+                        uint64_t lsbX = Frs2.udw;
+                        //Some special cases need to be split out, first
+                        //because they're the most likely to be used, and
+                        //second because otherwise, we end up shifting by
+                        //greater than the width of the type being shifted,
+                        //namely 64, which produces undefined results according
+                        //to the C standard.
+                        switch(Gsr<2:0>)
+                        {
+                            case 0:
+                                Frd.udw = msbX;
+                                break;
+                            case 8:
+                                Frd.udw = lsbX;
+                                break;
+                            default:
+                                uint64_t msbShift = Gsr<2:0> * 8;
+                                uint64_t lsbShift = (8 - Gsr<2:0>) * 8;
+                                uint64_t msbMask = ((uint64_t)(-1)) >> msbShift;
+                                uint64_t lsbMask = ((uint64_t)(-1)) << lsbShift;
+                                Frd.udw = ((msbX & msbMask) << msbShift) |
+                                        ((lsbX & lsbMask) >> lsbShift);
+                        }
+                }});
+                0x4B: Trap::fpmerge({{fault = new IllegalInstruction;}});
+                0x4C: Trap::bshuffle({{fault = new IllegalInstruction;}});
+                0x4D: Trap::fexpand({{fault = new IllegalInstruction;}});
+                0x50: Trap::fpadd16({{fault = new IllegalInstruction;}});
+                0x51: Trap::fpadd16s({{fault = new IllegalInstruction;}});
+                0x52: Trap::fpadd32({{fault = new IllegalInstruction;}});
+                0x53: Trap::fpadd32s({{fault = new IllegalInstruction;}});
+                0x54: Trap::fpsub16({{fault = new IllegalInstruction;}});
+                0x55: Trap::fpsub16s({{fault = new IllegalInstruction;}});
+                0x56: Trap::fpsub32({{fault = new IllegalInstruction;}});
+                0x57: Trap::fpsub32s({{fault = new IllegalInstruction;}});
+                0x60: BasicOperate::fzero({{Frd.df = 0;}});
+                0x61: BasicOperate::fzeros({{Frds.sf = 0;}});
+                0x62: Trap::fnor({{fault = new IllegalInstruction;}});
+                0x63: Trap::fnors({{fault = new IllegalInstruction;}});
+                0x64: Trap::fandnot2({{fault = new IllegalInstruction;}});
+                0x65: Trap::fandnot2s({{fault = new IllegalInstruction;}});
+                0x66: BasicOperate::fnot2({{
+                        Frd.df = (double)(~((uint64_t)Frs2.df));
+                }});
+                0x67: BasicOperate::fnot2s({{
+                        Frds.sf = (float)(~((uint32_t)Frs2s.sf));
+                }});
+                0x68: Trap::fandnot1({{fault = new IllegalInstruction;}});
+                0x69: Trap::fandnot1s({{fault = new IllegalInstruction;}});
+                0x6A: BasicOperate::fnot1({{
+                        Frd.df = (double)(~((uint64_t)Frs1.df));
+                }});
+                0x6B: BasicOperate::fnot1s({{
+                        Frds.sf = (float)(~((uint32_t)Frs1s.sf));
+                }});
+                0x6C: Trap::fxor({{fault = new IllegalInstruction;}});
+                0x6D: Trap::fxors({{fault = new IllegalInstruction;}});
+                0x6E: Trap::fnand({{fault = new IllegalInstruction;}});
+                0x6F: Trap::fnands({{fault = new IllegalInstruction;}});
+                0x70: Trap::fand({{fault = new IllegalInstruction;}});
+                0x71: Trap::fands({{fault = new IllegalInstruction;}});
+                0x72: Trap::fxnor({{fault = new IllegalInstruction;}});
+                0x73: Trap::fxnors({{fault = new IllegalInstruction;}});
+                0x74: BasicOperate::fsrc1({{Frd.udw = Frs1.udw;}});
+                0x75: BasicOperate::fsrc1s({{Frd.uw = Frs1.uw;}});
+                0x76: Trap::fornot2({{fault = new IllegalInstruction;}});
+                0x77: Trap::fornot2s({{fault = new IllegalInstruction;}});
+                0x78: BasicOperate::fsrc2({{Frd.udw = Frs2.udw;}});
+                0x79: BasicOperate::fsrc2s({{Frd.uw = Frs2.uw;}});
+                0x7A: Trap::fornot1({{fault = new IllegalInstruction;}});
+                0x7B: Trap::fornot1s({{fault = new IllegalInstruction;}});
+                0x7C: Trap::for({{fault = new IllegalInstruction;}});
+                0x7D: Trap::fors({{fault = new IllegalInstruction;}});
+                0x7E: Trap::fone({{fault = new IllegalInstruction;}});
+                0x7F: Trap::fones({{fault = new IllegalInstruction;}});
+                0x80: Trap::shutdown({{fault = new IllegalInstruction;}});
+                0x81: Trap::siam({{fault = new IllegalInstruction;}});
+            }
+            0x37: Trap::impdep2({{fault = new IllegalInstruction;}});
+            0x38: Branch::jmpl({{
+                Addr target = Rs1 + Rs2_or_imm13;
+                if(target & 0x3)
+                    fault = new MemAddressNotAligned;
+                else
+                {
+                    Rd = xc->readPC();
+                    NNPC = target;
+                }
+            }});
+            0x39: Branch::return({{
+                //If both MemAddressNotAligned and
+                //a fill trap happen, it's not clear
+                //which one should be returned.
+                Addr target = Rs1 + Rs2_or_imm13;
+                if(target & 0x3)
+                    fault = new MemAddressNotAligned;
+                else
+                    NNPC = target;
+                if(fault == NoFault)
+                {
+                    if(Canrestore == 0)
+                    {
+                        if(Otherwin)
+                            fault = new FillNOther(Wstate<5:3>);
+                        else
+                            fault = new FillNNormal(Wstate<2:0>);
+                    }
+                    else
+                    {
+                        //CWP should be set directly so that it always happens
+                        //Also, this will allow writing to the new window and
+                        //reading from the old one
+                        Cwp = (Cwp - 1 + NWindows) % NWindows;
+                        Cansave = Cansave + 1;
+                        Canrestore = Canrestore - 1;
+                        //This is here to make sure the CWP is written
+                        //no matter what. This ensures that the results
+                        //are written in the new window as well.
+                        xc->setMiscRegWithEffect(MISCREG_CWP, Cwp);
+                    }
+                }
+            }});
+            0x3A: decode CC
+            {
+                0x0: Trap::tcci({{
+                    if(passesCondition(Ccr<3:0>, COND2))
+                    {
+#if FULL_SYSTEM
+                        int lTrapNum = I ? (Rs1 + SW_TRAP) : (Rs1 + Rs2);
+                        DPRINTF(Sparc, "The trap number is %d\n", lTrapNum);
+                        fault = new TrapInstruction(lTrapNum);
+#else
+                        DPRINTF(Sparc, "The syscall number is %d\n", R1);
+                        xc->syscall(R1);
+#endif
+                    }
+                }});
+                0x2: Trap::tccx({{
+                    if(passesCondition(Ccr<7:4>, COND2))
+                    {
+#if FULL_SYSTEM
+                        int lTrapNum = I ? (Rs1 + SW_TRAP) : (Rs1 + Rs2);
+                        DPRINTF(Sparc, "The trap number is %d\n", lTrapNum);
+                        fault = new TrapInstruction(lTrapNum);
+#else
+                        DPRINTF(Sparc, "The syscall number is %d\n", R1);
+                        xc->syscall(R1);
+#endif
+                    }
+                }});
+            }
+            0x3B: Nop::flush({{/*Instruction memory flush*/}});
+            0x3C: save({{
+                //CWP should be set directly so that it always happens
+                //Also, this will allow writing to the new window and
+                //reading from the old one
+                if(Cansave == 0)
+                {
+                    if(Otherwin)
+                        fault = new SpillNOther(Wstate<5:3>);
+                    else
+                        fault = new SpillNNormal(Wstate<2:0>);
+                    //Cwp = (Cwp + 2) % NWindows;
+                }
+                else if(Cleanwin - Canrestore == 0)
+                {
+                    //Cwp = (Cwp + 1) % NWindows;
+                    fault = new CleanWindow;
+                }
+                else
+                {
+                    Cwp = (Cwp + 1) % NWindows;
+                    Rd = Rs1 + Rs2_or_imm13;
+                    Cansave = Cansave - 1;
+                    Canrestore = Canrestore + 1;
+                    //This is here to make sure the CWP is written
+                    //no matter what. This ensures that the results
+                    //are written in the new window as well.
+                    xc->setMiscRegWithEffect(MISCREG_CWP, Cwp);
+                }
+            }});
+            0x3D: restore({{
+                if(Canrestore == 0)
+                {
+                    if(Otherwin)
+                        fault = new FillNOther(Wstate<5:3>);
+                    else
+                        fault = new FillNNormal(Wstate<2:0>);
+                }
+                else
+                {
+                    //CWP should be set directly so that it always happens
+                    //Also, this will allow writing to the new window and
+                    //reading from the old one
+                    Cwp = (Cwp - 1 + NWindows) % NWindows;
+                    Rd = Rs1 + Rs2_or_imm13;
+                    Cansave = Cansave + 1;
+                    Canrestore = Canrestore - 1;
+                    //This is here to make sure the CWP is written
+                    //no matter what. This ensures that the results
+                    //are written in the new window as well.
+                    xc->setMiscRegWithEffect(MISCREG_CWP, Cwp);
+                }
+            }});
+            0x3E: decode FCN {
+                0x0: Priv::done({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+
+                    Cwp = Tstate<4:0>;
+                    Pstate = Tstate<20:8>;
+                    Asi = Tstate<31:24>;
+                    Ccr = Tstate<39:32>;
+                    Gl = Tstate<42:40>;
+                    NPC = Tnpc;
+                    NNPC = Tnpc + 4;
+                    Tl = Tl - 1;
+                }});
+                0x1: Priv::retry({{
+                    if(Tl == 0)
+                        return new IllegalInstruction;
+                    Cwp = Tstate<4:0>;
+                    Pstate = Tstate<20:8>;
+                    Asi = Tstate<31:24>;
+                    Ccr = Tstate<39:32>;
+                    Gl = Tstate<42:40>;
+                    NPC = Tpc;
+                    NNPC = Tnpc;
+                    Tl = Tl - 1;
+                }});
+            }
+        }
+    }
+    0x3: decode OP3 {
+        format Load {
+            0x00: lduw({{Rd = Mem.uw;}});
+            0x01: ldub({{Rd = Mem.ub;}});
+            0x02: lduh({{Rd = Mem.uhw;}});
+            0x03: ldd({{
+                uint64_t val = Mem.udw;
+                RdLow = val<31:0>;
+                RdHigh = val<63:32>;
+            }});
+        }
+        format Store {
+            0x04: stw({{Mem.uw = Rd.sw;}});
+            0x05: stb({{Mem.ub = Rd.sb;}});
+            0x06: sth({{Mem.uhw = Rd.shw;}});
+            0x07: std({{Mem.udw = RdLow<31:0> | (RdHigh<31:0> << 32);}});
+        }
+        format Load {
+            0x08: ldsw({{Rd = (int32_t)Mem.sw;}});
+            0x09: ldsb({{Rd = (int8_t)Mem.sb;}});
+            0x0A: ldsh({{Rd = (int16_t)Mem.shw;}});
+            0x0B: ldx({{Rd = (int64_t)Mem.sdw;}});
+        }
+        0x0D: LoadStore::ldstub(
+        {{Rd = Mem.ub;}},
+        {{Mem.ub = 0xFF;}});
+        0x0E: Store::stx({{Mem.udw = Rd}});
+        0x0F: LoadStore::swap(
+            {{uReg0 = Rd.uw;
+            Rd.uw = Mem.uw;}},
+            {{Mem.uw = uReg0;}});
+        format Load {
+            0x10: lduwa({{Rd = Mem.uw;}});
+            0x11: lduba({{Rd = Mem.ub;}});
+            0x12: lduha({{Rd = Mem.uhw;}});
+            0x13: ldda({{
+                uint64_t val = Mem.udw;
+                RdLow = val<31:0>;
+                RdHigh = val<63:32>;
+            }});
+        }
+        format Store {
+            0x14: stwa({{Mem.uw = Rd;}});
+            0x15: stba({{Mem.ub = Rd;}});
+            0x16: stha({{Mem.uhw = Rd;}});
+            0x17: stda({{Mem.udw = RdLow<31:0> | RdHigh<31:0> << 32;}});
+        }
+        format Load {
+            0x18: ldswa({{Rd = (int32_t)Mem.sw;}});
+            0x19: ldsba({{Rd = (int8_t)Mem.sb;}});
+            0x1A: ldsha({{Rd = (int16_t)Mem.shw;}});
+            0x1B: ldxa({{Rd = (int64_t)Mem.sdw;}});
+        }
+        0x1D: LoadStore::ldstuba(
+                {{Rd = Mem.ub;}},
+                {{Mem.ub = 0xFF}});
+        0x1E: Store::stxa({{Mem.udw = Rd}});
+        0x1F: LoadStore::swapa(
+            {{uReg0 = Rd.uw;
+            Rd.uw = Mem.uw;}},
+            {{Mem.uw = uReg0;}});
+        format Trap {
+            0x20: Load::ldf({{Frd.uw = Mem.uw;}});
+            0x21: decode X {
+                0x0: Load::ldfsr({{Fsr = Mem.uw | Fsr<63:32>;}});
+                0x1: Load::ldxfsr({{Fsr = Mem.udw;}});
+            }
+            0x22: ldqf({{fault = new FpDisabled;}});
+            0x23: Load::lddf({{Frd.udw = Mem.udw;}});
+            0x24: Store::stf({{Mem.uw = Frd.uw;}});
+            0x25: decode X {
+                0x0: Store::stfsr({{Mem.uw = Fsr<31:0>;}});
+                0x1: Store::stxfsr({{Mem.udw = Fsr;}});
+            }
+            0x26: stqf({{fault = new FpDisabled;}});
+            0x27: Store::stdf({{Mem.udw = Frd.udw;}});
+            0x2D: Nop::prefetch({{ }});
+            0x30: Load::ldfa({{Frd.uw = Mem.uw;}});
+            0x32: ldqfa({{fault = new FpDisabled;}});
+            format LoadAlt {
+                0x33: decode EXT_ASI {
+                    //ASI_NUCLEUS
+                    0x04: FailUnimpl::lddfa_n();
+                    //ASI_NUCLEUS_LITTLE
+                    0x0C: FailUnimpl::lddfa_nl();
+                    //ASI_AS_IF_USER_PRIMARY
+                    0x10: FailUnimpl::lddfa_aiup();
+                    //ASI_AS_IF_USER_PRIMARY_LITTLE
+                    0x18: FailUnimpl::lddfa_aiupl();
+                    //ASI_AS_IF_USER_SECONDARY
+                    0x11: FailUnimpl::lddfa_aius();
+                    //ASI_AS_IF_USER_SECONDARY_LITTLE
+                    0x19: FailUnimpl::lddfa_aiusl();
+                    //ASI_REAL
+                    0x14: FailUnimpl::lddfa_real();
+                    //ASI_REAL_LITTLE
+                    0x1C: FailUnimpl::lddfa_real_l();
+                    //ASI_REAL_IO
+                    0x15: FailUnimpl::lddfa_real_io();
+                    //ASI_REAL_IO_LITTLE
+                    0x1D: FailUnimpl::lddfa_real_io_l();
+                    //ASI_PRIMARY
+                    0x80: FailUnimpl::lddfa_p();
+                    //ASI_PRIMARY_LITTLE
+                    0x88: FailUnimpl::lddfa_pl();
+                    //ASI_SECONDARY
+                    0x81: FailUnimpl::lddfa_s();
+                    //ASI_SECONDARY_LITTLE
+                    0x89: FailUnimpl::lddfa_sl();
+                    //ASI_PRIMARY_NO_FAULT
+                    0x82: FailUnimpl::lddfa_pnf();
+                    //ASI_PRIMARY_NO_FAULT_LITTLE
+                    0x8A: FailUnimpl::lddfa_pnfl();
+                    //ASI_SECONDARY_NO_FAULT
+                    0x83: FailUnimpl::lddfa_snf();
+                    //ASI_SECONDARY_NO_FAULT_LITTLE
+                    0x8B: FailUnimpl::lddfa_snfl();
+
+                    format BlockLoad {
+                        // LDBLOCKF
+                        //ASI_BLOCK_AS_IF_USER_PRIMARY
+                        0x16: FailUnimpl::ldblockf_aiup();
+                        //ASI_BLOCK_AS_IF_USER_SECONDARY
+                        0x17: FailUnimpl::ldblockf_aius();
+                        //ASI_BLOCK_AS_IF_USER_PRIMARY_LITTLE
+                        0x1E: FailUnimpl::ldblockf_aiupl();
+                        //ASI_BLOCK_AS_IF_USER_SECONDARY_LITTLE
+                        0x1F: FailUnimpl::ldblockf_aiusl();
+                        //ASI_BLOCK_PRIMARY
+                        0xF0: ldblockf_p({{Frd_N.udw = Mem.udw;}});
+                        //ASI_BLOCK_SECONDARY
+                        0xF1: FailUnimpl::ldblockf_s();
+                        //ASI_BLOCK_PRIMARY_LITTLE
+                        0xF8: FailUnimpl::ldblockf_pl();
+                        //ASI_BLOCK_SECONDARY_LITTLE
+                        0xF9: FailUnimpl::ldblockf_sl();
+                    }
+
+                    //LDSHORTF
+                    //ASI_FL8_PRIMARY
+                    0xD0: FailUnimpl::ldshortf_8p();
+                    //ASI_FL8_SECONDARY
+                    0xD1: FailUnimpl::ldshortf_8s();
+                    //ASI_FL8_PRIMARY_LITTLE
+                    0xD8: FailUnimpl::ldshortf_8pl();
+                    //ASI_FL8_SECONDARY_LITTLE
+                    0xD9: FailUnimpl::ldshortf_8sl();
+                    //ASI_FL16_PRIMARY
+                    0xD2: FailUnimpl::ldshortf_16p();
+                    //ASI_FL16_SECONDARY
+                    0xD3: FailUnimpl::ldshortf_16s();
+                    //ASI_FL16_PRIMARY_LITTLE
+                    0xDA: FailUnimpl::ldshortf_16pl();
+                    //ASI_FL16_SECONDARY_LITTLE
+                    0xDB: FailUnimpl::ldshortf_16sl();
+                    //Not an ASI which is legal with lddfa
+                    default: Trap::lddfa_bad_asi(
+                        {{fault = new DataAccessException;}});
+                }
+            }
+            0x34: Store::stfa({{Mem.uw = Frd.uw;}});
+            0x36: stqfa({{fault = new FpDisabled;}});
+            format StoreAlt {
+                0x37: decode EXT_ASI {
+                    //ASI_NUCLEUS
+                    0x04: FailUnimpl::stdfa_n();
+                    //ASI_NUCLEUS_LITTLE
+                    0x0C: FailUnimpl::stdfa_nl();
+                    //ASI_AS_IF_USER_PRIMARY
+                    0x10: FailUnimpl::stdfa_aiup();
+                    //ASI_AS_IF_USER_PRIMARY_LITTLE
+                    0x18: FailUnimpl::stdfa_aiupl();
+                    //ASI_AS_IF_USER_SECONDARY
+                    0x11: FailUnimpl::stdfa_aius();
+                    //ASI_AS_IF_USER_SECONDARY_LITTLE
+                    0x19: FailUnimpl::stdfa_aiusl();
+                    //ASI_REAL
+                    0x14: FailUnimpl::stdfa_real();
+                    //ASI_REAL_LITTLE
+                    0x1C: FailUnimpl::stdfa_real_l();
+                    //ASI_REAL_IO
+                    0x15: FailUnimpl::stdfa_real_io();
+                    //ASI_REAL_IO_LITTLE
+                    0x1D: FailUnimpl::stdfa_real_io_l();
+                    //ASI_PRIMARY
+                    0x80: FailUnimpl::stdfa_p();
+                    //ASI_PRIMARY_LITTLE
+                    0x88: FailUnimpl::stdfa_pl();
+                    //ASI_SECONDARY
+                    0x81: FailUnimpl::stdfa_s();
+                    //ASI_SECONDARY_LITTLE
+                    0x89: FailUnimpl::stdfa_sl();
+                    //ASI_PRIMARY_NO_FAULT
+                    0x82: FailUnimpl::stdfa_pnf();
+                    //ASI_PRIMARY_NO_FAULT_LITTLE
+                    0x8A: FailUnimpl::stdfa_pnfl();
+                    //ASI_SECONDARY_NO_FAULT
+                    0x83: FailUnimpl::stdfa_snf();
+                    //ASI_SECONDARY_NO_FAULT_LITTLE
+                    0x8B: FailUnimpl::stdfa_snfl();
+
+                    format BlockStore {
+                        // STBLOCKF
+                        //ASI_BLOCK_AS_IF_USER_PRIMARY
+                        0x16: FailUnimpl::stblockf_aiup();
+                        //ASI_BLOCK_AS_IF_USER_SECONDARY
+                        0x17: FailUnimpl::stblockf_aius();
+                        //ASI_BLOCK_AS_IF_USER_PRIMARY_LITTLE
+                        0x1E: FailUnimpl::stblockf_aiupl();
+                        //ASI_BLOCK_AS_IF_USER_SECONDARY_LITTLE
+                        0x1F: FailUnimpl::stblockf_aiusl();
+                        //ASI_BLOCK_PRIMARY
+                        0xF0: stblockf_p({{Mem.udw = Frd_N.udw;}});
+                        //ASI_BLOCK_SECONDARY
+                        0xF1: FailUnimpl::stblockf_s();
+                        //ASI_BLOCK_PRIMARY_LITTLE
+                        0xF8: FailUnimpl::stblockf_pl();
+                        //ASI_BLOCK_SECONDARY_LITTLE
+                        0xF9: FailUnimpl::stblockf_sl();
+                    }
+
+                    //STSHORTF
+                    //ASI_FL8_PRIMARY
+                    0xD0: FailUnimpl::stshortf_8p();
+                    //ASI_FL8_SECONDARY
+                    0xD1: FailUnimpl::stshortf_8s();
+                    //ASI_FL8_PRIMARY_LITTLE
+                    0xD8: FailUnimpl::stshortf_8pl();
+                    //ASI_FL8_SECONDARY_LITTLE
+                    0xD9: FailUnimpl::stshortf_8sl();
+                    //ASI_FL16_PRIMARY
+                    0xD2: FailUnimpl::stshortf_16p();
+                    //ASI_FL16_SECONDARY
+                    0xD3: FailUnimpl::stshortf_16s();
+                    //ASI_FL16_PRIMARY_LITTLE
+                    0xDA: FailUnimpl::stshortf_16pl();
+                    //ASI_FL16_SECONDARY_LITTLE
+                    0xDB: FailUnimpl::stshortf_16sl();
+                    //Not an ASI which is legal with lddfa
+                    default: Trap::stdfa_bad_asi(
+                        {{fault = new DataAccessException;}});
+                }
+            }
+            0x3C: Cas::casa(
+                {{uReg0 = Mem.uw;}},
+                {{if(Rs2.uw == uReg0)
+                        Mem.uw = Rd.uw;
+                else
+                        storeCond = false;
+                Rd.uw = uReg0;}});
+            0x3D: Nop::prefetcha({{ }});
+            0x3E: Cas::casxa(
+                {{uReg0 = Mem.udw;}},
+                {{if(Rs2 == uReg0)
+                        Mem.udw = Rd;
+                else
+                        storeCond = false;
+                Rd = uReg0;}});
+        }
+    }
+}
