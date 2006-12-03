@@ -1,0 +1,339 @@
+# -*- mode:python -*-
+
+# Copyright (c) 2004-2005 The Regents of The University of Michigan
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met: redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer;
+# redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution;
+# neither the name of the copyright holders nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Authors: Steve Reinhardt
+
+import os
+import sys
+from os.path import isfile, join as joinpath
+
+# This file defines how to build a particular configuration of M5
+# based on variable settings in the 'env' build environment.
+
+# Import build environment variable from SConstruct.
+Import('env')
+
+###################################################
+#
+# Define needed sources.
+#
+###################################################
+
+# Base sources used by all configurations.
+
+base_sources = Split('''
+	base/annotate.cc
+	base/circlebuf.cc
+	base/cprintf.cc
+	base/fast_alloc.cc
+	base/fifo_buffer.cc
+	base/hostinfo.cc
+	base/hybrid_pred.cc
+	base/inifile.cc
+	base/intmath.cc
+	base/match.cc
+	base/misc.cc
+	base/output.cc
+	base/pollevent.cc
+	base/range.cc
+	base/random.cc
+	base/sat_counter.cc
+	base/socket.cc
+	base/statistics.cc
+	base/str.cc
+	base/time.cc
+	base/trace.cc
+	base/traceflags.cc
+	base/userinfo.cc
+	base/compression/lzss_compression.cc
+	base/loader/aout_object.cc
+	base/loader/ecoff_object.cc
+	base/loader/elf_object.cc
+	base/loader/raw_object.cc
+	base/loader/object_file.cc
+	base/loader/symtab.cc
+	base/stats/events.cc
+	base/stats/statdb.cc
+	base/stats/visit.cc
+	base/stats/text.cc
+
+        cpu/activity.cc
+	cpu/base.cc
+	cpu/cpuevent.cc
+	cpu/exetrace.cc
+        cpu/func_unit.cc
+        cpu/op_class.cc
+	cpu/pc_event.cc
+        cpu/quiesce_event.cc
+	cpu/static_inst.cc
+        cpu/simple_thread.cc
+        cpu/thread_state.cc
+
+        mem/bridge.cc
+        mem/bus.cc
+        mem/dram.cc
+        mem/mem_object.cc
+        mem/packet.cc
+        mem/physical.cc
+        mem/port.cc
+        mem/tport.cc
+
+        mem/cache/base_cache.cc
+        mem/cache/cache.cc
+        mem/cache/coherence/coherence_protocol.cc
+        mem/cache/coherence/uni_coherence.cc
+        mem/cache/miss/blocking_buffer.cc
+        mem/cache/miss/miss_queue.cc
+        mem/cache/miss/mshr.cc
+        mem/cache/miss/mshr_queue.cc
+        mem/cache/prefetch/base_prefetcher.cc
+        mem/cache/prefetch/ghb_prefetcher.cc
+        mem/cache/prefetch/prefetcher.cc
+        mem/cache/prefetch/stride_prefetcher.cc
+        mem/cache/prefetch/tagged_prefetcher.cc
+        mem/cache/tags/base_tags.cc
+        mem/cache/tags/cache_tags.cc
+        mem/cache/tags/fa_lru.cc
+        mem/cache/tags/iic.cc
+        mem/cache/tags/lru.cc
+        mem/cache/tags/repl/gen.cc
+        mem/cache/tags/repl/repl.cc
+        mem/cache/tags/split.cc
+        mem/cache/tags/split_lifo.cc
+        mem/cache/tags/split_lru.cc
+
+        mem/cache/cache_builder.cc
+
+        python/swig/debug_wrap.cc
+        python/swig/main_wrap.cc
+
+	sim/builder.cc
+	sim/debug.cc
+	sim/eventq.cc
+	sim/faults.cc
+	sim/main.cc
+	sim/param.cc
+	sim/root.cc
+	sim/serialize.cc
+	sim/sim_events.cc
+	sim/sim_object.cc
+	sim/startup.cc
+	sim/stat_context.cc
+	sim/stat_control.cc
+	sim/system.cc
+	sim/trace_context.cc
+        ''')
+
+trace_reader_sources = Split('''
+        cpu/trace/reader/mem_trace_reader.cc
+        cpu/trace/reader/ibm_reader.cc
+        cpu/trace/reader/itx_reader.cc
+        cpu/trace/reader/m5_reader.cc
+        cpu/trace/opt_cpu.cc
+        cpu/trace/trace_cpu.cc
+        ''')
+
+
+
+# MySql sources
+mysql_sources = Split('''
+	base/mysql.cc
+	base/stats/mysql.cc
+        ''')
+
+# Full-system sources
+full_system_sources = Split('''
+	base/crc.cc
+	base/inet.cc
+	base/remote_gdb.cc
+
+	cpu/intr_control.cc
+        cpu/profile.cc
+
+	dev/uart.cc
+	dev/uart8250.cc
+
+        mem/vport.cc
+
+	sim/pseudo_inst.cc
+        ''')
+	#dev/sinic.cc
+        #dev/i8254xGBe.cc
+
+if env['TARGET_ISA'] == 'alpha':
+    full_system_sources += Split('''
+	kern/tru64/dump_mbuf.cc
+	kern/tru64/printf.cc
+	kern/tru64/tru64_events.cc
+	kern/tru64/tru64_syscalls.cc
+        ''')
+
+# Syscall emulation (non-full-system) sources
+syscall_emulation_sources = Split('''
+        mem/translating_port.cc
+        mem/page_table.cc
+	sim/process.cc
+	sim/syscall_emul.cc
+        ''')
+
+#if env['TARGET_ISA'] == 'alpha':
+#    syscall_emulation_sources += Split('''
+#        kern/tru64/tru64.cc
+#        ''')
+
+memtest_sources = Split('''
+	cpu/memtest/memtest.cc
+        ''')
+
+# Include file paths are rooted in this directory.  SCons will
+# automatically expand '.' to refer to both the source directory and
+# the corresponding build directory to pick up generated include
+# files.
+env.Append(CPPPATH=Dir('.'))
+
+# Add a flag defining what THE_ISA should be for all compilation
+env.Append(CPPDEFINES=[('THE_ISA','%s_ISA' % env['TARGET_ISA'].upper())])
+
+arch_sources = SConscript(os.path.join('arch', 'SConscript'), exports = 'env')
+
+cpu_sources = SConscript(os.path.join('cpu', 'SConscript'), exports = 'env')
+
+if env['FULL_SYSTEM']:
+    dev_sources = SConscript(os.path.join('dev', 'SConscript'),
+                             exports = 'env')
+    full_system_sources += dev_sources
+
+    kern_sources = SConscript(os.path.join('kern', 'SConscript'),
+                              exports = 'env')
+    full_system_sources += kern_sources
+
+# Set up complete list of sources based on configuration.
+sources = base_sources + arch_sources + cpu_sources
+
+# encumbered should be last because we're adding to some of the other groups
+if isfile(joinpath(env['SRCDIR'], 'encumbered/SConscript')):
+    sources += SConscript('encumbered/SConscript', exports = 'env')
+
+
+if env['FULL_SYSTEM']:
+    sources += full_system_sources
+else:
+    sources += syscall_emulation_sources
+
+if env['USE_MYSQL']:
+    sources += mysql_sources
+
+for opt in env.ExportOptions:
+    env.ConfigFile(opt)
+
+###################################################
+#
+# Special build rules.
+#
+###################################################
+
+# base/traceflags.{cc,hh} are generated from base/traceflags.py.
+# $TARGET.base will expand to "<build-dir>/base/traceflags".
+env.Command(Split('base/traceflags.hh base/traceflags.cc'),
+            'base/traceflags.py',
+            'python $SOURCE $TARGET.base')
+
+SConscript('python/SConscript', exports = ['env'])
+
+# This function adds the specified sources to the given build
+# environment, and returns a list of all the corresponding SCons
+# Object nodes (including an extra one for date.cc).  We explicitly
+# add the Object nodes so we can set up special dependencies for
+# date.cc.
+def make_objs(sources, env):
+    objs = [env.Object(s) for s in sources]
+    # make date.cc depend on all other objects so it always gets
+    # recompiled whenever anything else does
+    date_obj = env.Object('base/date.cc')
+    env.Depends(date_obj, objs)
+    objs.append(date_obj)
+    return objs
+
+###################################################
+#
+# Define binaries.  Each different build type (debug, opt, etc.) gets
+# a slightly different build environment.
+#
+###################################################
+
+# List of constructed environments to pass back to SConstruct
+envList = []
+
+# Function to create a new build environment as clone of current
+# environment 'env' with modified object suffix and optional stripped
+# binary.  Additional keyword arguments are appended to corresponding
+# build environment vars.
+def makeEnv(label, objsfx, strip = False, **kwargs):
+    newEnv = env.Copy(OBJSUFFIX=objsfx)
+    newEnv.Label = label
+    newEnv.Append(**kwargs)
+    exe = 'm5.' + label  # final executable
+    bin = exe + '.bin'   # executable w/o appended Python zip archive
+    newEnv.Program(bin, make_objs(sources, newEnv))
+    if strip:
+        stripped_bin = bin + '.stripped'
+        newEnv.Command(stripped_bin, bin, 'strip $SOURCE -o $TARGET')
+        bin = stripped_bin
+    targets = newEnv.Concat(exe, [bin, 'python/m5py.zip'])
+    newEnv.M5Binary = targets[0]
+    envList.append(newEnv)
+
+# Debug binary
+# Solaris seems to have some issue with DWARF2 debugging information, it's ok
+# with stabs though
+if sys.platform == 'sunos5':
+   debug_flag = '-gstabs+'
+else:
+   debug_flag = '-ggdb3'
+
+makeEnv('debug', '.do',
+        CCFLAGS = Split('%s -O0' % debug_flag),
+        CPPDEFINES = ['DEBUG', 'TRACING_ON=1'])
+
+# Optimized binary
+makeEnv('opt', '.o',
+        CCFLAGS = Split('-g -O3'),
+        CPPDEFINES = ['TRACING_ON=1'])
+
+# "Fast" binary
+makeEnv('fast', '.fo', strip = True,
+        CCFLAGS = Split('-O3'),
+        CPPDEFINES = ['NDEBUG', 'TRACING_ON=0'])
+
+# Profiled binary
+makeEnv('prof', '.po',
+        CCFLAGS = Split('-O3 -g -pg'),
+        CPPDEFINES = ['NDEBUG', 'TRACING_ON=0'],
+        LINKFLAGS = '-pg')
+
+Return('envList')
