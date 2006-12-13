@@ -32,7 +32,6 @@
 #ifndef __ARCH_SPARC_MISCREGFILE_HH__
 #define __ARCH_SPARC_MISCREGFILE_HH__
 
-#include "arch/sparc/asi.hh"
 #include "arch/sparc/faults.hh"
 #include "arch/sparc/isa_traits.hh"
 #include "arch/sparc/types.hh"
@@ -42,14 +41,13 @@
 
 namespace SparcISA
 {
-
     //These functions map register indices to names
     std::string getMiscRegName(RegIndex);
 
     enum MiscRegIndex
     {
         /** Ancillary State Registers */
-        MISCREG_Y,
+        MISCREG_Y, /* 0 */
         MISCREG_CCR,
         MISCREG_ASI,
         MISCREG_TICK,
@@ -59,7 +57,7 @@ namespace SparcISA
         MISCREG_GSR,
         MISCREG_SOFTINT_SET,
         MISCREG_SOFTINT_CLR,
-        MISCREG_SOFTINT,
+        MISCREG_SOFTINT, /* 10 */
         MISCREG_TICK_CMPR,
         MISCREG_STICK,
         MISCREG_STICK_CMPR,
@@ -71,7 +69,7 @@ namespace SparcISA
         MISCREG_TT,
         MISCREG_PRIVTICK,
         MISCREG_TBA,
-        MISCREG_PSTATE,
+        MISCREG_PSTATE, /* 20 */
         MISCREG_TL,
         MISCREG_PIL,
         MISCREG_CWP,
@@ -83,7 +81,7 @@ namespace SparcISA
         MISCREG_GL,
 
         /** Hyper privileged registers */
-        MISCREG_HPSTATE,
+        MISCREG_HPSTATE, /* 30 */
         MISCREG_HTSTATE,
         MISCREG_HINTP,
         MISCREG_HTBA,
@@ -92,8 +90,76 @@ namespace SparcISA
         MISCREG_HSTICK_CMPR,
 
         /** Floating Point Status Register */
-        MISCREG_FSR
+        MISCREG_FSR,
+
+        /** MMU Internal Registers */
+        MISCREG_MMU_P_CONTEXT,
+        MISCREG_MMU_S_CONTEXT, /* 40 */
+        MISCREG_MMU_PART_ID,
+        MISCREG_MMU_LSU_CTRL,
+
+        MISCREG_MMU_ITLB_C0_TSB_PS0,
+        MISCREG_MMU_ITLB_C0_TSB_PS1,
+        MISCREG_MMU_ITLB_C0_CONFIG,
+        MISCREG_MMU_ITLB_CX_TSB_PS0,
+        MISCREG_MMU_ITLB_CX_TSB_PS1,
+        MISCREG_MMU_ITLB_CX_CONFIG,
+        MISCREG_MMU_ITLB_SFSR,
+        MISCREG_MMU_ITLB_TAG_ACCESS, /* 50 */
+
+        MISCREG_MMU_DTLB_C0_TSB_PS0,
+        MISCREG_MMU_DTLB_C0_TSB_PS1,
+        MISCREG_MMU_DTLB_C0_CONFIG,
+        MISCREG_MMU_DTLB_CX_TSB_PS0,
+        MISCREG_MMU_DTLB_CX_TSB_PS1,
+        MISCREG_MMU_DTLB_CX_CONFIG,
+        MISCREG_MMU_DTLB_SFSR,
+        MISCREG_MMU_DTLB_SFAR,
+        MISCREG_MMU_DTLB_TAG_ACCESS,
+
+        /** Scratchpad regiscers **/
+        MISCREG_SCRATCHPAD_R0, /* 60 */
+        MISCREG_SCRATCHPAD_R1,
+        MISCREG_SCRATCHPAD_R2,
+        MISCREG_SCRATCHPAD_R3,
+        MISCREG_SCRATCHPAD_R4,
+        MISCREG_SCRATCHPAD_R5,
+        MISCREG_SCRATCHPAD_R6,
+        MISCREG_SCRATCHPAD_R7,
+
+        /* CPU Queue Registers */
+        MISCREG_QUEUE_CPU_MONDO_HEAD,
+        MISCREG_QUEUE_CPU_MONDO_TAIL,
+        MISCREG_QUEUE_DEV_MONDO_HEAD, /* 70 */
+        MISCREG_QUEUE_DEV_MONDO_TAIL,
+        MISCREG_QUEUE_RES_ERROR_HEAD,
+        MISCREG_QUEUE_RES_ERROR_TAIL,
+        MISCREG_QUEUE_NRES_ERROR_HEAD,
+        MISCREG_QUEUE_NRES_ERROR_TAIL,
+
+        MISCREG_NUMMISCREGS
     };
+
+    enum HPStateFields {
+        id = 0x800,   // this impl. dependent (id) field must always be '1' for T1000
+        ibe = 0x400,
+        red = 0x20,
+        hpriv = 0x4,
+        tlz = 0x1
+    };
+
+    enum PStateFields {
+        cle = 0x200,
+        tle = 0x100,
+        mm = 0xC0,
+        pef = 0x10,
+        am = 0x8,
+        priv = 0x4,
+        ie = 0x2
+    };
+
+    const int NumMiscArchRegs = MISCREG_NUMMISCREGS;
+    const int NumMiscRegs = MISCREG_NUMMISCREGS;
 
     // The control registers, broken out into fields
     class MiscRegFile
@@ -146,12 +212,49 @@ namespace SparcISA
         /** Floating point misc registers. */
         uint64_t fsr;		// Floating-Point State Register
 
-        ASI implicitInstAsi;
-        ASI implicitDataAsi;
+        /** MMU Internal Registers */
+        uint16_t priContext;
+        uint16_t secContext;
+        uint16_t partId;
+        uint64_t lsuCtrlReg;
+
+        uint64_t iTlbC0TsbPs0;
+        uint64_t iTlbC0TsbPs1;
+        uint64_t iTlbC0Config;
+        uint64_t iTlbCXTsbPs0;
+        uint64_t iTlbCXTsbPs1;
+        uint64_t iTlbCXConfig;
+        uint64_t iTlbSfsr;
+        uint64_t iTlbTagAccess;
+
+        uint64_t dTlbC0TsbPs0;
+        uint64_t dTlbC0TsbPs1;
+        uint64_t dTlbC0Config;
+        uint64_t dTlbCXTsbPs0;
+        uint64_t dTlbCXTsbPs1;
+        uint64_t dTlbCXConfig;
+        uint64_t dTlbSfsr;
+        uint64_t dTlbSfar;
+        uint64_t dTlbTagAccess;
+
+        uint64_t scratchPad[8];
+
+        uint64_t cpu_mondo_head;
+        uint64_t cpu_mondo_tail;
+        uint64_t dev_mondo_head;
+        uint64_t dev_mondo_tail;
+        uint64_t res_error_head;
+        uint64_t res_error_tail;
+        uint64_t nres_error_head;
+        uint64_t nres_error_tail;
 
         // These need to check the int_dis field and if 0 then
         // set appropriate bit in softint and checkinterrutps on the cpu
 #if FULL_SYSTEM
+        void  setFSRegWithEffect(int miscReg, const MiscReg &val,
+                ThreadContext *tc);
+        MiscReg readFSRegWithEffect(int miscReg, ThreadContext * tc);
+
         /** Process a tick compare event and generate an interrupt on the cpu if
          * appropriate. */
         void processTickCompare(ThreadContext *tc);
@@ -172,11 +275,11 @@ namespace SparcISA
 #endif
       public:
 
-        void reset();
+        void clear();
 
         MiscRegFile()
         {
-            reset();
+            clear();
         }
 
         MiscReg readReg(int miscReg);
@@ -188,14 +291,14 @@ namespace SparcISA
         void setRegWithEffect(int miscReg,
                 const MiscReg &val, ThreadContext * tc);
 
-        ASI getInstAsid()
+        int getInstAsid()
         {
-            return implicitInstAsi;
+            return priContext | (uint32_t)partId << 13;
         }
 
-        ASI getDataAsid()
+        int getDataAsid()
         {
-            return implicitDataAsi;
+            return priContext | (uint32_t)partId << 13;
         }
 
         void serialize(std::ostream & os);
@@ -209,7 +312,6 @@ namespace SparcISA
         bool isHyperPriv() { return (hpstate & (1 << 2)); }
         bool isPriv() { return (hpstate & (1 << 2)) || (pstate & (1 << 2)); }
         bool isNonPriv() { return !isPriv(); }
-        inline void setImplicitAsis();
     };
 }
 

@@ -56,9 +56,11 @@ base_sources = Split('''
 full_system_sources = Split('''
 	arguments.cc
 	remote_gdb.cc
+        pagetable.cc
 	stacktrace.cc
 	system.cc
 	tlb.cc
+        ua2005.cc
 	vtophys.cc
 	''')
 

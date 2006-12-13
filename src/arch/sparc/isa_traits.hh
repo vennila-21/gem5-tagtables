@@ -26,33 +26,26 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Gabe Black
+ *          Ali Saidi
  */
 
 #ifndef __ARCH_SPARC_ISA_TRAITS_HH__
 #define __ARCH_SPARC_ISA_TRAITS_HH__
 
 #include "arch/sparc/types.hh"
-#include "base/misc.hh"
+#include "arch/sparc/sparc_traits.hh"
 #include "config/full_system.hh"
 #include "sim/host.hh"
 
-class ThreadContext;
-class FastCPU;
-//class FullCPU;
-class Checkpoint;
-
-class StaticInst;
 class StaticInstPtr;
 
 namespace BigEndianGuest {}
 
-#if FULL_SYSTEM
-#include "arch/sparc/isa_fullsys_traits.hh"
-#endif
-
 namespace SparcISA
 {
     class RegFile;
+
+    const int MachineBytes = 8;
 
     //This makes sure the big endian versions of certain functions are used.
     using namespace BigEndianGuest;
@@ -63,31 +56,11 @@ namespace SparcISA
     // SPARC NOP (sethi %(hi(0), g0)
     const MachInst NoopMachInst = 0x01000000;
 
-    const int NumRegularIntRegs = 32;
-    const int NumMicroIntRegs = 1;
-    const int NumIntRegs =
-        NumRegularIntRegs +
-        NumMicroIntRegs;
-    const int NumFloatRegs = 64;
-    const int NumMiscRegs = 40;
-
     // These enumerate all the registers for dependence tracking.
     enum DependenceTags {
-        // 0..31 are the integer regs 0..31
-        // 32..95 are the FP regs 0..31, i.e. use (reg + FP_Base_DepTag)
-        FP_Base_DepTag = NumIntRegs,
-        Ctrl_Base_DepTag = NumIntRegs + NumMicroIntRegs + NumFloatRegs,
+        FP_Base_DepTag = 33,
+        Ctrl_Base_DepTag = 97,
     };
-
-
-    // MAXTL - maximum trap level
-    const int MaxPTL = 2;
-    const int MaxTL  = 6;
-    const int MaxGL  = 3;
-    const int MaxPGL = 2;
-
-    // NWINDOWS - number of register windows, can be 3 to 32
-    const int NWindows = 8;
 
     // semantically meaningful register indices
     const int ZeroReg = 0;	// architecturally meaningful
@@ -116,23 +89,35 @@ namespace SparcISA
 
     //Why does both the previous set of constants and this one exist?
     const int PageShift = 13;
-    const int PageBytes = ULL(1) << PageShift;
+    const int PageBytes = 1ULL << PageShift;
 
     const int BranchPredAddrShiftAmt = 2;
 
-    const int MachineBytes = 8;
-    const int WordBytes = 4;
-    const int HalfwordBytes = 2;
-    const int ByteBytes = 1;
-
-    void serialize(std::ostream & os);
-
-    void unserialize(Checkpoint *cp, const std::string &section);
-
     StaticInstPtr decodeInst(ExtMachInst);
 
-    // return a no-op instruction... used for instruction fetch faults
-    extern const MachInst NoopMachInst;
+#if FULL_SYSTEM
+    ////////// Interrupt Stuff ///////////
+    enum InterruptLevels
+    {
+       INTLEVEL_MIN = 1,
+       INTLEVEL_MAX = 15,
+
+       NumInterruptLevels = INTLEVEL_MAX - INTLEVEL_MIN
+    };
+
+    // I don't know what it's for, so I don't
+    // know what SPARC's value should be
+    // For loading... XXX This maybe could be USegEnd?? --ali
+    const Addr LoadAddrMask = ULL(0xffffffffff);
+
+    /////////// TLB Stuff ////////////
+    const Addr StartVAddrHole = ULL(0x0000800000000000);
+    const Addr EndVAddrHole = ULL(0xFFFF7FFFFFFFFFFF);
+    const Addr VAddrAMask = ULL(0xFFFFFFFF);
+    const Addr PAddrImplMask = ULL(0x000000FFFFFFFFFF);
+    const Addr BytesInPageMask = ULL(0x1FFF);
+
+#endif
 }
 
 #endif // __ARCH_SPARC_ISA_TRAITS_HH__
