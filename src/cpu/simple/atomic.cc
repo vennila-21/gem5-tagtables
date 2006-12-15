@@ -29,6 +29,7 @@
  */
 
 #include "arch/locked_mem.hh"
+#include "arch/mmaped_ipr.hh"
 #include "arch/utility.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/simple/atomic.hh"
@@ -289,10 +290,16 @@ AtomicSimpleCPU::read(Addr addr, T &data, unsigned flags)
     if (fault == NoFault) {
         pkt->reinitFromRequest();
 
-        dcache_latency = dcachePort.sendAtomic(pkt);
+        if (req->isMmapedIpr())
+            dcache_latency = TheISA::handleIprRead(thread->getTC(),pkt);
+        else
+            dcache_latency = dcachePort.sendAtomic(pkt);
         dcache_access = true;
-
-        assert(pkt->result == Packet::Success);
+#if !defined(NDEBUG)
+        if (pkt->result != Packet::Success)
+            panic("Unable to find responder for address pa = %#X va = %#X\n",
+                    pkt->req->getPaddr(), pkt->req->getVaddr());
+#endif
         data = pkt->get<T>();
 
         if (req->isLocked()) {
@@ -376,14 +383,22 @@ AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
         }
 
         if (do_access) {
-            data = htog(data);
             pkt->reinitFromRequest();
             pkt->dataStatic(&data);
 
-            dcache_latency = dcachePort.sendAtomic(pkt);
+            if (req->isMmapedIpr()) {
+                dcache_latency = TheISA::handleIprWrite(thread->getTC(), pkt);
+            } else {
+                data = htog(data);
+                dcache_latency = dcachePort.sendAtomic(pkt);
+            }
             dcache_access = true;
 
-            assert(pkt->result == Packet::Success);
+#if !defined(NDEBUG)
+            if (pkt->result != Packet::Success)
+                panic("Unable to find responder for address pa = %#X va = %#X\n",
+                        pkt->req->getPaddr(), pkt->req->getVaddr());
+#endif
         }
 
         if (req->isLocked()) {
@@ -476,8 +491,14 @@ AtomicSimpleCPU::tick()
 
             dcache_access = false; // assume no dcache access
             preExecute();
+
             fault = curStaticInst->execute(this, traceData);
             postExecute();
+
+            // @todo remove me after debugging with legion done
+            if (curStaticInst && (!curStaticInst->isMicroOp() ||
+                        curStaticInst->isLastMicroOp()))
+                instCnt++;
 
             if (simulate_stalls) {
                 Tick icache_stall = icache_latency - cycles(1);

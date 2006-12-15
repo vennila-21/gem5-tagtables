@@ -284,6 +284,11 @@ void enterREDState(ThreadContext *tc)
     //HPSTATE.hpriv = 1
     HPSTATE |= (1 << 2);
     tc->setMiscRegWithEffect(MISCREG_HPSTATE, HPSTATE);
+    //PSTATE.priv is set to 1 here. The manual says it should be 0, but
+    //Legion sets it to 1.
+    MiscReg PSTATE = tc->readMiscReg(MISCREG_PSTATE);
+    PSTATE |= (1 << 2);
+    tc->setMiscRegWithEffect(MISCREG_PSTATE, PSTATE);
 }
 
 /**
@@ -340,10 +345,12 @@ void doREDFault(ThreadContext *tc, TrapType tt)
     PSTATE |= (1 << 4);
     //set PSTATE.am to 0
     PSTATE &= ~(1 << 3);
-    //set PSTATE.priv to 0
-    PSTATE &= ~(1 << 2);
+/*    //set PSTATE.priv to 0
+    PSTATE &= ~(1 << 2);*/
     //set PSTATE.ie to 0
-    PSTATE &= ~(1 << 1);
+    //PSTATE.priv is set to 1 here. The manual says it should be 0, but
+    //Legion sets it to 1.
+    PSTATE |= (1 << 2);
     //set PSTATE.cle to 0
     PSTATE &= ~(1 << 9);
     //PSTATE.tle is unchanged
@@ -451,7 +458,9 @@ void doNormalFault(ThreadContext *tc, TrapType tt, bool gotoHpriv)
     else
     {
         //PSTATE.priv = 0
-        PSTATE &= ~(1 << 2);
+        //PSTATE.priv is set to 1 here. The manual says it should be 0, but
+        //Legion sets it to 1.
+        PSTATE |= (1 << 2);
         //PSTATE.cle = 0
         PSTATE &= ~(1 << 9);
     }
@@ -519,7 +528,7 @@ void getPrivVector(ThreadContext * tc, Addr & PC, Addr & NPC, MiscReg TT, MiscRe
 
 void SparcFaultBase::invoke(ThreadContext * tc)
 {
-    panic("Invoking a second fault!\n");
+    //panic("Invoking a second fault!\n");
     FaultBase::invoke(tc);
     countStat()++;
 
@@ -533,40 +542,35 @@ void SparcFaultBase::invoke(ThreadContext * tc)
     Addr PC, NPC;
 
     PrivilegeLevel current;
-    if(!(PSTATE & (1 << 2)))
-        current = User;
-    else if(!(HPSTATE & (1 << 2)))
+    if(HPSTATE & (1 << 2))
+        current = Hyperprivileged;
+    else if(PSTATE & (1 << 2))
         current = Privileged;
     else
-        current = Hyperprivileged;
+        current = User;
 
     PrivilegeLevel level = getNextLevel(current);
 
-    if(HPSTATE & (1 << 5) || TL == MaxTL - 1)
-    {
+    if(HPSTATE & (1 << 5) || TL == MaxTL - 1) {
         getREDVector(5, PC, NPC);
-        enterREDState(tc);
         doREDFault(tc, TT);
-    }
-    else if(TL == MaxTL)
-    {
+        //This changes the hpstate and pstate, so we need to make sure we
+        //save the old version on the trap stack in doREDFault.
+        enterREDState(tc);
+    } else if(TL == MaxTL) {
+        panic("Should go to error state here.. crap\n");
         //Do error_state somehow?
         //Probably inject a WDR fault using the interrupt mechanism.
         //What should the PC and NPC be set to?
-    }
-    else if(TL > MaxPTL && level == Privileged)
-    {
+    } else if(TL > MaxPTL && level == Privileged) {
         //guest_watchdog fault
         doNormalFault(tc, trapType(), true);
         getHyperVector(tc, PC, NPC, 2);
-    }
-    else if(level == Hyperprivileged)
-    {
+    } else if(level == Hyperprivileged ||
+            level == Privileged && trapType() >= 384) {
         doNormalFault(tc, trapType(), true);
         getHyperVector(tc, PC, NPC, trapType());
-    }
-    else
-    {
+    } else {
         doNormalFault(tc, trapType(), false);
         getPrivVector(tc, PC, NPC, trapType(), TL+1);
     }
@@ -578,9 +582,6 @@ void SparcFaultBase::invoke(ThreadContext * tc)
 
 void PowerOnReset::invoke(ThreadContext * tc)
 {
-    //First, enter RED state.
-    enterREDState(tc);
-
     //For SPARC, when a system is first started, there is a power
     //on reset Trap which sets the processor into the following state.
     //Bits that aren't set aren't defined on startup.
@@ -589,14 +590,27 @@ void PowerOnReset::invoke(ThreadContext * tc)
     tc->setMiscReg(MISCREG_TT, trapType());
     tc->setMiscRegWithEffect(MISCREG_GL, MaxGL);
 
-    //Turn on pef, set everything else to 0
-    tc->setMiscReg(MISCREG_PSTATE, 1 << 4);
+    //Turn on pef and priv, set everything else to 0
+    tc->setMiscReg(MISCREG_PSTATE, (1 << 4) | (1 << 2));
 
     //Turn on red and hpriv, set everything else to 0
-    tc->setMiscReg(MISCREG_HPSTATE, (1 << 5) | (1 << 2));
+    MiscReg HPSTATE = tc->readMiscReg(MISCREG_HPSTATE);
+    //HPSTATE.red = 1
+    HPSTATE |= (1 << 5);
+    //HPSTATE.hpriv = 1
+    HPSTATE |= (1 << 2);
+    //HPSTATE.ibe = 0
+    HPSTATE &= ~(1 << 10);
+    //HPSTATE.tlz = 0
+    HPSTATE &= ~(1 << 0);
+    tc->setMiscReg(MISCREG_HPSTATE, HPSTATE);
 
     //The tick register is unreadable by nonprivileged software
     tc->setMiscReg(MISCREG_TICK, 1ULL << 63);
+
+    //Enter RED state. We do this last so that the actual state preserved in
+    //the trap stack is the state from before this fault.
+    enterREDState(tc);
 
     Addr PC, NPC;
     getREDVector(trapType(), PC, NPC);
