@@ -129,6 +129,26 @@ void MiscRegFile::clear()
 MiscReg MiscRegFile::readReg(int miscReg)
 {
     switch (miscReg) {
+      case MISCREG_TLB_DATA:
+        /* Package up all the data for the tlb:
+         * 6666555555555544444444443333333333222222222211111111110000000000
+         * 3210987654321098765432109876543210987654321098765432109876543210
+         *   secContext   | priContext    |             |tl|partid|  |||||^hpriv
+         *                                                           ||||^red
+         *                                                           |||^priv
+         *                                                           ||^am
+         *                                                           |^lsuim
+         *                                                           ^lsudm
+         */
+        return bits((uint64_t)hpstate,2,2) |
+               bits((uint64_t)hpstate,5,5) << 1 |
+               bits((uint64_t)pstate,3,2) << 2 |
+               bits((uint64_t)lsuCtrlReg,3,2) << 4 |
+               bits((uint64_t)partId,7,0) << 8 |
+               bits((uint64_t)tl,2,0) << 16 |
+               (uint64_t)priContext << 32 |
+               (uint64_t)secContext << 48;
+
       case MISCREG_Y:
         return y;
       case MISCREG_CCR:
@@ -294,16 +314,17 @@ MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
 {
     switch (miscReg) {
         // tick and stick are aliased to each other in niagra
-      case MISCREG_TICK:
+        // well store the tick data in stick and the interrupt bit in tick
       case MISCREG_STICK:
+      case MISCREG_TICK:
       case MISCREG_PRIVTICK:
         // I'm not sure why legion ignores the lowest two bits, but we'll go
         // with it
         // change from curCycle() to instCount() until we're done with legion
-        DPRINTFN("Instruction Count when STICK read: %#X\n",
-                tc->getCpuPtr()->instCount());
-        return mbits(tc->getCpuPtr()->instCount() - (tick &
-                    mask(63)),62,2) | mbits(tick,63,63) ;
+        DPRINTFN("Instruction Count when TICK read: %#X stick=%#X\n",
+                tc->getCpuPtr()->instCount(), stick);
+        return mbits(tc->getCpuPtr()->instCount() + (int32_t)stick,62,2) |
+               mbits(tick,63,63);
       case MISCREG_FPRS:
         warn("FPRS register read and FPU stuff not really implemented\n");
         return fprs;
@@ -320,7 +341,6 @@ MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
       case MISCREG_SOFTINT:
       case MISCREG_TICK_CMPR:
       case MISCREG_STICK_CMPR:
-      case MISCREG_HPSTATE:
       case MISCREG_HINTP:
       case MISCREG_HTSTATE:
       case MISCREG_HTBA:
@@ -336,9 +356,16 @@ MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
       case MISCREG_QUEUE_NRES_ERROR_HEAD:
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
 #if FULL_SYSTEM
+      case MISCREG_HPSTATE:
         return readFSRegWithEffect(miscReg, tc);
 #else
-        panic("Accessing Fullsystem register is SE mode\n");
+      case MISCREG_HPSTATE:
+        //HPSTATE is special because because sometimes in privilege checks for instructions
+        //it will read HPSTATE to make sure the priv. level is ok
+        //So, we'll just have to tell it it isn't, instead of panicing.
+        return 0;
+
+      panic("Accessing Fullsystem register %s in SE mode\n",getMiscRegName(miscReg));
 #endif
 
     }
@@ -581,13 +608,14 @@ void MiscRegFile::setReg(int miscReg, const MiscReg &val)
 void MiscRegFile::setRegWithEffect(int miscReg,
         const MiscReg &val, ThreadContext * tc)
 {
-    const uint64_t Bit64 = (1ULL << 63);
     switch (miscReg) {
       case MISCREG_STICK:
       case MISCREG_TICK:
-        // change from curCycle() to instCount() until we're done with legion
-        tick = tc->getCpuPtr()->instCount() - val  & ~Bit64;
-        tick |= val & Bit64;
+        // stick and tick are same thing on niagra
+        // use stick for offset and tick for holding intrrupt bit
+        stick = mbits(val,62,0) - tc->getCpuPtr()->instCount();
+        tick = mbits(val,63,63);
+        DPRINTFN("Writing TICK=%#X\n", val);
         break;
       case MISCREG_FPRS:
         //Configure the fpu based on the fprs
@@ -611,7 +639,6 @@ void MiscRegFile::setRegWithEffect(int miscReg,
       case MISCREG_SOFTINT:
       case MISCREG_TICK_CMPR:
       case MISCREG_STICK_CMPR:
-      case MISCREG_HPSTATE:
       case MISCREG_HINTP:
       case MISCREG_HTSTATE:
       case MISCREG_HTBA:
@@ -627,10 +654,15 @@ void MiscRegFile::setRegWithEffect(int miscReg,
       case MISCREG_QUEUE_NRES_ERROR_HEAD:
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
 #if FULL_SYSTEM
+      case MISCREG_HPSTATE:
         setFSRegWithEffect(miscReg, val, tc);
         return;
 #else
-        panic("Accessing Fullsystem register is SE mode\n");
+      case MISCREG_HPSTATE:
+        //HPSTATE is special because normal trap processing saves HPSTATE when
+        //it goes into a trap, and restores it when it returns.
+        return;
+      panic("Accessing Fullsystem register %s to %#x in SE mode\n", getMiscRegName(miscReg), val);
 #endif
     }
     setReg(miscReg, val);
