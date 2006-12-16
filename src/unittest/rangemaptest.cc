@@ -25,57 +25,50 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Steve Reinhardt
+ * Authors: Ali Saidi
  */
 
-#include "base/loader/raw_object.hh"
-#include "base/loader/symtab.hh"
-#include "base/trace.hh"
+#include <iostream>
+#include <cassert>
+#include "sim/host.hh"
+#include "base/range_map.hh"
 
-ObjectFile *
-RawObject::tryFile(const std::string &fname, int fd, size_t len, uint8_t *data)
+using namespace std;
+
+int main()
 {
-    return new RawObject(fname, fd, len, data, ObjectFile::UnknownArch,
-            ObjectFile::UnknownOpSys);
+    range_map<Addr,int> r;
+
+    range_map<Addr,int>::iterator i;
+
+    i = r.insert(RangeIn<Addr>(10,40),5);
+    assert(i != r.end());
+    i = r.insert(RangeIn<Addr>(60,90),3);
+    assert(i != r.end());
+
+    i = r.find(RangeIn(20,30));
+    assert(i != r.end());
+    cout << i->first << " " << i->second << endl;
+
+    i = r.find(RangeIn(55,55));
+    assert(i == r.end());
+
+    i = r.insert(RangeIn<Addr>(0,12),1);
+    assert(i == r.end());
+
+    i = r.insert(RangeIn<Addr>(0,9),1);
+    assert(i != r.end());
+
+    i = r.find(RangeIn(20,30));
+    assert(i != r.end());
+    cout << i->first << " " << i->second << endl;
+
 }
 
-RawObject::RawObject(const std::string &_filename, int _fd, size_t _len,
-        uint8_t *_data, Arch _arch, OpSys _opSys)
-    : ObjectFile(_filename, _fd, _len, _data, _arch, _opSys)
-{
-    text.baseAddr = 0;
-    text.size = len;
-    text.fileImage = fileData;
 
-    data.baseAddr = 0;
-    data.size = 0;
-    data.fileImage = NULL;
 
-    bss.baseAddr = 0;
-    bss.size = 0;
-    bss.fileImage = NULL;
 
-    DPRINTFR(Loader, "text: 0x%x %d\ndata: 0x%x %d\nbss: 0x%x %d\n",
-             text.baseAddr, text.size, data.baseAddr, data.size,
-             bss.baseAddr, bss.size);
-}
 
-bool
-RawObject::loadGlobalSymbols(SymbolTable *symtab, Addr addrMask)
-{
-    int fnameStart = filename.rfind('/',filename.size()) + 1;
-    int extStart = filename.rfind('.',filename.size());
-    symtab->insert(text.baseAddr & addrMask, filename.substr(fnameStart,
-                extStart-fnameStart) + "_start");
-    return true;
-}
 
-bool
-RawObject::loadLocalSymbols(SymbolTable *symtab, Addr addrMask)
-{
-    int fnameStart = filename.rfind('/',filename.size()) + 1;
-    int extStart = filename.rfind('.',filename.size());
-    symtab->insert(text.baseAddr & addrMask, filename.substr(fnameStart,
-                extStart-fnameStart) + "_start");
-    return true;
-}
+
+

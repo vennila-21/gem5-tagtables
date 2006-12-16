@@ -532,7 +532,7 @@ void getPrivVector(ThreadContext * tc, Addr & PC, Addr & NPC, MiscReg TT, MiscRe
 
 void SparcFaultBase::invoke(ThreadContext * tc)
 {
-    panic("Invoking a second fault!\n");
+    //panic("Invoking a second fault!\n");
     FaultBase::invoke(tc);
     countStat()++;
 
@@ -555,33 +555,26 @@ void SparcFaultBase::invoke(ThreadContext * tc)
 
     PrivilegeLevel level = getNextLevel(current);
 
-    if(HPSTATE & (1 << 5) || TL == MaxTL - 1)
-    {
+    if(HPSTATE & (1 << 5) || TL == MaxTL - 1) {
         getREDVector(5, PC, NPC);
         doREDFault(tc, TT);
         //This changes the hpstate and pstate, so we need to make sure we
         //save the old version on the trap stack in doREDFault.
         enterREDState(tc);
-    }
-    else if(TL == MaxTL)
-    {
+    } else if(TL == MaxTL) {
+        panic("Should go to error state here.. crap\n");
         //Do error_state somehow?
         //Probably inject a WDR fault using the interrupt mechanism.
         //What should the PC and NPC be set to?
-    }
-    else if(TL > MaxPTL && level == Privileged)
-    {
+    } else if(TL > MaxPTL && level == Privileged) {
         //guest_watchdog fault
         doNormalFault(tc, trapType(), true);
         getHyperVector(tc, PC, NPC, 2);
-    }
-    else if(level == Hyperprivileged)
-    {
+    } else if(level == Hyperprivileged ||
+            level == Privileged && trapType() >= 384) {
         doNormalFault(tc, trapType(), true);
         getHyperVector(tc, PC, NPC, trapType());
-    }
-    else
-    {
+    } else {
         doNormalFault(tc, trapType(), false);
         getPrivVector(tc, PC, NPC, trapType(), TL+1);
     }

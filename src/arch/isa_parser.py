@@ -1362,7 +1362,7 @@ class ControlRegOperand(Operand):
         bit_select = 0
         if (self.ctype == 'float' or self.ctype == 'double'):
             error(0, 'Attempt to read control register as FP')
-        base = 'xc->readMiscRegOperand(this, %s)' % self.src_reg_idx
+        base = 'xc->readMiscRegOperandWithEffect(%s)' % self.reg_spec
         if self.size == self.dflt_size:
             return '%s = %s;\n' % (self.base_name, base)
         else:

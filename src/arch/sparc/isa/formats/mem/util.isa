@@ -148,7 +148,7 @@ def template LoadExecute {{
             %(fault_check)s;
             if(fault == NoFault)
             {
-                fault = xc->read(EA, (uint%(mem_acc_size)s_t&)Mem, 0);
+                fault = xc->read(EA, (uint%(mem_acc_size)s_t&)Mem, %(asi_val)s);
             }
             if(fault == NoFault)
             {
@@ -178,7 +178,7 @@ def template LoadInitiateAcc {{
             %(fault_check)s;
             if(fault == NoFault)
             {
-                fault = xc->read(EA, (uint%(mem_acc_size)s_t&)Mem, 0);
+                fault = xc->read(EA, (uint%(mem_acc_size)s_t&)Mem, %(asi_val)s);
             }
             return fault;
         }
@@ -222,7 +222,8 @@ def template StoreExecute {{
             }
             if(storeCond && fault == NoFault)
             {
-                fault = xc->write((uint%(mem_acc_size)s_t)Mem, EA, 0, 0);
+                fault = xc->write((uint%(mem_acc_size)s_t)Mem,
+                        EA, %(asi_val)s, 0);
             }
             if(fault == NoFault)
             {
@@ -252,7 +253,8 @@ def template StoreInitiateAcc {{
             }
             if(storeCond && fault == NoFault)
             {
-                fault = xc->write((uint%(mem_acc_size)s_t)Mem, EA, 0, 0);
+                fault = xc->write((uint%(mem_acc_size)s_t)Mem,
+                        EA, %(asi_val)s, 0);
             }
             if(fault == NoFault)
             {
@@ -297,8 +299,9 @@ let {{
     # are split into ones that are available in priv and hpriv, and
     # those that are only available in hpriv
     AlternateASIPrivFaultCheck = '''
-        if(bits(Pstate,2,2) == 0 && (EXT_ASI & 0x80) == 0)
-            fault = new PrivilegedAction;
+        if(!bits(Pstate,2,2) && !bits(Hpstate,2,2) && !AsiIsUnPriv((ASI)EXT_ASI) ||
+                             !bits(Hpstate,2,2) && AsiIsHPriv((ASI)EXT_ASI))
+                fault = new PrivilegedAction;
         else if(AsiIsAsIfUser((ASI)EXT_ASI) && !bits(Pstate,2,2))
             fault = new PrivilegedAction;
     '''
@@ -318,14 +321,15 @@ let {{
 //and in the other they're distributed across two. Also note that for
 //execute functions, the name of the base class doesn't matter.
 let {{
-    def doSplitExecute(execute, name, Name, opt_flags, microParam):
+    def doSplitExecute(execute, name, Name, asi, opt_flags, microParam):
+        microParam["asi_val"] = asi;
         iop = InstObjParams(name, Name, '', microParam, opt_flags)
         (execf, initf, compf) = execute
         return execf.subst(iop) + initf.subst(iop) + compf.subst(iop)
 
 
     def doDualSplitExecute(code, eaRegCode, eaImmCode, execute,
-            faultCode, nameReg, nameImm, NameReg, NameImm, opt_flags):
+            faultCode, nameReg, nameImm, NameReg, NameImm, asi, opt_flags):
         executeCode = ''
         for (eaCode, name, Name) in (
                 (eaRegCode, nameReg, NameReg),
@@ -333,6 +337,6 @@ let {{
             microParams = {"code": code, "ea_code": eaCode,
                 "fault_check": faultCode}
             executeCode += doSplitExecute(execute, name, Name,
-                    opt_flags, microParams)
+                    asi, opt_flags, microParams)
         return executeCode
 }};

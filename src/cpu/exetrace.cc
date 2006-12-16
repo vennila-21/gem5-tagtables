@@ -57,6 +57,10 @@
 using namespace std;
 using namespace TheISA;
 
+#if THE_ISA == SPARC_ISA && FULL_SYSTEM
+static int diffcount = 0;
+#endif
+
 namespace Trace {
 SharedData *shared_data = NULL;
 }
@@ -281,12 +285,13 @@ Trace::InstRecord::dump(ostream &outs)
         //
         outs << endl;
     }
-#if THE_ISA == SPARC_ISA
+#if THE_ISA == SPARC_ISA && FULL_SYSTEM
     // Compare
     if (flags[LEGION_LOCKSTEP])
     {
         bool compared = false;
         bool diffPC   = false;
+        bool diffCC   = false;
         bool diffInst = false;
         bool diffRegs = false;
         bool diffTpc = false;
@@ -319,6 +324,11 @@ Trace::InstRecord::dump(ostream &outs)
                     lgnPc = shared_data->pc & TheISA::PAddrImplMask;
                     if (lgnPc != m5Pc)
                        diffPC = true;
+
+                    if (shared_data->cycle_count !=
+                            thread->getCpuPtr()->instCount())
+                        diffCC = true;
+
                     if (shared_data->instruction !=
                             (SparcISA::MachInst)staticInst->machInst) {
                         diffInst = true;
@@ -334,19 +344,19 @@ Trace::InstRecord::dump(ostream &outs)
                     for (int i = 1; i <= MaxTL; i++) {
                         thread->setMiscReg(MISCREG_TL, i);
                         if (thread->readMiscReg(MISCREG_TPC) !=
-                                shared_data->tpc[i])
+                                shared_data->tpc[i-1])
                             diffTpc = true;
                         if (thread->readMiscReg(MISCREG_TNPC) !=
-                                shared_data->tnpc[i])
+                                shared_data->tnpc[i-1])
                             diffTnpc = true;
                         if (thread->readMiscReg(MISCREG_TSTATE) !=
-                                shared_data->tstate[i])
+                                shared_data->tstate[i-1])
                             diffTstate = true;
                         if (thread->readMiscReg(MISCREG_TT) !=
-                                shared_data->tt[i])
+                                shared_data->tt[i-1])
                             diffTt = true;
                         if (thread->readMiscReg(MISCREG_HTSTATE) !=
-                                shared_data->htstate[i])
+                                shared_data->htstate[i-1])
                             diffHtstate = true;
                     }
                     thread->setMiscReg(MISCREG_TL, oldTl);
@@ -399,15 +409,18 @@ Trace::InstRecord::dump(ostream &outs)
                             thread->readMiscReg(NumIntArchRegs + 6))
                         diffCleanwin = true;
 
-                    if (diffPC || diffInst || diffRegs || diffTpc || diffTnpc ||
-                            diffTstate || diffTt || diffHpstate ||
+                    if ((diffPC || diffCC || diffInst || diffRegs || diffTpc ||
+                            diffTnpc || diffTstate || diffTt || diffHpstate ||
                             diffHtstate || diffHtba || diffPstate || diffY ||
                             diffCcr || diffTl || diffGl || diffAsi || diffPil ||
                             diffCwp || diffCansave || diffCanrestore ||
-                            diffOtherwin || diffCleanwin) {
+                            diffOtherwin || diffCleanwin)
+                        && !((staticInst->machInst & 0xC1F80000) == 0x81D00000)) {
                         outs << "Differences found between M5 and Legion:";
                         if (diffPC)
                             outs << " [PC]";
+                        if (diffCC)
+                            outs << " [CC]";
                         if (diffInst)
                             outs << " [Instruction]";
                         if (diffRegs)
@@ -458,6 +471,13 @@ Trace::InstRecord::dump(ostream &outs)
                         outs << setfill(' ') << setw(15)
                              << "Legion PC: " << "0x"<< setw(16) << setfill('0') << hex
                              << lgnPc << endl << endl;
+
+                        outs << right << setfill(' ') << setw(15)
+                             << "M5 CC: " << "0x"<< setw(16) << setfill('0')
+                             << hex << thread->getCpuPtr()->instCount() << endl;
+                        outs << setfill(' ') << setw(15)
+                             << "Legion CC: " << "0x"<< setw(16) << setfill('0') << hex
+                             << shared_data->cycle_count << endl << endl;
 
                         outs << setfill(' ') << setw(15)
                              << "M5 Inst: "  << "0x"<< setw(8)
@@ -532,19 +552,19 @@ Trace::InstRecord::dump(ostream &outs)
                             thread->setMiscReg(MISCREG_TL, i);
                             printRegPair(outs, "Tpc",
                                     thread->readMiscReg(MISCREG_TPC),
-                                    shared_data->tpc[i]);
+                                    shared_data->tpc[i-1]);
                             printRegPair(outs, "Tnpc",
                                     thread->readMiscReg(MISCREG_TNPC),
-                                    shared_data->tnpc[i]);
+                                    shared_data->tnpc[i-1]);
                             printRegPair(outs, "Tstate",
                                     thread->readMiscReg(MISCREG_TSTATE),
-                                    shared_data->tstate[i]);
+                                    shared_data->tstate[i-1]);
                             printRegPair(outs, "Tt",
                                     thread->readMiscReg(MISCREG_TT),
-                                    shared_data->tt[i]);
+                                    shared_data->tt[i-1]);
                             printRegPair(outs, "Htstate",
                                     thread->readMiscReg(MISCREG_HTSTATE),
-                                    shared_data->htstate[i]);
+                                    shared_data->htstate[i-1]);
                         }
                         thread->setMiscReg(MISCREG_TL, oldTl);
                         outs << endl;
@@ -573,7 +593,12 @@ Trace::InstRecord::dump(ostream &outs)
                                     << endl;*/
                             }
                         }
-                        fatal("Differences found between Legion and M5\n");
+                        thread->getITBPtr()->dumpAll();
+                        thread->getDTBPtr()->dumpAll();
+
+                        diffcount++;
+                        if (diffcount > 2)
+                            fatal("Differences found between Legion and M5\n");
                     }
 
                     compared = true;

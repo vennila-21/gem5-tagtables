@@ -25,57 +25,37 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Steve Reinhardt
+ * Authors: Ali Saidi
  */
 
-#include "base/loader/raw_object.hh"
-#include "base/loader/symtab.hh"
-#include "base/trace.hh"
+#ifndef __ARCH_ALPHA_MMAPED_IPR_HH__
+#define __ARCH_ALPHA_MMAPED_IPR_HH__
 
-ObjectFile *
-RawObject::tryFile(const std::string &fname, int fd, size_t len, uint8_t *data)
+/**
+ * @file
+ *
+ * ISA-specific helper functions for memory mapped IPR accesses.
+ */
+
+#include "mem/packet.hh"
+
+
+namespace AlphaISA
 {
-    return new RawObject(fname, fd, len, data, ObjectFile::UnknownArch,
-            ObjectFile::UnknownOpSys);
+inline Tick
+handleIprRead(ThreadContext *xc, Packet *pkt)
+{
+    panic("No handleIprRead implementation in Alpha\n");
 }
 
-RawObject::RawObject(const std::string &_filename, int _fd, size_t _len,
-        uint8_t *_data, Arch _arch, OpSys _opSys)
-    : ObjectFile(_filename, _fd, _len, _data, _arch, _opSys)
+
+inline Tick
+handleIprWrite(ThreadContext *xc, Packet *pkt)
 {
-    text.baseAddr = 0;
-    text.size = len;
-    text.fileImage = fileData;
-
-    data.baseAddr = 0;
-    data.size = 0;
-    data.fileImage = NULL;
-
-    bss.baseAddr = 0;
-    bss.size = 0;
-    bss.fileImage = NULL;
-
-    DPRINTFR(Loader, "text: 0x%x %d\ndata: 0x%x %d\nbss: 0x%x %d\n",
-             text.baseAddr, text.size, data.baseAddr, data.size,
-             bss.baseAddr, bss.size);
+    panic("No handleIprWrite implementation in Alpha\n");
 }
 
-bool
-RawObject::loadGlobalSymbols(SymbolTable *symtab, Addr addrMask)
-{
-    int fnameStart = filename.rfind('/',filename.size()) + 1;
-    int extStart = filename.rfind('.',filename.size());
-    symtab->insert(text.baseAddr & addrMask, filename.substr(fnameStart,
-                extStart-fnameStart) + "_start");
-    return true;
-}
 
-bool
-RawObject::loadLocalSymbols(SymbolTable *symtab, Addr addrMask)
-{
-    int fnameStart = filename.rfind('/',filename.size()) + 1;
-    int extStart = filename.rfind('.',filename.size());
-    symtab->insert(text.baseAddr & addrMask, filename.substr(fnameStart,
-                extStart-fnameStart) + "_start");
-    return true;
-}
+} // namespace AlphaISA
+
+#endif
