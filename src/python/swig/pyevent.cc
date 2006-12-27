@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005 The Regents of The University of Michigan
+ * Copyright (c) 2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,62 +25,42 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Ron Dreslinski
+ * Authors: Nathan Binkert
  */
 
-/**
- * @file
- * Describes a strided prefetcher.
- */
+#include <Python.h>
 
-#ifndef __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
-#define __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
+#include "python/swig/pyevent.hh"
 
-#include "mem/cache/prefetch/base_prefetcher.hh"
-
-class StridePrefetcher : public BasePrefetcher
+PythonEvent::PythonEvent(PyObject *obj, Tick when, Priority priority)
+    : Event(&mainEventQueue, priority), object(obj)
 {
-  protected:
+    if (object == NULL)
+        panic("Passed in invalid object");
 
-    class strideEntry
-    {
-      public:
-        Addr IAddr;
-        Addr MAddr;
-        int stride;
-        int64_t confidence;
+    Py_INCREF(object);
 
-/*	bool operator < (strideEntry a,strideEntry b)
-        {
-            if (a.confidence == b.confidence) {
-                return true; //??????
-            }
-            else return a.confidence < b.confidence;
-            }*/
-    };
-    Addr* lastMissAddr[64/*MAX_CPUS*/];
+    setFlags(AutoDelete);
+    schedule(when);
+}
 
-    std::list<strideEntry*> table[64/*MAX_CPUS*/];
-    Tick latency;
-    int degree;
-    bool useCPUId;
+PythonEvent::~PythonEvent()
+{
+    Py_DECREF(object);
+}
 
+void
+PythonEvent::process()
+{
+    PyObject *result;
 
-  public:
+    result = PyObject_CallMethod(object, "process", "");
 
-    StridePrefetcher(int size, bool pageStop, bool serialSquash,
-                     bool cacheCheckPush, bool onlyData,
-                     Tick latency, int degree, bool useCPUId)
-        : BasePrefetcher(size, pageStop, serialSquash,
-                         cacheCheckPush, onlyData),
-          latency(latency), degree(degree), useCPUId(useCPUId)
-    {
+    if (result) {
+        // Nothing to do just decrement the reference count
+        Py_DECREF(result);
+    } else {
+        // Somethign should be done to signal back to the main interpreter
+        // that there's been an exception.
     }
-
-    ~StridePrefetcher() {}
-
-    void calculatePrefetch(PacketPtr &pkt, std::list<Addr> &addresses,
-                           std::list<Tick> &delays);
-};
-
-#endif // __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
+}

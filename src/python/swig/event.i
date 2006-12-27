@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005 The Regents of The University of Michigan
+ * Copyright (c) 2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,62 +25,30 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Ron Dreslinski
+ * Authors: Nathan Binkert
  */
 
-/**
- * @file
- * Describes a strided prefetcher.
- */
+%module event
 
-#ifndef __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
-#define __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
+%{
+#include "python/swig/pyevent.hh"
 
-#include "mem/cache/prefetch/base_prefetcher.hh"
-
-class StridePrefetcher : public BasePrefetcher
+inline void
+create(PyObject *object, Tick when)
 {
-  protected:
+    new PythonEvent(object, when);
+}
+%}
 
-    class strideEntry
-    {
-      public:
-        Addr IAddr;
-        Addr MAddr;
-        int stride;
-        int64_t confidence;
+%include "stdint.i"
+%include "sim/host.hh"
 
-/*	bool operator < (strideEntry a,strideEntry b)
-        {
-            if (a.confidence == b.confidence) {
-                return true; //??????
-            }
-            else return a.confidence < b.confidence;
-            }*/
-    };
-    Addr* lastMissAddr[64/*MAX_CPUS*/];
+%inline %{
+extern void create(PyObject *object, Tick when);
+%}
 
-    std::list<strideEntry*> table[64/*MAX_CPUS*/];
-    Tick latency;
-    int degree;
-    bool useCPUId;
-
-
-  public:
-
-    StridePrefetcher(int size, bool pageStop, bool serialSquash,
-                     bool cacheCheckPush, bool onlyData,
-                     Tick latency, int degree, bool useCPUId)
-        : BasePrefetcher(size, pageStop, serialSquash,
-                         cacheCheckPush, onlyData),
-          latency(latency), degree(degree), useCPUId(useCPUId)
-    {
-    }
-
-    ~StridePrefetcher() {}
-
-    void calculatePrefetch(PacketPtr &pkt, std::list<Addr> &addresses,
-                           std::list<Tick> &delays);
-};
-
-#endif // __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
+%wrapper %{
+// fix up module name to reflect the fact that it's inside the m5 package
+#undef SWIG_name
+#define SWIG_name "m5.internal._event"
+%}
