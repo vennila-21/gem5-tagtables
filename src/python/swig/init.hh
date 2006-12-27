@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005 The Regents of The University of Michigan
+ * Copyright (c) 2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,62 +25,12 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Ron Dreslinski
+ * Authors: Nathan Binkert
  */
 
-/**
- * @file
- * Describes a strided prefetcher.
- */
+#ifndef __PYTHON_SWIG_INIT_HH__
+#define __PYTHON_SWIG_INIT_HH__
 
-#ifndef __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
-#define __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
+void init_swig();
 
-#include "mem/cache/prefetch/base_prefetcher.hh"
-
-class StridePrefetcher : public BasePrefetcher
-{
-  protected:
-
-    class strideEntry
-    {
-      public:
-        Addr IAddr;
-        Addr MAddr;
-        int stride;
-        int64_t confidence;
-
-/*	bool operator < (strideEntry a,strideEntry b)
-        {
-            if (a.confidence == b.confidence) {
-                return true; //??????
-            }
-            else return a.confidence < b.confidence;
-            }*/
-    };
-    Addr* lastMissAddr[64/*MAX_CPUS*/];
-
-    std::list<strideEntry*> table[64/*MAX_CPUS*/];
-    Tick latency;
-    int degree;
-    bool useCPUId;
-
-
-  public:
-
-    StridePrefetcher(int size, bool pageStop, bool serialSquash,
-                     bool cacheCheckPush, bool onlyData,
-                     Tick latency, int degree, bool useCPUId)
-        : BasePrefetcher(size, pageStop, serialSquash,
-                         cacheCheckPush, onlyData),
-          latency(latency), degree(degree), useCPUId(useCPUId)
-    {
-    }
-
-    ~StridePrefetcher() {}
-
-    void calculatePrefetch(PacketPtr &pkt, std::list<Addr> &addresses,
-                           std::list<Tick> &delays);
-};
-
-#endif // __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
+#endif // __PYTHON_SWIG_INIT_HH__

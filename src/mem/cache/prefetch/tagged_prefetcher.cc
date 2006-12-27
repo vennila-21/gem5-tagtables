@@ -30,57 +30,45 @@
 
 /**
  * @file
- * Describes a strided prefetcher.
+ * Describes a tagged prefetcher based on template policies.
  */
 
-#ifndef __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
-#define __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
+#include "arch/isa_traits.hh"
+#include "mem/cache/prefetch/tagged_prefetcher.hh"
 
-#include "mem/cache/prefetch/base_prefetcher.hh"
-
-class StridePrefetcher : public BasePrefetcher
+TaggedPrefetcher::
+TaggedPrefetcher(int size, bool pageStop, bool serialSquash,
+                 bool cacheCheckPush, bool onlyData,
+                 Tick latency, int degree)
+    : BasePrefetcher(size, pageStop, serialSquash,
+                     cacheCheckPush, onlyData),
+      latency(latency), degree(degree)
 {
-  protected:
+}
 
-    class strideEntry
-    {
-      public:
-        Addr IAddr;
-        Addr MAddr;
-        int stride;
-        int64_t confidence;
+void
+TaggedPrefetcher::
+calculatePrefetch(PacketPtr &pkt, std::list<Addr> &addresses,
+                  std::list<Tick> &delays)
+{
+    Addr blkAddr = pkt->getAddr() & ~(Addr)(this->blkSize-1);
 
-/*	bool operator < (strideEntry a,strideEntry b)
+    for (int d=1; d <= degree; d++) {
+        Addr newAddr = blkAddr + d*(this->blkSize);
+        if (this->pageStop &&
+            (blkAddr & ~(TheISA::VMPageSize - 1)) !=
+            (newAddr & ~(TheISA::VMPageSize - 1)))
         {
-            if (a.confidence == b.confidence) {
-                return true; //??????
-            }
-            else return a.confidence < b.confidence;
-            }*/
-    };
-    Addr* lastMissAddr[64/*MAX_CPUS*/];
-
-    std::list<strideEntry*> table[64/*MAX_CPUS*/];
-    Tick latency;
-    int degree;
-    bool useCPUId;
-
-
-  public:
-
-    StridePrefetcher(int size, bool pageStop, bool serialSquash,
-                     bool cacheCheckPush, bool onlyData,
-                     Tick latency, int degree, bool useCPUId)
-        : BasePrefetcher(size, pageStop, serialSquash,
-                         cacheCheckPush, onlyData),
-          latency(latency), degree(degree), useCPUId(useCPUId)
-    {
+            //Spanned the page, so now stop
+            this->pfSpanPage += degree - d + 1;
+            return;
+        }
+        else
+        {
+            addresses.push_back(newAddr);
+            delays.push_back(latency);
+        }
     }
+}
 
-    ~StridePrefetcher() {}
 
-    void calculatePrefetch(PacketPtr &pkt, std::list<Addr> &addresses,
-                           std::list<Tick> &delays);
-};
-
-#endif // __MEM_CACHE_PREFETCH_STRIDE_PREFETCHER_HH__
