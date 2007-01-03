@@ -1,4 +1,4 @@
-// Copyright (c) 2006 The Regents of The University of Michigan
+// Copyright (c) 2006-2007 The Regents of The University of Michigan
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -454,14 +454,14 @@ let {{
             else:
                 flag_code = "flags[IsDelayedCommit] = true;"
             pcedCode = matcher.sub("Frd_%d" % microPc, code)
-            iop = InstObjParams(name, Name, 'BlockMem', pcedCode,
-                    opt_flags, {"ea_code": addrCalcReg,
+            iop = InstObjParams(name, Name, 'BlockMem',
+                    {"code": pcedCode, "ea_code": addrCalcReg,
                     "fault_check": faultCode, "micro_pc": microPc,
-                    "set_flags": flag_code})
-            iop_imm = InstObjParams(name, Name + 'Imm', 'BlockMemImm', pcedCode,
-                    opt_flags, {"ea_code": addrCalcImm,
+                    "set_flags": flag_code}, opt_flags)
+            iop_imm = InstObjParams(name, Name + 'Imm', 'BlockMemImm',
+                    {"code": pcedCode, "ea_code": addrCalcImm,
                     "fault_check": faultCode, "micro_pc": microPc,
-                    "set_flags": flag_code})
+                    "set_flags": flag_code}, opt_flags)
             decoder_output += BlockMemMicroConstructor.subst(iop)
             decoder_output += BlockMemMicroConstructor.subst(iop_imm)
             exec_output += doDualSplitExecute(
@@ -494,18 +494,18 @@ let {{
             else:
                 flag_code = "flags[IsDelayedCommit] = true;"
                 pcedCode = matcher.sub("RdLow", code)
-            iop = InstObjParams(name, Name, 'TwinMem', pcedCode,
-                    opt_flags, {"ea_code": addrCalcReg,
+            iop = InstObjParams(name, Name, 'TwinMem',
+                    {"code": pcedCode, "ea_code": addrCalcReg,
                     "fault_check": faultCode, "micro_pc": microPc,
-                    "set_flags": flag_code})
-            iop_imm = InstObjParams(name, Name + 'Imm', 'TwinMemImm', pcedCode,
-                    opt_flags, {"ea_code": addrCalcImm,
+                    "set_flags": flag_code}, opt_flags)
+            iop_imm = InstObjParams(name, Name + 'Imm', 'TwinMemImm',
+                    {"code": pcedCode, "ea_code": addrCalcImm,
                     "fault_check": faultCode, "micro_pc": microPc,
-                    "set_flags": flag_code})
+                    "set_flags": flag_code}, opt_flags)
             decoder_output += BlockMemMicroConstructor.subst(iop)
             decoder_output += BlockMemMicroConstructor.subst(iop_imm)
             exec_output += doDualSplitExecute(
-                    pcedCode, addrCalcReg, addrCalcImm, LoadExecute, faultCode,
+                    pcedCode, addrCalcReg, addrCalcImm, LoadFuncs, faultCode,
                     makeMicroName(name, microPc),
                     makeMicroName(name + "Imm", microPc),
                     makeMicroName(Name, microPc),
@@ -525,7 +525,7 @@ def format BlockLoad(code, asi, *opt_flags) {{
          decoder_output,
          exec_output,
          decode_block) = doBlockMemFormat(code, faultCode,
-             LoadExecute, name, Name, asi, opt_flags)
+             LoadFuncs, name, Name, asi, opt_flags)
 }};
 
 def format BlockStore(code, asi, *opt_flags) {{
@@ -537,7 +537,7 @@ def format BlockStore(code, asi, *opt_flags) {{
          decoder_output,
          exec_output,
          decode_block) = doBlockMemFormat(code, faultCode,
-             StoreExecute, name, Name, asi, opt_flags)
+             StoreFuncs, name, Name, asi, opt_flags)
 }};
 
 def format TwinLoad(code, asi, *opt_flags) {{

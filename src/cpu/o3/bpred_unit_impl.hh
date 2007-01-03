@@ -149,7 +149,7 @@ BPredUnit<Impl>::predict(DynInstPtr &inst, Addr &PC, unsigned tid)
     using TheISA::MachInst;
 
     bool pred_taken = false;
-    Addr target;
+    Addr target = PC;
 
     ++lookups;
 
@@ -233,14 +233,7 @@ BPredUnit<Impl>::predict(DynInstPtr &inst, Addr &PC, unsigned tid)
         }
     }
 
-    if (pred_taken) {
-        // Set the PC and the instruction's predicted target.
-        PC = target;
-        inst->setPredTarg(target);
-    } else {
-        PC = PC + sizeof(MachInst);
-        inst->setPredTarg(PC);
-    }
+    PC = target;
 
     predHist[tid].push_front(predict_record);
 
