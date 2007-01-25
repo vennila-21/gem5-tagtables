@@ -54,14 +54,14 @@ namespace TheISA
 }
 class MemObject;
 
-class RemoteGDB;
-class GDBListener;
-
 #else
 
 class Process;
 
 #endif // FULL_SYSTEM
+
+class RemoteGDB;
+class GDBListener;
 
 class ThreadContext;
 class Checkpoint;
@@ -301,6 +301,31 @@ class BaseSimpleCPU : public BaseCPU
     void setMiscRegWithEffect(int misc_reg, const MiscReg &val)
     {
         return thread->setMiscRegWithEffect(misc_reg, val);
+    }
+
+    MiscReg readMiscRegOperand(const StaticInst *si, int idx)
+    {
+        int reg_idx = si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        return thread->readMiscReg(reg_idx);
+    }
+
+    MiscReg readMiscRegOperandWithEffect(const StaticInst *si, int idx)
+    {
+        int reg_idx = si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        return thread->readMiscRegWithEffect(reg_idx);
+    }
+
+    void setMiscRegOperand(const StaticInst *si, int idx, const MiscReg &val)
+    {
+        int reg_idx = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        return thread->setMiscReg(reg_idx, val);
+    }
+
+    void setMiscRegOperandWithEffect(
+            const StaticInst *si, int idx, const MiscReg &val)
+    {
+        int reg_idx = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        return thread->setMiscRegWithEffect(reg_idx, val);
     }
 
 #if FULL_SYSTEM
