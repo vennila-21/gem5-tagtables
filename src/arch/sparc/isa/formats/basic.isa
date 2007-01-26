@@ -38,6 +38,7 @@ def template BasicExecPanic {{
         Fault execute(%(CPU_exec_context)s *, Trace::InstRecord *) const
         {
             panic("Execute method called when it shouldn't!");
+            M5_DUMMY_RETURN
         }
 }};
 
