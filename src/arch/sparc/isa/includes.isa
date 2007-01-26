@@ -64,6 +64,7 @@ output exec {{
 #if defined(linux)
 #include <fenv.h>
 #endif
+#include <limits>
 
 #include <cmath>
 #include "arch/sparc/asi.hh"
