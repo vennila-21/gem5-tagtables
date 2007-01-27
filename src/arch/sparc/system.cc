@@ -191,13 +191,6 @@ SparcSystem::~SparcSystem()
     delete partition_desc;
 }
 
-bool
-SparcSystem::breakpoint()
-{
-    panic("Need to implement");
-    M5_DUMMY_RETURN
-}
-
 void
 SparcSystem::serialize(std::ostream &os)
 {

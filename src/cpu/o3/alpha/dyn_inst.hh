@@ -73,8 +73,9 @@ class AlphaDynInst : public BaseDynInst<Impl>
 
   public:
     /** BaseDynInst constructor given a binary instruction. */
-    AlphaDynInst(ExtMachInst inst, Addr PC, Addr Pred_PC, InstSeqNum seq_num,
-                 O3CPU *cpu);
+    AlphaDynInst(ExtMachInst inst, Addr PC, Addr NPC,
+                 Addr Pred_PC, Addr Pred_NPC,
+                 InstSeqNum seq_num, O3CPU *cpu);
 
     /** BaseDynInst constructor given a static inst pointer. */
     AlphaDynInst(StaticInstPtr &_staticInst);
@@ -123,6 +124,44 @@ class AlphaDynInst : public BaseDynInst<Impl>
                                                this->threadNumber);
     }
 
+    /** Reads a miscellaneous register. */
+    TheISA::MiscReg readMiscRegOperand(const StaticInst *si, int idx)
+    {
+        return this->cpu->readMiscReg(
+                si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag,
+                this->threadNumber);
+    }
+
+    /** Reads a misc. register, including any side-effects the read
+     * might have as defined by the architecture.
+     */
+    TheISA::MiscReg readMiscRegOperandWithEffect(const StaticInst *si, int idx)
+    {
+        return this->cpu->readMiscRegWithEffect(
+                si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag,
+                this->threadNumber);
+    }
+
+    /** Sets a misc. register. */
+    void setMiscRegOperand(const StaticInst * si, int idx, const MiscReg &val)
+    {
+        this->instResult.integer = val;
+        return this->cpu->setMiscReg(
+                si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag,
+                val, this->threadNumber);
+    }
+
+    /** Sets a misc. register, including any side-effects the write
+     * might have as defined by the architecture.
+     */
+    void setMiscRegOperandWithEffect(const StaticInst *si, int idx,
+                                     const MiscReg &val)
+    {
+        return this->cpu->setMiscRegWithEffect(
+                si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag,
+                val, this->threadNumber);
+    }
+
 #if FULL_SYSTEM
     /** Calls hardware return from error interrupt. */
     Fault hwrei();
@@ -133,22 +172,6 @@ class AlphaDynInst : public BaseDynInst<Impl>
     /** Calls a syscall. */
     void syscall(int64_t callnum);
 #endif
-
-  private:
-    /** Physical register index of the destination registers of this
-     *  instruction.
-     */
-    PhysRegIndex _destRegIdx[MaxInstDestRegs];
-
-    /** Physical register index of the source registers of this
-     *  instruction.
-     */
-    PhysRegIndex _srcRegIdx[MaxInstSrcRegs];
-
-    /** Physical register index of the previous producers of the
-     *  architected destinations.
-     */
-    PhysRegIndex _prevDestRegIdx[MaxInstDestRegs];
 
   public:
 
@@ -165,28 +188,28 @@ class AlphaDynInst : public BaseDynInst<Impl>
 
     uint64_t readIntRegOperand(const StaticInst *si, int idx)
     {
-        return this->cpu->readIntReg(_srcRegIdx[idx]);
+        return this->cpu->readIntReg(this->_srcRegIdx[idx]);
     }
 
     FloatReg readFloatRegOperand(const StaticInst *si, int idx, int width)
     {
-        return this->cpu->readFloatReg(_srcRegIdx[idx], width);
+        return this->cpu->readFloatReg(this->_srcRegIdx[idx], width);
     }
 
     FloatReg readFloatRegOperand(const StaticInst *si, int idx)
     {
-        return this->cpu->readFloatReg(_srcRegIdx[idx]);
+        return this->cpu->readFloatReg(this->_srcRegIdx[idx]);
     }
 
     FloatRegBits readFloatRegOperandBits(const StaticInst *si, int idx,
                                          int width)
     {
-        return this->cpu->readFloatRegBits(_srcRegIdx[idx], width);
+        return this->cpu->readFloatRegBits(this->_srcRegIdx[idx], width);
     }
 
     FloatRegBits readFloatRegOperandBits(const StaticInst *si, int idx)
     {
-        return this->cpu->readFloatRegBits(_srcRegIdx[idx]);
+        return this->cpu->readFloatRegBits(this->_srcRegIdx[idx]);
     }
 
     /** @todo: Make results into arrays so they can handle multiple dest
@@ -194,77 +217,35 @@ class AlphaDynInst : public BaseDynInst<Impl>
      */
     void setIntRegOperand(const StaticInst *si, int idx, uint64_t val)
     {
-        this->cpu->setIntReg(_destRegIdx[idx], val);
+        this->cpu->setIntReg(this->_destRegIdx[idx], val);
         BaseDynInst<Impl>::setIntRegOperand(si, idx, val);
     }
 
     void setFloatRegOperand(const StaticInst *si, int idx, FloatReg val,
                             int width)
     {
-        this->cpu->setFloatReg(_destRegIdx[idx], val, width);
+        this->cpu->setFloatReg(this->_destRegIdx[idx], val, width);
         BaseDynInst<Impl>::setFloatRegOperand(si, idx, val, width);
     }
 
     void setFloatRegOperand(const StaticInst *si, int idx, FloatReg val)
     {
-        this->cpu->setFloatReg(_destRegIdx[idx], val);
+        this->cpu->setFloatReg(this->_destRegIdx[idx], val);
         BaseDynInst<Impl>::setFloatRegOperand(si, idx, val);
     }
 
     void setFloatRegOperandBits(const StaticInst *si, int idx,
                                 FloatRegBits val, int width)
     {
-        this->cpu->setFloatRegBits(_destRegIdx[idx], val, width);
+        this->cpu->setFloatRegBits(this->_destRegIdx[idx], val, width);
         BaseDynInst<Impl>::setFloatRegOperandBits(si, idx, val);
     }
 
     void setFloatRegOperandBits(const StaticInst *si, int idx,
                                 FloatRegBits val)
     {
-        this->cpu->setFloatRegBits(_destRegIdx[idx], val);
+        this->cpu->setFloatRegBits(this->_destRegIdx[idx], val);
         BaseDynInst<Impl>::setFloatRegOperandBits(si, idx, val);
-    }
-
-    /** Returns the physical register index of the i'th destination
-     *  register.
-     */
-    PhysRegIndex renamedDestRegIdx(int idx) const
-    {
-        return _destRegIdx[idx];
-    }
-
-    /** Returns the physical register index of the i'th source register. */
-    PhysRegIndex renamedSrcRegIdx(int idx) const
-    {
-        return _srcRegIdx[idx];
-    }
-
-    /** Returns the physical register index of the previous physical register
-     *  that remapped to the same logical register index.
-     */
-    PhysRegIndex prevDestRegIdx(int idx) const
-    {
-        return _prevDestRegIdx[idx];
-    }
-
-    /** Renames a destination register to a physical register.  Also records
-     *  the previous physical register that the logical register mapped to.
-     */
-    void renameDestReg(int idx,
-                       PhysRegIndex renamed_dest,
-                       PhysRegIndex previous_rename)
-    {
-        _destRegIdx[idx] = renamed_dest;
-        _prevDestRegIdx[idx] = previous_rename;
-    }
-
-    /** Renames a source logical register to the physical register which
-     *  has/will produce that logical register's result.
-     *  @todo: add in whether or not the source register is ready.
-     */
-    void renameSrcReg(int idx, PhysRegIndex renamed_src)
-    {
-        _srcRegIdx[idx] = renamed_src;
     }
 
   public:
