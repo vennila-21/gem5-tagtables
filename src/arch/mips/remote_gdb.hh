@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2002-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,31 +25,40 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Gabe Black
- *          Korey Sewell
+ * Authors: Nathan Binkert
  */
 
-#ifndef __ARCH_MIPS_SYSCALLRETURN_HH__
-#define __ARCH_MIPS_SYSCALLRETURN_HH__
+#ifndef __ARCH_MIPS_REMOTE_GDB_HH__
+#define __ARCH_MIPS_REMOTE_GDB_HH__
 
-#include "sim/syscallreturn.hh"
-#include "cpu/thread_context.hh"
+#include "base/remote_gdb.hh"
 
 namespace MipsISA
 {
-    static inline void setSyscallReturn(SyscallReturn return_value,
-            ThreadContext *tc)
+    class RemoteGDB : public BaseRemoteGDB
     {
-        if (return_value.successful()) {
-            // no error
-            tc->setIntReg(SyscallSuccessReg, 0);
-            tc->setIntReg(ReturnValueReg1, return_value.value());
-        } else {
-            // got an error, return details
-            tc->setIntReg(SyscallSuccessReg, (IntReg) -1);
-            tc->setIntReg(ReturnValueReg1, -return_value.value());
-        }
-    }
+      public:
+        //These needs to be written to suit MIPS
+
+        RemoteGDB(System *system, ThreadContext *context)
+            : BaseRemoteGDB(system, context, 1)
+        {}
+
+        bool acc(Addr, size_t)
+        { panic("acc not implemented for MIPS!"); }
+
+        void getregs()
+        { panic("getregs not implemented for MIPS!"); }
+
+        void setregs()
+        { panic("setregs not implemented for MIPS!"); }
+
+        void clearSingleStep()
+        { panic("clearSingleStep not implemented for MIPS!"); }
+
+        void setSingleStep()
+        { panic("setSingleStep not implemented for MIPS!"); }
+    };
 }
 
-#endif
+#endif /* __ARCH_ALPHA_REMOTE_GDB_H__ */

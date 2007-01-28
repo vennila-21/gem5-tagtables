@@ -78,13 +78,11 @@ namespace AlphaISA
 
         Addr readNextNPC()
         {
-            return nnpc;
+            return npc + sizeof(MachInst);
         }
 
         void setNextNPC(Addr val)
-        {
-            nnpc = val;
-        }
+        { }
 
       protected:
         IntRegFile intRegFile;		// (signed) integer register file
@@ -188,6 +186,11 @@ namespace AlphaISA
             //the swapPALShadow function
         }
     };
+
+    static inline int flattenIntIndex(ThreadContext * tc, int reg)
+    {
+        return reg;
+    }
 
     void copyRegs(ThreadContext *src, ThreadContext *dest);
 

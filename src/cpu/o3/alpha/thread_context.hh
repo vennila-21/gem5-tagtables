@@ -36,12 +36,6 @@ class AlphaTC : public O3ThreadContext<Impl>
 {
   public:
 #if FULL_SYSTEM
-    /** Returns a pointer to the ITB. */
-    virtual AlphaISA::ITB *getITBPtr() { return this->cpu->itb; }
-
-    /** Returns a pointer to the DTB. */
-    virtual AlphaISA::DTB *getDTBPtr() { return this->cpu->dtb; }
-
     /** Returns pointer to the quiesce event. */
     virtual EndQuiesceEvent *getQuiesceEvent()
     {
@@ -51,8 +45,7 @@ class AlphaTC : public O3ThreadContext<Impl>
 
     virtual uint64_t readNextNPC()
     {
-        panic("Alpha has no NextNPC!");
-        return 0;
+        return this->readNextPC() + sizeof(TheISA::MachInst);
     }
 
     virtual void setNextNPC(uint64_t val)
