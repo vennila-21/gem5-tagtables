@@ -121,16 +121,21 @@
 #include <string>
 #include <unistd.h>
 
+#include "config/full_system.hh"
+
+#if FULL_SYSTEM
 #include "arch/vtophys.hh"
+#endif
+
 #include "base/intmath.hh"
 #include "base/remote_gdb.hh"
 #include "base/socket.hh"
 #include "base/trace.hh"
-#include "config/full_system.hh"
 #include "cpu/thread_context.hh"
 #include "cpu/static_inst.hh"
-#include "mem/physical.hh"
+//#include "mem/physical.hh"
 #include "mem/port.hh"
+#include "mem/translating_port.hh"
 #include "sim/system.hh"
 
 using namespace std;
@@ -448,9 +453,17 @@ BaseRemoteGDB::read(Addr vaddr, size_t size, char *data)
 
     DPRINTF(GDBRead, "read:  addr=%#x, size=%d", vaddr, size);
 
-    VirtualPort *vp = context->getVirtPort(context);
-    vp->readBlob(vaddr, (uint8_t*)data, size);
-    context->delVirtPort(vp);
+#if FULL_SYSTEM
+    VirtualPort *port = context->getVirtPort(context);
+#else
+    TranslatingPort *port = context->getMemPort();
+#endif
+    port->readBlob(vaddr, (uint8_t*)data, size);
+#if FULL_SYSTEM
+    context->delVirtPort(port);
+#else
+    delete port;
+#endif
 
 #if TRACING_ON
     if (DTRACE(GDBRead)) {
@@ -487,9 +500,17 @@ BaseRemoteGDB::write(Addr vaddr, size_t size, const char *data)
         } else
             DPRINTFNR("\n");
     }
-    VirtualPort *vp = context->getVirtPort(context);
-    vp->writeBlob(vaddr, (uint8_t*)data, size);
-    context->delVirtPort(vp);
+#if FULL_SYSTEM
+    VirtualPort *port = context->getVirtPort(context);
+#else
+    TranslatingPort *port = context->getMemPort();
+#endif
+    port->writeBlob(vaddr, (uint8_t*)data, size);
+#if FULL_SYSTEM
+    context->delVirtPort(port);
+#else
+    delete port;
+#endif
 
     return true;
 }
@@ -610,7 +631,8 @@ BaseRemoteGDB::trap(int type)
     uint64_t val;
     size_t datalen, len;
     char data[GDBPacketBufLen + 1];
-    char buffer[gdbregs.bytes() * 2 + 256];
+    char *buffer;
+    int bufferSize;
     const char *p;
     char command, subcmd;
     string var;
@@ -618,6 +640,9 @@ BaseRemoteGDB::trap(int type)
 
     if (!attached)
         return false;
+
+    bufferSize = gdbregs.bytes() * 2 + 256;
+    buffer = (char*)malloc(bufferSize);
 
     DPRINTF(GDBMisc, "trap: PC=%#x NPC=%#x\n",
             context->readPC(), context->readNextPC());
@@ -638,7 +663,7 @@ BaseRemoteGDB::trap(int type)
         active = true;
     else
         // Tell remote host that an exception has occurred.
-        snprintf((char *)buffer, sizeof(buffer), "S%02x", type);
+        snprintf((char *)buffer, bufferSize, "S%02x", type);
         send(buffer);
 
     // Stick frame regs into our reg cache.
@@ -656,13 +681,13 @@ BaseRemoteGDB::trap(int type)
             // if this command came from a running gdb, answer it --
             // the other guy has no way of knowing if we're in or out
             // of this loop when he issues a "remote-signal".
-            snprintf((char *)buffer, sizeof(buffer),
+            snprintf((char *)buffer, bufferSize,
                     "S%02x", type);
             send(buffer);
             continue;
 
           case GDBRegR:
-            if (2 * gdbregs.bytes() > sizeof(buffer))
+            if (2 * gdbregs.bytes() > bufferSize)
                 panic("buffer too small");
 
             mem2hex(buffer, gdbregs.regs, gdbregs.bytes());
@@ -709,7 +734,7 @@ BaseRemoteGDB::trap(int type)
                 send("E03");
                 continue;
             }
-            if (len > sizeof(buffer)) {
+            if (len > bufferSize) {
                 send("E04");
                 continue;
             }
@@ -745,7 +770,7 @@ BaseRemoteGDB::trap(int type)
                 send("E08");
                 continue;
             }
-            p = hex2mem(buffer, p, sizeof(buffer));
+            p = hex2mem(buffer, p, bufferSize);
             if (p == NULL) {
                 send("E09");
                 continue;
@@ -916,6 +941,7 @@ BaseRemoteGDB::trap(int type)
     }
 
   out:
+    free(buffer);
     return true;
 }
 

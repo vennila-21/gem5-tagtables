@@ -147,13 +147,15 @@ Trace::InstRecord::dump(ostream &outs)
             outs << hex;
             outs << "PC = " << thread->readNextPC();
             outs << " NPC = " << thread->readNextNPC();
-            newVal = thread->readMiscReg(SparcISA::MISCREG_CCR);
+            newVal = thread->readIntReg(SparcISA::NumIntArchRegs + 2);
+            //newVal = thread->readMiscReg(SparcISA::MISCREG_CCR);
             if(newVal != ccr)
             {
                 outs << " CCR = " << newVal;
                 ccr = newVal;
             }
-            newVal = thread->readMiscReg(SparcISA::MISCREG_Y);
+            newVal = thread->readIntReg(SparcISA::NumIntArchRegs + 1);
+            //newVal = thread->readMiscReg(SparcISA::MISCREG_Y);
             if(newVal != y)
             {
                 outs << " Y = " << newVal;
@@ -293,7 +295,8 @@ Trace::InstRecord::dump(ostream &outs)
         bool diffPC   = false;
         bool diffCC   = false;
         bool diffInst = false;
-        bool diffRegs = false;
+        bool diffIntRegs = false;
+        bool diffFpRegs = false;
         bool diffTpc = false;
         bool diffTnpc = false;
         bool diffTstate = false;
@@ -304,6 +307,7 @@ Trace::InstRecord::dump(ostream &outs)
         bool diffHtba = false;
         bool diffPstate = false;
         bool diffY = false;
+        bool diffFsr = false;
         bool diffCcr = false;
         bool diffTl = false;
         bool diffGl = false;
@@ -355,12 +359,18 @@ Trace::InstRecord::dump(ostream &outs)
                             (SparcISA::MachInst)staticInst->machInst) {
                         diffInst = true;
                     }
-                    for (int i = 0; i < TheISA::NumIntArchRegs; i++) {
+                    // assume we have %g0 working correctly
+                    for (int i = 1; i < TheISA::NumIntArchRegs; i++) {
                         if (thread->readIntReg(i) != shared_data->intregs[i]) {
-                            diffRegs = true;
+                            diffIntRegs = true;
                         }
                     }
-                    uint64_t oldTl = thread->readMiscReg(MISCREG_TL);
+                    for (int i = 0; i < TheISA::NumFloatRegs/2; i++) {
+                        if (thread->readFloatRegBits(i*2,FloatRegFile::DoubleWidth) != shared_data->fpregs[i]) {
+                            diffFpRegs = true;
+                        }
+                    }
+                            uint64_t oldTl = thread->readMiscReg(MISCREG_TL);
                     if (oldTl != shared_data->tl)
                         diffTl = true;
                     for (int i = 1; i <= MaxTL; i++) {
@@ -397,9 +407,15 @@ Trace::InstRecord::dump(ostream &outs)
                         diffHtba = true;
                     if(shared_data->pstate != thread->readMiscReg(MISCREG_PSTATE))
                         diffPstate = true;
-                    if(shared_data->y != thread->readMiscReg(MISCREG_Y))
+                    //if(shared_data->y != thread->readMiscReg(MISCREG_Y))
+                    if(shared_data->y !=
+                            thread->readIntReg(NumIntArchRegs + 1))
                         diffY = true;
-                    if(shared_data->ccr != thread->readMiscReg(MISCREG_CCR))
+                    if(shared_data->fsr != thread->readMiscReg(MISCREG_FSR))
+                        diffFsr = true;
+                    //if(shared_data->ccr != thread->readMiscReg(MISCREG_CCR))
+                    if(shared_data->ccr !=
+                            thread->readIntReg(NumIntArchRegs + 2))
                         diffCcr = true;
                     if(shared_data->gl != thread->readMiscReg(MISCREG_GL))
                         diffGl = true;
@@ -409,14 +425,22 @@ Trace::InstRecord::dump(ostream &outs)
                         diffPil = true;
                     if(shared_data->cwp != thread->readMiscReg(MISCREG_CWP))
                         diffCwp = true;
-                    if(shared_data->cansave != thread->readMiscReg(MISCREG_CANSAVE))
+                    //if(shared_data->cansave != thread->readMiscReg(MISCREG_CANSAVE))
+                    if(shared_data->cansave !=
+                            thread->readIntReg(NumIntArchRegs + 3))
                         diffCansave = true;
+                    //if(shared_data->canrestore !=
+                    //	    thread->readMiscReg(MISCREG_CANRESTORE))
                     if(shared_data->canrestore !=
-                            thread->readMiscReg(MISCREG_CANRESTORE))
+                            thread->readIntReg(NumIntArchRegs + 4))
                         diffCanrestore = true;
-                    if(shared_data->otherwin != thread->readMiscReg(MISCREG_OTHERWIN))
+                    //if(shared_data->otherwin != thread->readMiscReg(MISCREG_OTHERWIN))
+                    if(shared_data->otherwin !=
+                            thread->readIntReg(NumIntArchRegs + 6))
                         diffOtherwin = true;
-                    if(shared_data->cleanwin != thread->readMiscReg(MISCREG_CLEANWIN))
+                    //if(shared_data->cleanwin != thread->readMiscReg(MISCREG_CLEANWIN))
+                    if(shared_data->cleanwin !=
+                            thread->readIntReg(NumIntArchRegs + 5))
                         diffCleanwin = true;
 
                     for (int i = 0; i < 64; i++) {
@@ -426,12 +450,12 @@ Trace::InstRecord::dump(ostream &outs)
                                 diffTlb = true;
                     }
 
-                    if ((diffPC || diffCC || diffInst || diffRegs || diffTpc ||
-                            diffTnpc || diffTstate || diffTt || diffHpstate ||
-                            diffHtstate || diffHtba || diffPstate || diffY ||
-                            diffCcr || diffTl || diffGl || diffAsi || diffPil ||
-                            diffCwp || diffCansave || diffCanrestore ||
-                            diffOtherwin || diffCleanwin || diffTlb)
+                    if ((diffPC || diffCC || diffInst || diffIntRegs ||
+                         diffFpRegs || diffTpc || diffTnpc || diffTstate ||
+                         diffTt || diffHpstate || diffHtstate || diffHtba ||
+                         diffPstate || diffY || diffCcr || diffTl || diffFsr ||
+                         diffGl || diffAsi || diffPil || diffCwp || diffCansave ||
+                         diffCanrestore || diffOtherwin || diffCleanwin || diffTlb)
                         && !((staticInst->machInst & 0xC1F80000) == 0x81D00000)
                         && !(((staticInst->machInst & 0xC0000000) == 0xC0000000)
                             && shared_data->tl == thread->readMiscReg(MISCREG_TL) + 1)
@@ -444,8 +468,10 @@ Trace::InstRecord::dump(ostream &outs)
                             outs << " [CC]";
                         if (diffInst)
                             outs << " [Instruction]";
-                        if (diffRegs)
+                        if (diffIntRegs)
                             outs << " [IntRegs]";
+                        if (diffFpRegs)
+                            outs << " [FpRegs]";
                         if (diffTpc)
                             outs << " [Tpc]";
                         if (diffTnpc)
@@ -464,6 +490,8 @@ Trace::InstRecord::dump(ostream &outs)
                             outs << " [Pstate]";
                         if (diffY)
                             outs << " [Y]";
+                        if (diffFsr)
+                            outs << " [FSR]";
                         if (diffCcr)
                             outs << " [Ccr]";
                         if (diffTl)
@@ -530,10 +558,15 @@ Trace::InstRecord::dump(ostream &outs)
                                 thread->readMiscReg(MISCREG_PSTATE),
                                 shared_data->pstate);
                         printRegPair(outs, "Y",
-                                thread->readMiscReg(MISCREG_Y),
+                                //thread->readMiscReg(MISCREG_Y),
+                                thread->readIntReg(NumIntArchRegs + 1),
                                 shared_data->y);
+                        printRegPair(outs, "FSR",
+                                thread->readMiscReg(MISCREG_FSR),
+                                shared_data->fsr);
                         printRegPair(outs, "Ccr",
-                                thread->readMiscReg(MISCREG_CCR),
+                                //thread->readMiscReg(MISCREG_CCR),
+                                thread->readIntReg(NumIntArchRegs + 2),
                                 shared_data->ccr);
                         printRegPair(outs, "Tl",
                                 thread->readMiscReg(MISCREG_TL),
@@ -551,16 +584,20 @@ Trace::InstRecord::dump(ostream &outs)
                                 thread->readMiscReg(MISCREG_CWP),
                                 shared_data->cwp);
                         printRegPair(outs, "Cansave",
-                                thread->readMiscReg(MISCREG_CANSAVE),
+                                //thread->readMiscReg(MISCREG_CANSAVE),
+                                thread->readIntReg(NumIntArchRegs + 3),
                                 shared_data->cansave);
                         printRegPair(outs, "Canrestore",
-                                thread->readMiscReg(MISCREG_CANRESTORE),
+                                //thread->readMiscReg(MISCREG_CANRESTORE),
+                                thread->readIntReg(NumIntArchRegs + 4),
                                 shared_data->canrestore);
                         printRegPair(outs, "Otherwin",
-                                thread->readMiscReg(MISCREG_OTHERWIN),
+                                //thread->readMiscReg(MISCREG_OTHERWIN),
+                                thread->readIntReg(NumIntArchRegs + 6),
                                 shared_data->otherwin);
                         printRegPair(outs, "Cleanwin",
-                                thread->readMiscReg(MISCREG_CLEANWIN),
+                                //thread->readMiscReg(MISCREG_CLEANWIN),
+                                thread->readIntReg(NumIntArchRegs + 5),
                                 shared_data->cleanwin);
                         outs << endl;
                         for (int i = 1; i <= MaxTL; i++) {
@@ -588,26 +625,22 @@ Trace::InstRecord::dump(ostream &outs)
 
                         printSectionHeader(outs, "General Purpose Registers");
                         static const char * regtypes[4] = {"%g", "%o", "%l", "%i"};
-                        for(int y = 0; y < 4; y++)
-                        {
-                            for(int x = 0; x < 8; x++)
-                            {
+                        for(int y = 0; y < 4; y++) {
+                            for(int x = 0; x < 8; x++) {
                                 char label[8];
                                 sprintf(label, "%s%d", regtypes[y], x);
                                 printRegPair(outs, label,
                                         thread->readIntReg(y*8+x),
                                         shared_data->intregs[y*8+x]);
-                                /*outs << regtypes[y] << x << "         " ;
-                                outs <<  "0x" << hex << setw(16)
-                                    << thread->readIntReg(y*8+x);
-                                if (thread->readIntReg(y*8 + x)
-                                        != shared_data->intregs[y*8+x])
-                                    outs << "     X     ";
-                                else
-                                    outs << "     |     ";
-                                outs << "0x" << setw(16) << hex
-                                    << shared_data->intregs[y*8+x]
-                                    << endl;*/
+                            }
+                        }
+                        if (diffFpRegs) {
+                            for (int x = 0; x < 32; x++) {
+                                char label[8];
+                                sprintf(label, "%%f%d", x);
+                                printRegPair(outs, label,
+                                 thread->readFloatRegBits(x,FloatRegFile::DoubleWidth),
+                                 shared_data->fpregs[x]);
                             }
                         }
                         if (diffTlb) {

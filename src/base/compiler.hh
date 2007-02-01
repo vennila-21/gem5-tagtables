@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006-2007 The Regents of The University of Michigan
+ * Copyright (c) 2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,56 +28,26 @@
  * Authors: Ali Saidi
  */
 
-#include <unistd.h>
+#ifndef __BASE_COMPILER_HH__
+#define __BASE_COMPILER_HH__
 
-#define VERSION         0xA1000009
-#define OWN_M5          0x000000AA
-#define OWN_LEGION      0x00000055
+//http://msdn2.microsoft.com/en-us/library/ms937669.aspx
+//http://msdn2.microsoft.com/en-us/library/aa448724.aspx
+//http://docs.sun.com/source/819-3688/sun.specific.html#marker-998278
+//http://gcc.gnu.org/onlinedocs/gcc-3.3.1/gcc/Function-Attributes.html#Function%20Attributes
 
-/** !!!  VVV Increment VERSION on change VVV !!! **/
+#if defined(__GNUC__)
+#define M5_ATTR_NORETURN  __attribute__((noreturn))
+#define M5_PRAGMA_NORETURN(x)
+#define M5_DUMMY_RETURN
+#elif defined(__SUNPRO_CC)
+// this doesn't do anything with sun cc, but why not
+#define M5_ATTR_NORETURN  __sun_attr__((__noreturn__))
+#define M5_DUMMY_RETURN return (0);
+#define DO_PRAGMA(x) _Pragma(#x)
+#define M5_PRAGMA_NORETURN(x) DO_PRAGMA(does_not_return(x))
+#else
+#error "Need to define compiler options in base/compiler.hh"
+#endif
 
-typedef struct {
-    uint32_t flags;
-    uint32_t version;
-
-    uint64_t pc;
-    uint64_t new_pc;
-    uint64_t cycle_count;
-    uint64_t new_cycle_count;
-    uint32_t instruction;
-    uint32_t new_instruction;
-    uint64_t intregs[32];
-    uint64_t fpregs[32];
-
-    uint64_t tpc[8];
-    uint64_t tnpc[8];
-    uint64_t tstate[8];
-    uint16_t tt[8];
-    uint64_t tba;
-
-    uint64_t hpstate;
-    uint64_t htstate[8];
-    uint64_t htba;
-    uint16_t pstate;
-
-    uint64_t y;
-    uint64_t fsr;
-    uint8_t ccr;
-    uint8_t tl;
-    uint8_t gl;
-    uint8_t asi;
-    uint8_t pil;
-
-    uint8_t cwp;
-    uint8_t cansave;
-    uint8_t canrestore;
-    uint8_t otherwin;
-    uint8_t cleanwin;
-
-    uint64_t itb[64];
-    uint64_t dtb[64];
-
-} SharedData;
-
-/** !!! ^^^  Increment VERSION on change ^^^ !!! **/
-
+#endif // __BASE_COMPILER_HH__

@@ -47,7 +47,7 @@
 // If one doesn't exist, we pretty much get what is listed below, so it all
 // works out
 #include <byteswap.h>
-#elif defined (__sun__)
+#elif defined (__sun)
 #include <sys/isa_defs.h>
 #else
 #include <machine/endian.h>
@@ -56,6 +56,8 @@
 #if defined(__APPLE__)
 #include <libkern/OSByteOrder.h>
 #endif
+
+enum ByteOrder {BigEndianByteOrder, LittleEndianByteOrder};
 
 //These functions actually perform the swapping for parameters
 //of various bit lengths
@@ -131,11 +133,13 @@ template <typename T> static inline T letobe(T value) {return swap_byte(value);}
 //For conversions not involving the guest system, we can define the functions
 //conditionally based on the BYTE_ORDER macro and outside of the namespaces
 #if defined(_BIG_ENDIAN) || !defined(_LITTLE_ENDIAN) && BYTE_ORDER == BIG_ENDIAN
+const ByteOrder HostByteOrder = BigEndianByteOrder;
 template <typename T> static inline T htole(T value) {return swap_byte(value);}
 template <typename T> static inline T letoh(T value) {return swap_byte(value);}
 template <typename T> static inline T htobe(T value) {return value;}
 template <typename T> static inline T betoh(T value) {return value;}
 #elif defined(_LITTLE_ENDIAN) || BYTE_ORDER == LITTLE_ENDIAN
+const ByteOrder HostByteOrder = LittleEndianByteOrder;
 template <typename T> static inline T htole(T value) {return value;}
 template <typename T> static inline T letoh(T value) {return value;}
 template <typename T> static inline T htobe(T value) {return swap_byte(value);}
@@ -146,33 +150,35 @@ template <typename T> static inline T betoh(T value) {return swap_byte(value);}
 
 namespace BigEndianGuest
 {
-        template <typename T>
-        static inline T gtole(T value) {return betole(value);}
-        template <typename T>
-        static inline T letog(T value) {return letobe(value);}
-        template <typename T>
-        static inline T gtobe(T value) {return value;}
-        template <typename T>
-        static inline T betog(T value) {return value;}
-        template <typename T>
-        static inline T htog(T value) {return htobe(value);}
-        template <typename T>
-        static inline T gtoh(T value) {return betoh(value);}
+    const bool ByteOrderDiffers = (HostByteOrder != BigEndianByteOrder);
+    template <typename T>
+    static inline T gtole(T value) {return betole(value);}
+    template <typename T>
+    static inline T letog(T value) {return letobe(value);}
+    template <typename T>
+    static inline T gtobe(T value) {return value;}
+    template <typename T>
+    static inline T betog(T value) {return value;}
+    template <typename T>
+    static inline T htog(T value) {return htobe(value);}
+    template <typename T>
+    static inline T gtoh(T value) {return betoh(value);}
 }
 
 namespace LittleEndianGuest
 {
-        template <typename T>
-        static inline T gtole(T value) {return value;}
-        template <typename T>
-        static inline T letog(T value) {return value;}
-        template <typename T>
-        static inline T gtobe(T value) {return letobe(value);}
-        template <typename T>
-        static inline T betog(T value) {return betole(value);}
-        template <typename T>
-        static inline T htog(T value) {return htole(value);}
-        template <typename T>
-        static inline T gtoh(T value) {return letoh(value);}
+    const bool ByteOrderDiffers = (HostByteOrder != LittleEndianByteOrder);
+    template <typename T>
+    static inline T gtole(T value) {return value;}
+    template <typename T>
+    static inline T letog(T value) {return value;}
+    template <typename T>
+    static inline T gtobe(T value) {return letobe(value);}
+    template <typename T>
+    static inline T betog(T value) {return betole(value);}
+    template <typename T>
+    static inline T htog(T value) {return htole(value);}
+    template <typename T>
+    static inline T gtoh(T value) {return letoh(value);}
 }
 #endif // __SIM_BYTE_SWAP_HH__

@@ -50,6 +50,9 @@
 
 #include <algorithm>
 #include <cassert>
+#ifdef __SUNPRO_CC
+#include <math.h>
+#endif
 #include <cmath>
 #include <functional>
 #include <iosfwd>
@@ -395,7 +398,7 @@ class Wrap : public Child
   public:
     Wrap()
     {
-      map(new Data<Child>(*this));
+      this->map(new Data<Child>(*this));
     }
 
     /**
@@ -1410,7 +1413,7 @@ struct DistStor
         else if (val > params.max)
             overflow += number;
         else {
-            int index = (int)floor((val - params.min) / params.bucket_size);
+            int index = (int)std::floor((val - params.min) / params.bucket_size);
             assert(index < size(params));
             cvec[index] += number;
         }

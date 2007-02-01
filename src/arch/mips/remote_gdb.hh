@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2002-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,100 +26,39 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Nathan Binkert
- *          Ali Saidi
  */
 
-#if defined(__sun)
-#include <ieeefp.h>
-#endif
-#ifdef __SUNPRO_CC
-#include <stdlib.h>
-#include <math.h>
-#endif
+#ifndef __ARCH_MIPS_REMOTE_GDB_HH__
+#define __ARCH_MIPS_REMOTE_GDB_HH__
 
-#include <cstdlib>
-#include <cmath>
+#include "base/remote_gdb.hh"
 
-
-#include "sim/param.hh"
-#include "base/random.hh"
-#include "base/trace.hh"
-
-using namespace std;
-
-class RandomContext : public ParamContext
+namespace MipsISA
 {
-  public:
-    RandomContext(const string &_iniSection)
-        : ::ParamContext(_iniSection) {}
-    ~RandomContext() {}
+    class RemoteGDB : public BaseRemoteGDB
+    {
+      public:
+        //These needs to be written to suit MIPS
 
-    void checkParams();
-};
+        RemoteGDB(System *system, ThreadContext *context)
+            : BaseRemoteGDB(system, context, 1)
+        {}
 
-RandomContext paramContext("random");
+        bool acc(Addr, size_t)
+        { panic("acc not implemented for MIPS!"); }
 
-Param<unsigned>
-seed(&paramContext, "seed", "seed to random number generator", 1);
+        void getregs()
+        { panic("getregs not implemented for MIPS!"); }
 
-void
-RandomContext::checkParams()
-{
-    ::srand48(seed);
-}
+        void setregs()
+        { panic("setregs not implemented for MIPS!"); }
 
-long
-getLong()
-{
-    return mrand48();
-}
+        void clearSingleStep()
+        { panic("clearSingleStep not implemented for MIPS!"); }
 
-double
-m5round(double r)
-{
-#if defined(__sun)
-    double val;
-    fp_rnd oldrnd = fpsetround(FP_RN);
-    val = rint(r);
-    fpsetround(oldrnd);
-    return val;
-#else
-    return round(r);
-#endif
-}
-
-int64_t
-getUniform(int64_t min, int64_t max)
-{
-    double r;
-    r = drand48() * (max-min) + min;
-
-    return (int64_t)m5round(r);
-}
-
-uint64_t
-getUniformPos(uint64_t min, uint64_t max)
-{
-    double r;
-    r = drand48() * (max-min) + min;
-
-    return (uint64_t)m5round(r);
-}
-
-
-// idea for generating a double from erand48
-double
-getDouble()
-{
-    union {
-        uint32_t _long[2];
-        uint16_t _short[4];
+        void setSingleStep()
+        { panic("setSingleStep not implemented for MIPS!"); }
     };
-
-    _long[0] = mrand48();
-    _long[1] = mrand48();
-
-    return ldexp((double) _short[0], -48) +
-        ldexp((double) _short[1], -32) +
-        ldexp((double) _short[2], -16);
 }
+
+#endif /* __ARCH_ALPHA_REMOTE_GDB_H__ */

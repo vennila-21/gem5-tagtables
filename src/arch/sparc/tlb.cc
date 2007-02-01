@@ -28,6 +28,8 @@
  * Authors: Ali Saidi
  */
 
+#include <cstring>
+
 #include "arch/sparc/asi.hh"
 #include "arch/sparc/miscregfile.hh"
 #include "arch/sparc/tlb.hh"
@@ -53,7 +55,7 @@ TLB::TLB(const std::string &name, int s)
         fatal("SPARC T1 TLB registers don't support more than 64 TLB entries.");
 
     tlb = new TlbEntry[size];
-    memset(tlb, 0, sizeof(TlbEntry) * size);
+    std::memset(tlb, 0, sizeof(TlbEntry) * size);
 
     for (int x = 0; x < size; x++)
         freeList.push_back(&tlb[x]);
@@ -174,8 +176,6 @@ insertAllLocked:
         lookupTable.erase(new_entry->range);
 
 
-    DPRINTF(TLB, "Using entry: %#X\n", new_entry);
-
     assert(PTE.valid());
     new_entry->range.va = va;
     new_entry->range.size = PTE.size() - 1;
@@ -285,7 +285,6 @@ TLB::demapPage(Addr va, int partition_id, bool real, int context_id)
             usedEntries--;
         }
         freeList.push_front(i->second);
-        DPRINTF(TLB, "Freeing TLB entry : %#X\n", i->second);
         lookupTable.erase(i);
     }
 }
@@ -302,7 +301,6 @@ TLB::demapContext(int partition_id, int context_id)
             tlb[x].range.partitionId == partition_id) {
             if (tlb[x].valid == true) {
                 freeList.push_front(&tlb[x]);
-                DPRINTF(TLB, "Freeing TLB entry : %#X\n", &tlb[x]);
             }
             tlb[x].valid = false;
             if (tlb[x].used) {
@@ -324,7 +322,6 @@ TLB::demapAll(int partition_id)
         if (!tlb[x].pte.locked() && tlb[x].range.partitionId == partition_id) {
             if (tlb[x].valid == true){
                 freeList.push_front(&tlb[x]);
-                DPRINTF(TLB, "Freeing TLB entry : %#X\n", &tlb[x]);
             }
             tlb[x].valid = false;
             if (tlb[x].used) {
@@ -902,7 +899,6 @@ DTB::doMmuRegRead(ThreadContext *tc, Packet *pkt)
         pkt->set(tc->readMiscRegWithEffect(MISCREG_MMU_ITLB_CX_CONFIG));
         break;
       case ASI_SPARC_ERROR_STATUS_REG:
-        warn("returning 0 for  SPARC ERROR regsiter read\n");
         pkt->set((uint64_t)0);
         break;
       case ASI_HYP_SCRATCHPAD:
@@ -1253,13 +1249,55 @@ doMmuWriteError:
 void
 TLB::serialize(std::ostream &os)
 {
-    panic("Need to implement serialize tlb for SPARC\n");
+    SERIALIZE_SCALAR(size);
+    SERIALIZE_SCALAR(usedEntries);
+    SERIALIZE_SCALAR(lastReplaced);
+
+    // convert the pointer based free list into an index based one
+    int *free_list = (int*)malloc(sizeof(int) * size);
+    int cntr = 0;
+    std::list<TlbEntry*>::iterator i;
+    i = freeList.begin();
+    while (i != freeList.end()) {
+        free_list[cntr++] = ((size_t)*i - (size_t)tlb)/ sizeof(TlbEntry);
+        i++;
+    }
+    SERIALIZE_SCALAR(cntr);
+    SERIALIZE_ARRAY(free_list,  cntr);
+
+    for (int x = 0; x < size; x++) {
+        nameOut(os, csprintf("%s.PTE%d", name(), x));
+        tlb[x].serialize(os);
+    }
 }
 
 void
 TLB::unserialize(Checkpoint *cp, const std::string &section)
 {
-    panic("Need to implement unserialize tlb for SPARC\n");
+    int oldSize;
+
+    paramIn(cp, section, "size", oldSize);
+    if (oldSize != size)
+        panic("Don't support unserializing different sized TLBs\n");
+    UNSERIALIZE_SCALAR(usedEntries);
+    UNSERIALIZE_SCALAR(lastReplaced);
+
+    int cntr;
+    UNSERIALIZE_SCALAR(cntr);
+
+    int *free_list = (int*)malloc(sizeof(int) * cntr);
+    freeList.clear();
+    UNSERIALIZE_ARRAY(free_list,  cntr);
+    for (int x = 0; x < cntr; x++)
+        freeList.push_back(&tlb[free_list[x]]);
+
+    lookupTable.clear();
+    for (int x = 0; x < size; x++) {
+        tlb[x].unserialize(cp, csprintf("%s.PTE%d", section, x));
+        if (tlb[x].valid)
+            lookupTable.insert(tlb[x].range, &tlb[x]);
+
+    }
 }
 
 

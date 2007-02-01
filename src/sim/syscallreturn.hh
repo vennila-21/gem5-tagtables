@@ -25,101 +25,46 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Nathan Binkert
- *          Ali Saidi
+ * Authors: Gabe Black
  */
 
-#if defined(__sun)
-#include <ieeefp.h>
-#endif
-#ifdef __SUNPRO_CC
-#include <stdlib.h>
-#include <math.h>
-#endif
+#ifndef __SIM_SYSCALLRETURN_HH__
+#define __SIM_SYSCALLRETURN_HH__
 
-#include <cstdlib>
-#include <cmath>
+#include <inttypes.h>
 
-
-#include "sim/param.hh"
-#include "base/random.hh"
-#include "base/trace.hh"
-
-using namespace std;
-
-class RandomContext : public ParamContext
+class SyscallReturn
 {
   public:
-    RandomContext(const string &_iniSection)
-        : ::ParamContext(_iniSection) {}
-    ~RandomContext() {}
+    template <class T>
+    SyscallReturn(T v, bool s)
+    {
+        retval = (uint64_t)v;
+        success = s;
+    }
 
-    void checkParams();
+    template <class T>
+    SyscallReturn(T v)
+    {
+        success = (v >= 0);
+        retval = (uint64_t)v;
+    }
+
+    ~SyscallReturn() {}
+
+    SyscallReturn& operator=(const SyscallReturn& s)
+    {
+        retval = s.retval;
+        success = s.success;
+        return *this;
+    }
+
+    bool successful() { return success; }
+    uint64_t value() { return retval; }
+
+    private:
+    uint64_t retval;
+    bool success;
 };
 
-RandomContext paramContext("random");
-
-Param<unsigned>
-seed(&paramContext, "seed", "seed to random number generator", 1);
-
-void
-RandomContext::checkParams()
-{
-    ::srand48(seed);
-}
-
-long
-getLong()
-{
-    return mrand48();
-}
-
-double
-m5round(double r)
-{
-#if defined(__sun)
-    double val;
-    fp_rnd oldrnd = fpsetround(FP_RN);
-    val = rint(r);
-    fpsetround(oldrnd);
-    return val;
-#else
-    return round(r);
 #endif
-}
-
-int64_t
-getUniform(int64_t min, int64_t max)
-{
-    double r;
-    r = drand48() * (max-min) + min;
-
-    return (int64_t)m5round(r);
-}
-
-uint64_t
-getUniformPos(uint64_t min, uint64_t max)
-{
-    double r;
-    r = drand48() * (max-min) + min;
-
-    return (uint64_t)m5round(r);
-}
-
-
-// idea for generating a double from erand48
-double
-getDouble()
-{
-    union {
-        uint32_t _long[2];
-        uint16_t _short[4];
-    };
-
-    _long[0] = mrand48();
-    _long[1] = mrand48();
-
-    return ldexp((double) _short[0], -48) +
-        ldexp((double) _short[1], -32) +
-        ldexp((double) _short[2], -16);
-}

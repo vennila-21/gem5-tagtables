@@ -36,6 +36,8 @@
 #ifndef __DEV_SPARC_DTOD_HH__
 #define __DEV_SPARC_DTOD_HH__
 
+#include <vector>
+
 #include "base/range.hh"
 #include "dev/io_device.hh"
 
@@ -52,7 +54,7 @@ class DumbTOD : public BasicPioDevice
   public:
     struct Params : public BasicPioDevice::Params
     {
-        time_t init_time;
+        std::vector<int> init_time;
     };
   protected:
     const Params *params() const { return (const Params *)_params; }
@@ -62,6 +64,21 @@ class DumbTOD : public BasicPioDevice
 
     virtual Tick read(PacketPtr pkt);
     virtual Tick write(PacketPtr pkt);
+
+    /**
+     * Serialize this object to the given output stream.
+     * @param os The stream to serialize to.
+     */
+    virtual void serialize(std::ostream &os);
+
+    /**
+     * Reconstruct the state of this object from a checkpoint.
+     * @param cp The checkpoint use.
+     * @param section The section name of this object
+     */
+    virtual void unserialize(Checkpoint *cp, const std::string &section);
+
+
 };
 
 #endif // __DEV_BADDEV_HH__

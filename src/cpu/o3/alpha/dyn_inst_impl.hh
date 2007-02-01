@@ -31,9 +31,10 @@
 #include "cpu/o3/alpha/dyn_inst.hh"
 
 template <class Impl>
-AlphaDynInst<Impl>::AlphaDynInst(ExtMachInst inst, Addr PC, Addr Pred_PC,
+AlphaDynInst<Impl>::AlphaDynInst(ExtMachInst inst, Addr PC, Addr NPC,
+                                 Addr Pred_PC, Addr Pred_NPC,
                                  InstSeqNum seq_num, O3CPU *cpu)
-    : BaseDynInst<Impl>(inst, PC, Pred_PC, seq_num, cpu)
+    : BaseDynInst<Impl>(inst, PC, NPC, Pred_PC, Pred_NPC, seq_num, cpu)
 {
     initVars();
 }
@@ -53,11 +54,11 @@ AlphaDynInst<Impl>::initVars()
     // as the normal register entries.  It will allow the IQ to work
     // without any modifications.
     for (int i = 0; i < this->staticInst->numDestRegs(); i++) {
-        _destRegIdx[i] = this->staticInst->destRegIdx(i);
+        this->_destRegIdx[i] = this->staticInst->destRegIdx(i);
     }
 
     for (int i = 0; i < this->staticInst->numSrcRegs(); i++) {
-        _srcRegIdx[i] = this->staticInst->srcRegIdx(i);
+        this->_srcRegIdx[i] = this->staticInst->srcRegIdx(i);
         this->_readySrcRegIdx[i] = 0;
     }
 }
