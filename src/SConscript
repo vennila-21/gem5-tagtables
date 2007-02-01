@@ -62,6 +62,7 @@ base_sources = Split('''
 	base/pollevent.cc
 	base/range.cc
 	base/random.cc
+	base/remote_gdb.cc
 	base/sat_counter.cc
 	base/socket.cc
 	base/statistics.cc
@@ -172,7 +173,6 @@ mysql_sources = Split('''
 full_system_sources = Split('''
 	base/crc.cc
 	base/inet.cc
-	base/remote_gdb.cc
 
 	cpu/intr_control.cc
         cpu/profile.cc
@@ -304,37 +304,56 @@ def makeEnv(label, objsfx, strip = False, **kwargs):
     newEnv.Program(bin, make_objs(sources, newEnv))
     if strip:
         stripped_bin = bin + '.stripped'
-        newEnv.Command(stripped_bin, bin, 'strip $SOURCE -o $TARGET')
+        if sys.platform == 'sunos5':
+            newEnv.Command(stripped_bin, bin, 'cp $SOURCE $TARGET; strip $TARGET')
+        else:
+            newEnv.Command(stripped_bin, bin, 'strip $SOURCE -o $TARGET')
         bin = stripped_bin
     targets = newEnv.Concat(exe, [bin, 'python/m5py.zip'])
     newEnv.M5Binary = targets[0]
     envList.append(newEnv)
 
 # Debug binary
-# Solaris seems to have some issue with DWARF2 debugging information, it's ok
-# with stabs though
-if sys.platform == 'sunos5':
-   debug_flag = '-gstabs+'
+ccflags = {}
+if env['GCC']:
+    if sys.platform == 'sunos5':
+        ccflags['debug'] = '-gstabs+'
+    else:
+        ccflags['debug'] = '-ggdb3'
+    ccflags['opt'] = '-g -O3'
+    ccflags['fast'] = '-O3'
+    ccflags['prof'] = '-O3 -g -pg'
+elif env['SUNCC']:
+    ccflags['debug'] = '-g0'
+    ccflags['opt'] = '-g -O'
+    ccflags['fast'] = '-fast'
+    ccflags['prof'] = '-fast -g -pg'
+elif env['ICC']:
+    ccflags['debug'] = '-g -O0'
+    ccflags['opt'] = '-g -O'
+    ccflags['fast'] = '-fast'
+    ccflags['prof'] = '-fast -g -pg'
 else:
-   debug_flag = '-ggdb3'
+    print 'Unknown compiler, please fix compiler options'
+    Exit(1)    
 
 makeEnv('debug', '.do',
-        CCFLAGS = Split('%s -O0' % debug_flag),
+        CCFLAGS = Split(ccflags['debug']),
         CPPDEFINES = ['DEBUG', 'TRACING_ON=1'])
 
 # Optimized binary
 makeEnv('opt', '.o',
-        CCFLAGS = Split('-g -O3'),
+        CCFLAGS = Split(ccflags['opt']),
         CPPDEFINES = ['TRACING_ON=1'])
 
 # "Fast" binary
 makeEnv('fast', '.fo', strip = True,
-        CCFLAGS = Split('-O3'),
+        CCFLAGS = Split(ccflags['fast']),
         CPPDEFINES = ['NDEBUG', 'TRACING_ON=0'])
 
 # Profiled binary
 makeEnv('prof', '.po',
-        CCFLAGS = Split('-O3 -g -pg'),
+        CCFLAGS = Split(ccflags['prof']),
         CPPDEFINES = ['NDEBUG', 'TRACING_ON=0'],
         LINKFLAGS = '-pg')
 

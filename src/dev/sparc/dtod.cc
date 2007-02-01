@@ -49,12 +49,24 @@ using namespace std;
 using namespace TheISA;
 
 DumbTOD::DumbTOD(Params *p)
-    : BasicPioDevice(p), todTime(p->init_time)
+    : BasicPioDevice(p)
 {
+    struct tm tm;
+    char *tz;
+
     pioSize = 0x08;
 
-    struct tm tm;
-    gmtime_r((time_t*)&todTime, &tm);
+    parseTime(p->init_time, &tm);
+    tz = getenv("TZ");
+    setenv("TZ", "", 1);
+    tzset();
+    todTime = mktime(&tm);
+    if (tz)
+        setenv("TZ", tz, 1);
+    else
+        unsetenv("TZ");
+    tzset();
+
     DPRINTFN("Real-time clock set to %s\n", asctime(&tm));
     DPRINTFN("Real-time clock set to %d\n", todTime);
 }
@@ -80,13 +92,26 @@ DumbTOD::write(PacketPtr pkt)
     panic("Dumb tod device doesn't support writes\n");
 }
 
+void
+DumbTOD::serialize(std::ostream &os)
+{
+    SERIALIZE_SCALAR(todTime);
+}
+
+void
+DumbTOD::unserialize(Checkpoint *cp, const std::string &section)
+{
+    UNSERIALIZE_SCALAR(todTime);
+}
+
+
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(DumbTOD)
 
     Param<Addr> pio_addr;
     Param<Tick> pio_latency;
     SimObjectParam<Platform *> platform;
     SimObjectParam<System *> system;
-    Param<time_t> time;
+    VectorParam<int> time;
 
 END_DECLARE_SIM_OBJECT_PARAMS(DumbTOD)
 
@@ -96,7 +121,7 @@ BEGIN_INIT_SIM_OBJECT_PARAMS(DumbTOD)
     INIT_PARAM(pio_latency, "Programmed IO latency"),
     INIT_PARAM(platform, "platform"),
     INIT_PARAM(system, "system object"),
-    INIT_PARAM(time, "System time to use (0 for actual time")
+    INIT_PARAM(time, "")
 
 END_INIT_SIM_OBJECT_PARAMS(DumbTOD)
 

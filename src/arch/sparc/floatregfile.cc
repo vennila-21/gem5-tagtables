@@ -72,16 +72,19 @@ FloatReg FloatRegFile::readReg(int floatReg, int width)
         float32_t result32;
         memcpy(&result32, regSpace + 4 * floatReg, sizeof(result32));
         result = htog(result32);
+        DPRINTF(Sparc, "Read FP32 register %d = 0x%x\n", floatReg, result);
         break;
       case DoubleWidth:
         float64_t result64;
         memcpy(&result64, regSpace + 4 * floatReg, sizeof(result64));
         result = htog(result64);
+        DPRINTF(Sparc, "Read FP64 register %d = 0x%x\n", floatReg, result);
         break;
       case QuadWidth:
         float128_t result128;
         memcpy(&result128, regSpace + 4 * floatReg, sizeof(result128));
         result = htog(result128);
+        DPRINTF(Sparc, "Read FP128 register %d = 0x%x\n", floatReg, result);
         break;
       default:
         panic("Attempted to read a %d bit floating point register!", width);
@@ -101,16 +104,19 @@ FloatRegBits FloatRegFile::readRegBits(int floatReg, int width)
         uint32_t result32;
         memcpy(&result32, regSpace + 4 * floatReg, sizeof(result32));
         result = htog(result32);
+        DPRINTF(Sparc, "Read FP32 bits register %d = 0x%x\n", floatReg, result);
         break;
       case DoubleWidth:
         uint64_t result64;
         memcpy(&result64, regSpace + 4 * floatReg, sizeof(result64));
         result = htog(result64);
+        DPRINTF(Sparc, "Read FP64 bits register %d = 0x%x\n", floatReg, result);
         break;
       case QuadWidth:
         uint64_t result128;
         memcpy(&result128, regSpace + 4 * floatReg, sizeof(result128));
         result = htog(result128);
+        DPRINTF(Sparc, "Read FP128 bits register %d = 0x%x\n", floatReg, result);
         break;
       default:
         panic("Attempted to read a %d bit floating point register!", width);
@@ -131,10 +137,12 @@ Fault FloatRegFile::setReg(int floatReg, const FloatReg &val, int width)
       case SingleWidth:
         result32 = gtoh((uint32_t)val);
         memcpy(regSpace + 4 * floatReg, &result32, sizeof(result32));
+        DPRINTF(Sparc, "Write FP64 register %d = 0x%x\n", floatReg, result32);
         break;
       case DoubleWidth:
         result64 = gtoh((uint64_t)val);
         memcpy(regSpace + 4 * floatReg, &result64, sizeof(result64));
+        DPRINTF(Sparc, "Write FP64 register %d = 0x%x\n", floatReg, result64);
         break;
       case QuadWidth:
         panic("Quad width FP not implemented.");
@@ -157,10 +165,12 @@ Fault FloatRegFile::setRegBits(int floatReg, const FloatRegBits &val, int width)
       case SingleWidth:
         result32 = gtoh((uint32_t)val);
         memcpy(regSpace + 4 * floatReg, &result32, sizeof(result32));
+        DPRINTF(Sparc, "Write FP64 bits register %d = 0x%x\n", floatReg, result32);
         break;
       case DoubleWidth:
         result64 = gtoh((uint64_t)val);
         memcpy(regSpace + 4 * floatReg, &result64, sizeof(result64));
+        DPRINTF(Sparc, "Write FP64 bits register %d = 0x%x\n", floatReg, result64);
         break;
       case QuadWidth:
         panic("Quad width FP not implemented.");
@@ -173,13 +183,15 @@ Fault FloatRegFile::setRegBits(int floatReg, const FloatRegBits &val, int width)
 
 void FloatRegFile::serialize(std::ostream &os)
 {
-    SERIALIZE_ARRAY((unsigned char *)regSpace,
+    uint8_t *float_reg = (uint8_t*)regSpace;
+    SERIALIZE_ARRAY(float_reg,
             SingleWidth / 8 * NumFloatRegs);
 }
 
 void FloatRegFile::unserialize(Checkpoint *cp, const std::string &section)
 {
-    UNSERIALIZE_ARRAY((unsigned char *)regSpace,
+    uint8_t *float_reg = (uint8_t*)regSpace;
+    UNSERIALIZE_ARRAY(float_reg,
             SingleWidth / 8 * NumFloatRegs);
 }
 

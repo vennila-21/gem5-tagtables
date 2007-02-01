@@ -34,15 +34,17 @@
 //
 
 output header {{
+#include <cstring>
 #include <sstream>
 #include <iostream>
 
-#include "cpu/static_inst.hh"
 #include "arch/sparc/faults.hh"
-#include "mem/request.hh"  // some constructors use MemReq flags
-#include "mem/packet.hh"
 #include "arch/sparc/isa_traits.hh"
 #include "arch/sparc/regfile.hh"
+#include "base/misc.hh"
+#include "cpu/static_inst.hh"
+#include "mem/packet.hh"
+#include "mem/request.hh"  // some constructors use MemReq flags
 }};
 
 output decoder {{
@@ -65,6 +67,7 @@ output exec {{
 #endif
 #include <limits>
 
+#include <cmath>
 #include "arch/sparc/asi.hh"
 #include "cpu/base.hh"
 #include "cpu/exetrace.hh"
@@ -73,5 +76,6 @@ output exec {{
 #include "mem/packet_access.hh"
 
 using namespace SparcISA;
+using namespace std;
 }};
 

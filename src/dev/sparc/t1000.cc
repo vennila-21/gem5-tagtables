@@ -57,6 +57,7 @@ Tick
 T1000::intrFrequency()
 {
     panic("Need implementation\n");
+    M5_DUMMY_RETURN
 }
 
 void
@@ -89,6 +90,7 @@ Addr
 T1000::pciToDma(Addr pciAddr) const
 {
     panic("Need implementation\n");
+    M5_DUMMY_RETURN
 }
 
 
@@ -96,18 +98,7 @@ Addr
 T1000::calcConfigAddr(int bus, int dev, int func)
 {
     panic("Need implementation\n");
-}
-
-void
-T1000::serialize(std::ostream &os)
-{
-    panic("Need implementation\n");
-}
-
-void
-T1000::unserialize(Checkpoint *cp, const std::string &section)
-{
-    panic("Need implementation\n");
+    M5_DUMMY_RETURN
 }
 
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(T1000)

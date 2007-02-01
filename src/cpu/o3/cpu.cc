@@ -150,6 +150,10 @@ FullO3CPU<Impl>::DeallocateContextEvent::description()
 template <class Impl>
 FullO3CPU<Impl>::FullO3CPU(Params *params)
     : BaseO3CPU(params),
+#if FULL_SYSTEM
+      itb(params->itb),
+      dtb(params->dtb),
+#endif
       tickEvent(this),
       removeInstsThisCycle(false),
       fetch(params),
@@ -657,9 +661,7 @@ FullO3CPU<Impl>::insertThread(unsigned tid)
     //Set PC/NPC/NNPC
     setPC(src_tc->readPC(), tid);
     setNextPC(src_tc->readNextPC(), tid);
-#if ISA_HAS_DELAY_SLOT
     setNextNPC(src_tc->readNextNPC(), tid);
-#endif
 
     src_tc->setStatus(ThreadContext::Active);
 
@@ -698,7 +700,7 @@ FullO3CPU<Impl>::removeThread(unsigned tid)
 
     // Squash Throughout Pipeline
     InstSeqNum squash_seq_num = commit.rob->readHeadInst(tid)->seqNum;
-    fetch.squash(0, squash_seq_num, true, tid);
+    fetch.squash(0, sizeof(TheISA::MachInst), squash_seq_num, true, tid);
     decode.squash(tid);
     rename.squash(squash_seq_num, tid);
     iew.squash(tid);

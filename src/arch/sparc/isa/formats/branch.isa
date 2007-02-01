@@ -1,4 +1,4 @@
-// Copyright (c) 2006 The Regents of The University of Michigan
+// Copyright (c) 2006-2007 The Regents of The University of Michigan
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -170,7 +170,7 @@ output decoder {{
             printMnemonic(response, mnemonic);
             ccprintf(response, "0x%x", target);
 
-            if(symtab->findNearestSymbol(target, symbol, symbolAddr))
+            if(symtab && symtab->findNearestSymbol(target, symbol, symbolAddr))
             {
                 ccprintf(response, " <%s", symbol);
                 if(symbolAddr != target)
@@ -211,13 +211,13 @@ let {{
     {
         if(A)
         {
-            NPC = xc->readNextNPC();
-            NNPC = NPC + 4;
+            NNPC = NPC + 8;
+            NPC = NPC + 4;
         }
         else
         {
-            NPC = xc->readNextPC();
-            NNPC = xc->readNextNPC();
+            NPC = NPC;
+            NNPC = NNPC;
         }
     }'''
 }};
@@ -244,7 +244,6 @@ def format Branch(code, *opt_flags) {{
 // Primary format for branch instructions:
 def format BranchN(bits, code, *opt_flags) {{
         code = re.sub(r'handle_annul', handle_annul, code)
-        codeBlk = CodeBlock(code)
         new_opt_flags = []
         for flag in opt_flags:
             if flag == ',a':
@@ -252,7 +251,7 @@ def format BranchN(bits, code, *opt_flags) {{
                 Name += 'Annul'
             else:
                 new_opt_flags += flag
-        iop = InstObjParams(name, Name, "BranchNBits<%d>" % bits, codeBlk, new_opt_flags)
+        iop = InstObjParams(name, Name, "BranchNBits<%d>" % bits, code, new_opt_flags)
         header_output = BasicDeclare.subst(iop)
         decoder_output = BasicConstructor.subst(iop)
         exec_output = BranchExecute.subst(iop)
@@ -262,8 +261,7 @@ def format BranchN(bits, code, *opt_flags) {{
 // Primary format for branch instructions:
 def format BranchSplit(code, *opt_flags) {{
         code = re.sub(r'handle_annul', handle_annul, code)
-        codeBlk = CodeBlock(code)
-        iop = InstObjParams(name, Name, 'BranchSplit', codeBlk, opt_flags)
+        iop = InstObjParams(name, Name, 'BranchSplit', code, opt_flags)
         header_output = BasicDeclare.subst(iop)
         decoder_output = BasicConstructor.subst(iop)
         exec_output = BranchExecute.subst(iop)
