@@ -123,8 +123,10 @@ inline void printLevelHeader(ostream & os, int level)
 #endif
 
 void
-Trace::InstRecord::dump(ostream &outs)
+Trace::InstRecord::dump()
 {
+    ostream &outs = Trace::output();
+
     DPRINTF(Sparc, "Instruction: %#X\n", staticInst->machInst);
     if (flags[PRINT_REG_DELTA])
     {
@@ -194,7 +196,7 @@ Trace::InstRecord::dump(ostream &outs)
         bool is_trace_system = true;
 #endif
         if (is_trace_system) {
-            ccprintf(outs, "%7d ) ", cycle);
+            ccprintf(outs, "%7d ) ", when);
             outs << "0x" << hex << PC << ":\t";
             if (staticInst->isLoad()) {
                 outs << "<RD 0x" << hex << addr;
@@ -206,8 +208,8 @@ Trace::InstRecord::dump(ostream &outs)
             outs << endl;
         }
     } else {
-        if (flags[PRINT_CYCLE])
-            ccprintf(outs, "%7d: ", cycle);
+        if (flags[PRINT_TICKS])
+            ccprintf(outs, "%7d: ", when);
 
         outs << thread->getCpuPtr()->name() << " ";
 
@@ -324,7 +326,7 @@ Trace::InstRecord::dump(ostream &outs)
         // We took a trap on a micro-op...
         if (wasMicro && !staticInst->isMicroOp())
         {
-            // let's skip comparing this cycle
+            // let's skip comparing this tick
             while (!compared)
                 if (shared_data->flags == OWN_M5) {
                     shared_data->flags = OWN_LEGION;
@@ -411,8 +413,14 @@ Trace::InstRecord::dump(ostream &outs)
                     if(shared_data->y !=
                             thread->readIntReg(NumIntArchRegs + 1))
                         diffY = true;
-                    if(shared_data->fsr != thread->readMiscReg(MISCREG_FSR))
+                    if(shared_data->fsr != thread->readMiscReg(MISCREG_FSR)) {
                         diffFsr = true;
+                        if (mbits(shared_data->fsr, 63,10) ==
+                                mbits(thread->readMiscReg(MISCREG_FSR), 63,10)) {
+                            thread->setMiscReg(MISCREG_FSR, shared_data->fsr);
+                            diffFsr = false;
+                        }
+                    }
                     //if(shared_data->ccr != thread->readMiscReg(MISCREG_CCR))
                     if(shared_data->ccr !=
                             thread->readIntReg(NumIntArchRegs + 2))
@@ -450,16 +458,13 @@ Trace::InstRecord::dump(ostream &outs)
                                 diffTlb = true;
                     }
 
-                    if ((diffPC || diffCC || diffInst || diffIntRegs ||
+                    if (diffPC || diffCC || diffInst || diffIntRegs ||
                          diffFpRegs || diffTpc || diffTnpc || diffTstate ||
                          diffTt || diffHpstate || diffHtstate || diffHtba ||
                          diffPstate || diffY || diffCcr || diffTl || diffFsr ||
                          diffGl || diffAsi || diffPil || diffCwp || diffCansave ||
                          diffCanrestore || diffOtherwin || diffCleanwin || diffTlb)
-                        && !((staticInst->machInst & 0xC1F80000) == 0x81D00000)
-                        && !(((staticInst->machInst & 0xC0000000) == 0xC0000000)
-                            && shared_data->tl == thread->readMiscReg(MISCREG_TL) + 1)
-                       ) {
+                       {
 
                         outs << "Differences found between M5 and Legion:";
                         if (diffPC)
@@ -639,7 +644,7 @@ Trace::InstRecord::dump(ostream &outs)
                                 char label[8];
                                 sprintf(label, "%%f%d", x);
                                 printRegPair(outs, label,
-                                 thread->readFloatRegBits(x,FloatRegFile::DoubleWidth),
+                                 thread->readFloatRegBits(x*2,FloatRegFile::DoubleWidth),
                                  shared_data->fpregs[x]);
                             }
                         }
@@ -667,7 +672,7 @@ Trace::InstRecord::dump(ostream &outs)
                         }
 
                         diffcount++;
-                        if (diffcount > 2)
+                        if (diffcount > 3)
                             fatal("Differences found between Legion and M5\n");
                     } else
                         diffcount = 0;
@@ -745,7 +750,7 @@ Trace::InstRecord::setParams()
 {
     flags[TRACE_MISSPEC]     = exe_trace_spec;
 
-    flags[PRINT_CYCLE]       = exe_trace_print_cycle;
+    flags[PRINT_TICKS]       = exe_trace_print_cycle;
     flags[PRINT_OP_CLASS]    = exe_trace_print_opclass;
     flags[PRINT_THREAD_NUM]  = exe_trace_print_thread;
     flags[PRINT_RESULT_DATA] = exe_trace_print_effaddr;
