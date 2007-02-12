@@ -25,45 +25,52 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Ali Saidi
+ * Authors: Nathan Binkert
  */
 
-/** @file
- * This device acts as a disk similar to the memory mapped disk device
- * in legion. Any access is translated to an offset in the disk image.
- */
+%module trace
 
-#ifndef __DEV_SPARC_MM_DISK_HH__
-#define __DEV_SPARC_MM_DISK_HH__
+%{
+#include "base/trace.hh"
+#include "sim/host.hh"
 
-#include "base/range.hh"
-#include "dev/io_device.hh"
-#include "dev/disk_image.hh"
-
-class MmDisk : public BasicPioDevice
+inline void
+output(const char *filename)
 {
-  private:
-    DiskImage *image;
-    off_t curSector;
-    bool dirty;
-    uint8_t diskData[SectorSize];
+    Trace::setOutput(filename);
+}
 
-  public:
-    struct Params : public BasicPioDevice::Params
-    {
-        DiskImage *image;
-    };
-  protected:
-    const Params *params() const { return (const Params*)_params; }
+inline void
+set(const char *flag)
+{
+    Trace::changeFlag(flag, true);
+}
 
-  public:
-    MmDisk(Params *p);
+inline void
+clear(const char *flag)
+{
+    Trace::changeFlag(flag, false);
+}
 
-    virtual Tick read(PacketPtr pkt);
-    virtual Tick write(PacketPtr pkt);
+inline void
+ignore(const char *expr)
+{
+    Trace::ignore.setExpression(expr);
+}
 
-    virtual void serialize(std::ostream &os);
-};
+using Trace::enabled;
+%}
 
-#endif //__DEV_SPARC_MM_DISK_HH__
+%inline %{
+extern void output(const char *string);
+extern void set(const char *string);
+extern void clear(const char *string);
+extern void ignore(const char *expr);
+extern bool enabled;
+%}
 
+%wrapper %{
+// fix up module name to reflect the fact that it's inside the m5 package
+#undef SWIG_name
+#define SWIG_name "m5.internal._trace"
+%}

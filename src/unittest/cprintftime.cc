@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006 The Regents of The University of Michigan
+ * Copyright (c) 2002-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,45 +25,66 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Ali Saidi
+ * Authors: Nathan Binkert
  */
 
-/** @file
- * This device acts as a disk similar to the memory mapped disk device
- * in legion. Any access is translated to an offset in the disk image.
- */
+#include <iostream>
+#include <list>
+#include <string>
+#include <sstream>
 
-#ifndef __DEV_SPARC_MM_DISK_HH__
-#define __DEV_SPARC_MM_DISK_HH__
+#include "base/cprintf.hh"
 
-#include "base/range.hh"
-#include "dev/io_device.hh"
-#include "dev/disk_image.hh"
+using namespace std;
 
-class MmDisk : public BasicPioDevice
+volatile int stop = false;
+
+void
+handle_alarm(int signal)
 {
-  private:
-    DiskImage *image;
-    off_t curSector;
-    bool dirty;
-    uint8_t diskData[SectorSize];
+    stop = true;
+}
 
-  public:
-    struct Params : public BasicPioDevice::Params
-    {
-        DiskImage *image;
-    };
-  protected:
-    const Params *params() const { return (const Params*)_params; }
+void
+do_test(int seconds)
+{
+    stop = false;
+    alarm(seconds);
+}
 
-  public:
-    MmDisk(Params *p);
+int
+main()
+{
+    stringstream result;
+    int iterations = 0;
 
-    virtual Tick read(PacketPtr pkt);
-    virtual Tick write(PacketPtr pkt);
+    signal(SIGALRM, handle_alarm);
 
-    virtual void serialize(std::ostream &os);
-};
+    do_test(10);
+    while (!stop) {
+        stringstream result;
+        ccprintf(result,
+                 "this is a %s of %d iterations %3.2f %#x\n",
+                 "test", iterations, 51.934, &result);
 
-#endif //__DEV_SPARC_MM_DISK_HH__
+        iterations += 1;
+    }
 
+    cprintf("completed %d iterations of ccprintf in 10s, %f iterations/s\n",
+            iterations, iterations / 10.0);
+
+    do_test(10);
+    while (!stop) {
+        char result[1024];
+        sprintf(result,
+                 "this is a %s of %d iterations %3.2f %#x\n",
+                 "test", iterations, 51.934, &result);
+
+        iterations += 1;
+    }
+
+    cprintf("completed %d iterations of sprintf in 10s, %f iterations/s\n",
+            iterations, iterations / 10.0);
+
+    return 0;
+}

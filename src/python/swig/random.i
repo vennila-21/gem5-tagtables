@@ -25,45 +25,31 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Ali Saidi
+ * Authors: Nathan Binkert
  */
 
-/** @file
- * This device acts as a disk similar to the memory mapped disk device
- * in legion. Any access is translated to an offset in the disk image.
- */
+%module random
 
-#ifndef __DEV_SPARC_MM_DISK_HH__
-#define __DEV_SPARC_MM_DISK_HH__
+%include "stdint.i"
 
-#include "base/range.hh"
-#include "dev/io_device.hh"
-#include "dev/disk_image.hh"
+%{
+#include <cstdlib>
 
-class MmDisk : public BasicPioDevice
+#include "sim/host.hh"
+
+inline void
+seed(uint64_t seed)
 {
-  private:
-    DiskImage *image;
-    off_t curSector;
-    bool dirty;
-    uint8_t diskData[SectorSize];
+    ::srand48(seed & ULL(0xffffffffffff));
+}
+%}
 
-  public:
-    struct Params : public BasicPioDevice::Params
-    {
-        DiskImage *image;
-    };
-  protected:
-    const Params *params() const { return (const Params*)_params; }
+%inline %{
+extern void seed(uint64_t seed);
+%}
 
-  public:
-    MmDisk(Params *p);
-
-    virtual Tick read(PacketPtr pkt);
-    virtual Tick write(PacketPtr pkt);
-
-    virtual void serialize(std::ostream &os);
-};
-
-#endif //__DEV_SPARC_MM_DISK_HH__
-
+%wrapper %{
+// fix up module name to reflect the fact that it's inside the m5 package
+#undef SWIG_name
+#define SWIG_name "m5.internal._random"
+%}
