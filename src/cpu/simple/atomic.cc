@@ -421,17 +421,8 @@ AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
         if (req->isSwap()) {
             assert(res);
             *res = pkt->get<T>();
-        }
-
-        if (req->isLocked()) {
-            uint64_t scResult = req->getExtraData();
-            if (scResult != 0) {
-                // clear failure counter
-                thread->setStCondFailures(0);
-            }
-            if (res) {
-                *res = req->getExtraData();
-            }
+        } else if (res) {
+            *res = req->getScResult();
         }
     }
 

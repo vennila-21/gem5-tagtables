@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,52 +28,28 @@
  * Authors: Nathan Binkert
  */
 
-#include <sys/types.h>
-#include <algorithm>
+%module random
 
-#include "base/cprintf.hh"
-#include "base/trace.hh"
-#include "base/loader/symtab.hh"
-#include "cpu/thread_context.hh"
-#include "kern/tru64/mbuf.hh"
+%include "stdint.i"
+
+%{
+#include <cstdlib>
+
 #include "sim/host.hh"
-#include "sim/system.hh"
-#include "arch/arguments.hh"
-#include "arch/isa_traits.hh"
-#include "arch/vtophys.hh"
 
-using namespace TheISA;
-
-namespace tru64 {
-
-void
-DumpMbuf(Arguments args)
+inline void
+seed(uint64_t seed)
 {
-    ThreadContext *tc = args.getThreadContext();
-    StringWrap name(tc->getSystemPtr()->name());
-    Addr addr = (Addr)args;
-    struct mbuf m;
-
-    CopyOut(tc, &m, addr, sizeof(m));
-
-    int count = m.m_pkthdr.len;
-
-    DPRINTFN("m=%#lx, m->m_pkthdr.len=%#d\n", addr, m.m_pkthdr.len);
-
-    while (count > 0) {
-        DPRINTFN("m=%#lx, m->m_data=%#lx, m->m_len=%d\n",
-                 addr, m.m_data, m.m_len);
-        char *buffer = new char[m.m_len];
-        CopyOut(tc, buffer, m.m_data, m.m_len);
-        DDUMPN((uint8_t *)buffer, m.m_len);
-        delete [] buffer;
-
-        count -= m.m_len;
-        if (!m.m_next)
-            break;
-
-        CopyOut(tc, &m, m.m_next, sizeof(m));
-    }
+    ::srand48(seed & ULL(0xffffffffffff));
 }
+%}
 
-} // namespace Tru64
+%inline %{
+extern void seed(uint64_t seed);
+%}
+
+%wrapper %{
+// fix up module name to reflect the fact that it's inside the m5 package
+#undef SWIG_name
+#define SWIG_name "m5.internal._random"
+%}
