@@ -1,0 +1,124 @@
+# -*- mode:python -*-
+
+# Copyright (c) 2004-2005 The Regents of The University of Michigan
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met: redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer;
+# redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution;
+# neither the name of the copyright holders nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Authors: Steve Reinhardt
+#          Nathan Binkert
+
+import os, os.path, re, sys
+from zipfile import PyZipFile
+
+# handy function for path joins
+def join(*args):
+    return os.path.normpath(os.path.join(*args))
+
+Import('env')
+
+# This SConscript is in charge of collecting .py files and generating
+# a zip archive that is appended to the m5 binary.
+
+# List of files & directories to include in the zip file.  To include
+# a package, list only the root directory of the package, not any
+# internal .py files (else they will get the path stripped off when
+# they are imported into the zip file).
+pyzip_files = []
+
+# List of additional files on which the zip archive depends, but which
+# are not included in pyzip_files... i.e. individual .py files within
+# a package.
+pyzip_dep_files = []
+
+# Add the specified package to the zip archive.  Adds the directory to
+# pyzip_files and all included .py files to pyzip_dep_files.
+def addPkg(pkgdir):
+    pyzip_files.append(pkgdir)
+    origdir = os.getcwd()
+    srcdir = join(Dir('.').srcnode().abspath, pkgdir)
+    os.chdir(srcdir)
+    for path, dirs, files in os.walk('.'):
+        for i,dir in enumerate(dirs):
+            if dir == 'SCCS':
+                del dirs[i]
+                break
+
+        for f in files:
+            if f.endswith('.py'):
+                pyzip_dep_files.append(join(pkgdir, path, f))
+
+    os.chdir(origdir)
+
+# Generate Python file that contains a dict specifying the current
+# build_env flags.
+def MakeDefinesPyFile(target, source, env):
+    f = file(str(target[0]), 'w')
+    print >>f, "m5_build_env = ", source[0]
+    f.close()
+
+optionDict = dict([(opt, env[opt]) for opt in env.ExportOptions])
+env.Command('m5/defines.py', Value(optionDict), MakeDefinesPyFile)
+
+def MakeInfoPyFile(target, source, env):
+    f = file(str(target[0]), 'w')
+    for src in source:
+        data = ''.join(file(src.srcnode().abspath, 'r').xreadlines())
+        print >>f, "%s = %s" % (src, repr(data))
+    f.close()
+
+env.Command('m5/info.py',
+            [ '#/AUTHORS', '#/LICENSE', '#/README', '#/RELEASE_NOTES' ],
+            MakeInfoPyFile)
+
+# Now specify the packages & files for the zip archive.
+addPkg('m5')
+pyzip_files.append('m5/defines.py')
+pyzip_files.append('m5/info.py')
+pyzip_files.append(join(env['ROOT'], 'util/pbs/jobfile.py'))
+pyzip_files.append(join(env['ROOT'], 'src/base/traceflags.py'))
+
+def swig_it(basename):
+    env.Command(['swig/%s_wrap.cc' % basename, 'm5/internal/%s.py' % basename],
+                'swig/%s.i' % basename,
+                '$SWIG $SWIGFLAGS -outdir ${TARGETS[1].dir} '
+                '-o ${TARGETS[0]} $SOURCES')
+    pyzip_dep_files.append('m5/internal/%s.py' % basename)
+
+swig_it('main')
+swig_it('debug')
+swig_it('event')
+swig_it('random')
+swig_it('trace')
+
+# Action function to build the zip archive.  Uses the PyZipFile module
+# included in the standard Python library.
+def buildPyZip(target, source, env):
+    pzf = PyZipFile(str(target[0]), 'w')
+    for s in source:
+        pzf.writepy(str(s))
+
+# Add the zip file target to the environment.
+env.Command('m5py.zip', pyzip_files, buildPyZip)
+env.Depends('m5py.zip', pyzip_dep_files)
