@@ -53,6 +53,7 @@
 #include "base/output.hh"
 #include "base/pollevent.hh"
 #include "base/statistics.hh"
+#include "base/stats/output.hh"
 #include "base/str.hh"
 #include "base/time.hh"
 #include "config/pythonhome.hh"
@@ -82,6 +83,7 @@ volatile bool async_dumpreset = false;
 volatile bool async_exit = false;
 volatile bool async_io = false;
 volatile bool async_alarm = false;
+volatile bool async_exception = false;
 
 /// Stats signal handler.
 void
@@ -219,7 +221,7 @@ loadIniFile(PyObject *_resolveFunc)
     inifile.load(simout.resolve("config.ini"));
 
     // Initialize statistics database
-    Stats::InitSimStats();
+    Stats::initSimStats();
 }
 
 
@@ -270,13 +272,6 @@ connectPorts(SimObject *o1, const std::string &name1, int i1,
 void
 finalInit()
 {
-    // Parse and check all non-config-hierarchy parameters.
-    ParamContext::parseAllContexts(inifile);
-    ParamContext::checkAllContexts();
-
-    // Echo all parameter settings to stats file as well.
-    ParamContext::showAllContexts(*configStream);
-
     // Do a second pass to finish initializing the sim objects
     SimObject::initAll();
 
@@ -295,7 +290,6 @@ finalInit()
 
     SimStartup();
 }
-
 
 /** Simulate for num_cycles additional cycles.  If num_cycles is -1
  * (the default), do not limit simulation; some other event must
@@ -349,16 +343,12 @@ simulate(Tick num_cycles = MaxTick)
             async_event = false;
             if (async_dump) {
                 async_dump = false;
-
-                using namespace Stats;
-                SetupEvent(Dump, curTick);
+                Stats::StatEvent(true, false);
             }
 
             if (async_dumpreset) {
                 async_dumpreset = false;
-
-                using namespace Stats;
-                SetupEvent(Dump | Reset, curTick);
+                Stats::StatEvent(true, true);
             }
 
             if (async_exit) {
@@ -370,6 +360,11 @@ simulate(Tick num_cycles = MaxTick)
                 async_io = false;
                 async_alarm = false;
                 pollQueue.service();
+            }
+
+            if (async_exception) {
+                async_exception = false;
+                return NULL;
             }
         }
     }
@@ -460,8 +455,6 @@ doExitCleanup()
 
     cout.flush();
 
-    ParamContext::cleanupAllContexts();
-
     // print simulation stats
-    Stats::DumpNow();
+    Stats::dump();
 }

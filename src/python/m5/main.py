@@ -264,7 +264,7 @@ def main():
     import objects
 
     # set stats options
-    objects.Statistics.text_file = options.stats_file
+    internal.stats.initText(options.stats_file)
 
     # set debugging options
     for when in options.debug_break:
@@ -292,11 +292,12 @@ def main():
     for flag in off_flags:
         internal.trace.clear(flag)
 
-    if options.trace_start is not None:
-        internal.trace.enabled = False
+    if options.trace_start:
         def enable_trace():
-            internal.event.enabled = True
-        internal.event.create(enable_trace, options.trace_start)
+            internal.trace.cvar.enabled = True
+        internal.event.create(enable_trace, int(options.trace_start))
+    else:
+        internal.trace.enabled = True
 
     internal.trace.output(options.trace_file)
 
