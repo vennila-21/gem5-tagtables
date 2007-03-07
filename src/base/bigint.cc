@@ -25,39 +25,23 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Ali Saidi
- *          Nathan Binkert
+ * Authors: Gabe Black
  */
 
-#include "arch/isa_traits.hh"
 #include "base/bigint.hh"
-#include "mem/packet.hh"
-#include "sim/byteswap.hh"
 
-#ifndef __MEM_PACKET_ACCESS_HH__
-#define __MEM_PACKET_ACCESS_HH__
-// The memory system needs to have an endianness. This is the easiest
-// way to deal with it for now. At some point, we will have to remove
-// these functions and make the users do their own byte swapping since
-// the memory system does not in fact have an endianness.
+#include <iostream>
 
-/** return the value of what is pointed to in the packet. */
-template <typename T>
-inline T
-Packet::get()
+using namespace std;
+
+ostream & operator << (ostream & os, const Twin64_t & t)
 {
-    assert(staticData || dynamicData);
-    assert(sizeof(T) <= size);
-    return TheISA::gtoh(*(T*)data);
+    os << t.a << ", " << t.b;
+    return os;
 }
 
-/** set the value in the data pointer to v. */
-template <typename T>
-inline void
-Packet::set(T v)
+ostream & operator << (ostream & os, const Twin32_t & t)
 {
-    assert(sizeof(T) <= size);
-    *(T*)data = TheISA::htog(v);
+    os << t.a << ", " << t.b;
+    return os;
 }
-
-#endif //__MEM_PACKET_ACCESS_HH__
