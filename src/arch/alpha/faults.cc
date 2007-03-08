@@ -59,12 +59,6 @@ FaultName ArithmeticFault::_name = "arith";
 FaultVect ArithmeticFault::_vect = 0x0501;
 FaultStat ArithmeticFault::_count;
 
-#if !FULL_SYSTEM
-FaultName PageTableFault::_name = "page_table_fault";
-FaultVect PageTableFault::_vect = 0x0000;
-FaultStat PageTableFault::_count;
-#endif
-
 FaultName InterruptFault::_name = "interrupt";
 FaultVect InterruptFault::_vect = 0x0101;
 FaultStat InterruptFault::_count;
@@ -126,15 +120,15 @@ void AlphaFault::invoke(ThreadContext * tc)
 
     // exception restart address
     if (setRestartAddress() || !(tc->readPC() & 0x3))
-        tc->setMiscReg(AlphaISA::IPR_EXC_ADDR, tc->readPC());
+        tc->setMiscRegNoEffect(AlphaISA::IPR_EXC_ADDR, tc->readPC());
 
     if (skipFaultingInstruction()) {
         // traps...  skip faulting instruction.
-        tc->setMiscReg(AlphaISA::IPR_EXC_ADDR,
-                   tc->readMiscReg(AlphaISA::IPR_EXC_ADDR) + 4);
+        tc->setMiscRegNoEffect(AlphaISA::IPR_EXC_ADDR,
+                   tc->readMiscRegNoEffect(AlphaISA::IPR_EXC_ADDR) + 4);
     }
 
-    tc->setPC(tc->readMiscReg(AlphaISA::IPR_PAL_BASE) + vect());
+    tc->setPC(tc->readMiscRegNoEffect(AlphaISA::IPR_PAL_BASE) + vect());
     tc->setNextPC(tc->readPC() + sizeof(MachInst));
 }
 
@@ -154,17 +148,17 @@ void DtbFault::invoke(ThreadContext * tc)
     if (!tc->misspeculating()
         && !(reqFlags & VPTE) && !(reqFlags & NO_FAULT)) {
         // set VA register with faulting address
-        tc->setMiscReg(AlphaISA::IPR_VA, vaddr);
+        tc->setMiscRegNoEffect(AlphaISA::IPR_VA, vaddr);
 
         // set MM_STAT register flags
-        tc->setMiscReg(AlphaISA::IPR_MM_STAT,
+        tc->setMiscRegNoEffect(AlphaISA::IPR_MM_STAT,
             (((EV5::Opcode(tc->getInst()) & 0x3f) << 11)
              | ((EV5::Ra(tc->getInst()) & 0x1f) << 6)
              | (flags & 0x3f)));
 
         // set VA_FORM register with faulting formatted address
-        tc->setMiscReg(AlphaISA::IPR_VA_FORM,
-            tc->readMiscReg(AlphaISA::IPR_MVPTBR) | (vaddr.vpn() << 3));
+        tc->setMiscRegNoEffect(AlphaISA::IPR_VA_FORM,
+            tc->readMiscRegNoEffect(AlphaISA::IPR_MVPTBR) | (vaddr.vpn() << 3));
     }
 
     AlphaFault::invoke(tc);
@@ -173,39 +167,13 @@ void DtbFault::invoke(ThreadContext * tc)
 void ItbFault::invoke(ThreadContext * tc)
 {
     if (!tc->misspeculating()) {
-        tc->setMiscReg(AlphaISA::IPR_ITB_TAG, pc);
-        tc->setMiscReg(AlphaISA::IPR_IFAULT_VA_FORM,
-                       tc->readMiscReg(AlphaISA::IPR_IVPTBR) |
+        tc->setMiscRegNoEffect(AlphaISA::IPR_ITB_TAG, pc);
+        tc->setMiscRegNoEffect(AlphaISA::IPR_IFAULT_VA_FORM,
+                       tc->readMiscRegNoEffect(AlphaISA::IPR_IVPTBR) |
                        (AlphaISA::VAddr(pc).vpn() << 3));
     }
 
     AlphaFault::invoke(tc);
-}
-
-#else //!FULL_SYSTEM
-
-void PageTableFault::invoke(ThreadContext *tc)
-{
-    Process *p = tc->getProcessPtr();
-
-    // address is higher than the stack region or in the current stack region
-    if (vaddr > p->stack_base || vaddr > p->stack_min)
-        FaultBase::invoke(tc);
-
-    // We've accessed the next page
-    if (vaddr > p->stack_min - PageBytes) {
-        DPRINTF(Stack,
-                "Increasing stack %#x:%#x to %#x:%#x because of access to %#x",
-                p->stack_min, p->stack_base, p->stack_min - PageBytes,
-                p->stack_base, vaddr);
-        p->stack_min -= PageBytes;
-        if (p->stack_base - p->stack_min > 8*1024*1024)
-            fatal("Over max stack size for one thread\n");
-        p->pTable->allocate(p->stack_min, PageBytes);
-    } else {
-        warn("Page fault on address %#x\n", vaddr);
-        FaultBase::invoke(tc);
-    }
 }
 
 #endif

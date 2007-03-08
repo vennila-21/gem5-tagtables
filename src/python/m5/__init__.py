@@ -36,7 +36,7 @@ import internal
 # import a few SWIG-wrapped items (those that are likely to be used
 # directly by user scripts) completely into this module for
 # convenience
-from internal.event import SimLoopExitEvent
+import event
 
 # import the m5 compile options
 import defines
@@ -80,7 +80,9 @@ env.update(os.environ)
 # The final hook to generate .ini files.  Called from the user script
 # once the config is built.
 def instantiate(root):
-    params.ticks_per_sec = float(root.clock.frequency)
+    # we need to fix the global frequency
+    ticks.fixGlobalFrequency()
+
     root.unproxy_all()
     # ugly temporary hack to get output to config.ini
     sys.stdout = file(os.path.join(options.outdir, 'config.ini'), 'w')
@@ -94,6 +96,7 @@ def instantiate(root):
     # Initialize the global statistics
     internal.stats.initSimStats()
 
+    # Create the C++ sim objects and connect ports
     root.createCCObject()
     root.connectPorts()
 
@@ -136,11 +139,13 @@ def simulate(*args, **kwargs):
 
 # Export curTick to user script.
 def curTick():
-    return internal.event.cvar.curTick
+    return internal.core.cvar.curTick
+
+# Python exit handlers happen in reverse order.  We want to dump stats last.
+atexit.register(internal.stats.dump)
 
 # register our C++ exit callback function with Python
 atexit.register(internal.core.doExitCleanup)
-atexit.register(internal.stats.dump)
 
 # This loops until all objects have been fully drained.
 def doDrain(root):
@@ -182,17 +187,17 @@ def restoreCheckpoint(root, dir):
     need_resume.append(root)
 
 def changeToAtomic(system):
-    if not isinstance(system, objects.Root) and not isinstance(system, objects.System):
-        raise TypeError, "Object is not a root or system object.  Checkpoint must be "
-        "called on a root object."
+    if not isinstance(system, (objects.Root, objects.System)):
+        raise TypeError, "Parameter of type '%s'.  Must be type %s or %s." % \
+              (type(system), objects.Root, objects.System)
     doDrain(system)
     print "Changing memory mode to atomic"
     system.changeTiming(internal.sim_object.SimObject.Atomic)
 
 def changeToTiming(system):
-    if not isinstance(system, objects.Root) and not isinstance(system, objects.System):
-        raise TypeError, "Object is not a root or system object.  Checkpoint must be "
-        "called on a root object."
+    if not isinstance(system, (objects.Root, objects.System)):
+        raise TypeError, "Parameter of type '%s'.  Must be type %s or %s." % \
+              (type(system), objects.Root, objects.System)
     doDrain(system)
     print "Changing memory mode to timing"
     system.changeTiming(internal.sim_object.SimObject.Timing)
@@ -232,14 +237,6 @@ def switchCpus(cpuList):
         new_cpu.takeOverFrom(old_cpus[index])
         new_cpu._ccObject.resume()
         index += 1
-
-def dumpStats():
-    print 'Dumping stats'
-    internal.stats.dump()
-
-def resetStats():
-    print 'Resetting stats'
-    internal.stats.reset()
 
 # Since we have so many mutual imports in this package, we should:
 # 1. Put all intra-package imports at the *bottom* of the file, unless
