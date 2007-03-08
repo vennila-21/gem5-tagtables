@@ -140,7 +140,7 @@ void MiscRegFile::clear()
 #endif
 }
 
-MiscReg MiscRegFile::readReg(int miscReg)
+MiscReg MiscRegFile::readRegNoEffect(int miscReg)
 {
     switch (miscReg) {
       case MISCREG_TLB_DATA:
@@ -331,7 +331,7 @@ MiscReg MiscRegFile::readReg(int miscReg)
     }
 }
 
-MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
+MiscReg MiscRegFile::readReg(int miscReg, ThreadContext * tc)
 {
     switch (miscReg) {
         // tick and stick are aliased to each other in niagra
@@ -374,7 +374,7 @@ MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
 #if FULL_SYSTEM
       case MISCREG_HPSTATE:
-        return readFSRegWithEffect(miscReg, tc);
+        return readFSReg(miscReg, tc);
 #else
       case MISCREG_HPSTATE:
         //HPSTATE is special because because sometimes in privilege checks for instructions
@@ -386,10 +386,10 @@ MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
 #endif
 
     }
-    return readReg(miscReg);
+    return readRegNoEffect(miscReg);
 }
 
-void MiscRegFile::setReg(int miscReg, const MiscReg &val)
+void MiscRegFile::setRegNoEffect(int miscReg, const MiscReg &val)
 {
     switch (miscReg) {
 //      case MISCREG_Y:
@@ -621,7 +621,7 @@ void MiscRegFile::setReg(int miscReg, const MiscReg &val)
     }
 }
 
-void MiscRegFile::setRegWithEffect(int miscReg,
+void MiscRegFile::setReg(int miscReg,
         const MiscReg &val, ThreadContext * tc)
 {
     MiscReg new_val = val;
@@ -682,7 +682,7 @@ void MiscRegFile::setRegWithEffect(int miscReg,
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
 #if FULL_SYSTEM
       case MISCREG_HPSTATE:
-        setFSRegWithEffect(miscReg, val, tc);
+        setFSReg(miscReg, val, tc);
         return;
 #else
       case MISCREG_HPSTATE:
@@ -692,7 +692,7 @@ void MiscRegFile::setRegWithEffect(int miscReg,
       panic("Accessing Fullsystem register %s to %#x in SE mode\n", getMiscRegName(miscReg), val);
 #endif
     }
-    setReg(miscReg, new_val);
+    setRegNoEffect(miscReg, new_val);
 }
 
 void MiscRegFile::serialize(std::ostream & os)

@@ -284,14 +284,19 @@ class BaseSimpleCPU : public BaseCPU
     void setNextPC(uint64_t val) { thread->setNextPC(val); }
     void setNextNPC(uint64_t val) { thread->setNextNPC(val); }
 
+    MiscReg readMiscRegNoEffect(int misc_reg)
+    {
+        return thread->readMiscRegNoEffect(misc_reg);
+    }
+
     MiscReg readMiscReg(int misc_reg)
     {
         return thread->readMiscReg(misc_reg);
     }
 
-    MiscReg readMiscRegWithEffect(int misc_reg)
+    void setMiscRegNoEffect(int misc_reg, const MiscReg &val)
     {
-        return thread->readMiscRegWithEffect(misc_reg);
+        return thread->setMiscRegNoEffect(misc_reg, val);
     }
 
     void setMiscReg(int misc_reg, const MiscReg &val)
@@ -299,9 +304,10 @@ class BaseSimpleCPU : public BaseCPU
         return thread->setMiscReg(misc_reg, val);
     }
 
-    void setMiscRegWithEffect(int misc_reg, const MiscReg &val)
+    MiscReg readMiscRegOperandNoEffect(const StaticInst *si, int idx)
     {
-        return thread->setMiscRegWithEffect(misc_reg, val);
+        int reg_idx = si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        return thread->readMiscRegNoEffect(reg_idx);
     }
 
     MiscReg readMiscRegOperand(const StaticInst *si, int idx)
@@ -310,23 +316,17 @@ class BaseSimpleCPU : public BaseCPU
         return thread->readMiscReg(reg_idx);
     }
 
-    MiscReg readMiscRegOperandWithEffect(const StaticInst *si, int idx)
-    {
-        int reg_idx = si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
-        return thread->readMiscRegWithEffect(reg_idx);
-    }
-
-    void setMiscRegOperand(const StaticInst *si, int idx, const MiscReg &val)
+    void setMiscRegOperandNoEffect(const StaticInst *si, int idx, const MiscReg &val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
-        return thread->setMiscReg(reg_idx, val);
+        return thread->setMiscRegNoEffect(reg_idx, val);
     }
 
-    void setMiscRegOperandWithEffect(
+    void setMiscRegOperand(
             const StaticInst *si, int idx, const MiscReg &val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
-        return thread->setMiscRegWithEffect(reg_idx, val);
+        return thread->setMiscReg(reg_idx, val);
     }
 
     unsigned readStCondFailures() {

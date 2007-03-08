@@ -257,9 +257,8 @@ namespace SparcISA
         // These need to check the int_dis field and if 0 then
         // set appropriate bit in softint and checkinterrutps on the cpu
 #if FULL_SYSTEM
-        void  setFSRegWithEffect(int miscReg, const MiscReg &val,
-                ThreadContext *tc);
-        MiscReg readFSRegWithEffect(int miscReg, ThreadContext * tc);
+        void  setFSReg(int miscReg, const MiscReg &val, ThreadContext *tc);
+        MiscReg readFSReg(int miscReg, ThreadContext * tc);
 
         // Update interrupt state on softint or pil change
         void checkSoftInt(ThreadContext *tc);
@@ -291,13 +290,13 @@ namespace SparcISA
             clear();
         }
 
-        MiscReg readReg(int miscReg);
+        MiscReg readRegNoEffect(int miscReg);
 
-        MiscReg readRegWithEffect(int miscReg, ThreadContext *tc);
+        MiscReg readReg(int miscReg, ThreadContext *tc);
 
-        void setReg(int miscReg, const MiscReg &val);
+        void setRegNoEffect(int miscReg, const MiscReg &val);
 
-        void setRegWithEffect(int miscReg,
+        void setReg(int miscReg,
                 const MiscReg &val, ThreadContext * tc);
 
         int getInstAsid()
