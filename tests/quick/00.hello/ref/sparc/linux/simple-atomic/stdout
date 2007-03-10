@@ -1,0 +1,12 @@
+Hello World!M5 Simulator System
+
+Copyright (c) 2001-2006
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Oct 27 2006 02:07:29
+M5 started Fri Oct 27 02:08:08 2006
+M5 executing on zizzer.eecs.umich.edu
+command line: build/SPARC_SE/m5.debug -d build/SPARC_SE/tests/debug/quick/00.hello/sparc/linux/simple-atomic tests/run.py quick/00.hello/sparc/linux/simple-atomic
+Exiting @ tick 4862 because target called exit()
