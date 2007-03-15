@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006-2007 The Regents of The University of Michigan
+ * Copyright (c) 2006 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,41 +28,73 @@
  * Authors: Gabe Black
  */
 
-#ifndef TRACECHILD_HH
-#define TRACECHILD_HH
+#ifndef __ARCH_MIPS_PREDECODER_HH__
+#define __ARCH_MIPS_PREDECODER_HH__
 
-#include "regstate.hh"
+#include "arch/mips/types.hh"
+#include "base/misc.hh"
+#include "sim/host.hh"
 
-class TraceChild : public RegState
+class ThreadContext;
+
+namespace MipsISA
 {
-protected:
-        int pid;
-        uint64_t instructions;
-        bool tracing;
-public:
-        TraceChild() : tracing(false), instructions(0)
-        {;}
-        virtual bool sendState(int socket) = 0;
-        virtual bool startTracing(const char * pathToFile,
-                char * const argv[]);
-        virtual bool stopTracing();
-        virtual bool step();
-        virtual uint64_t getPC() = 0;
-        virtual uint64_t getSP() = 0;
-        virtual std::ostream & outputStartState(std::ostream & os) = 0;
-        int getPid()
+    class Predecoder
+    {
+      protected:
+        ThreadContext * tc;
+        //The extended machine instruction being generated
+        ExtMachInst emi;
+
+      public:
+        Predecoder(ThreadContext * _tc) : tc(_tc)
+        {}
+
+        ThreadContext * getTC()
         {
-            return pid;
+            return tc;
         }
-        bool isTracing()
+
+        void setTC(ThreadContext * _tc)
         {
-                return tracing;
+            tc = _tc;
         }
-protected:
-        bool ptraceSingleStep();
-        bool doWait();
+
+        void process()
+        {
+        }
+
+        //Use this to give data to the predecoder. This should be used
+        //when there is control flow.
+        void moreBytes(Addr currPC, Addr off, MachInst inst)
+        {
+            assert(off == 0);
+            emi = inst;
+        }
+
+        //Use this to give data to the predecoder. This should be used
+        //when instructions are executed in order.
+        void moreBytes(MachInst machInst)
+        {
+            moreBytes(0, 0, machInst);
+        }
+
+        bool needMoreBytes()
+        {
+            return true;
+        }
+
+        bool extMachInstReady()
+        {
+            return true;
+        }
+
+        //This returns a constant reference to the ExtMachInst to avoid a copy
+        const ExtMachInst & getExtMachInst()
+        {
+            return emi;
+        }
+    };
 };
 
-TraceChild * genTraceChild();
-
-#endif
+#endif // __ARCH_MIPS_PREDECODER_HH__
