@@ -194,7 +194,7 @@ TimingSimpleCPU::switchOut()
 void
 TimingSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
 {
-    BaseCPU::takeOverFrom(oldCPU);
+    BaseCPU::takeOverFrom(oldCPU, &icachePort, &dcachePort);
 
     // if any of this CPU's ThreadContexts are active, mark the CPU as
     // running and schedule its tick event.
@@ -209,23 +209,6 @@ TimingSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
     if (_status != Running) {
         _status = Idle;
     }
-
-    Port *peer;
-    if (icachePort.getPeer() == NULL) {
-        peer = oldCPU->getPort("icache_port")->getPeer();
-        icachePort.setPeer(peer);
-    } else {
-        peer = icachePort.getPeer();
-    }
-    peer->setPeer(&icachePort);
-
-    if (dcachePort.getPeer() == NULL) {
-        peer = oldCPU->getPort("dcache_port")->getPeer();
-        dcachePort.setPeer(peer);
-    } else {
-        peer = dcachePort.getPeer();
-    }
-    peer->setPeer(&dcachePort);
 }
 
 
@@ -239,12 +222,6 @@ TimingSimpleCPU::activateContext(int thread_num, int delay)
 
     notIdleFraction++;
     _status = Running;
-
-#if FULL_SYSTEM
-    // Connect the ThreadContext's memory ports (Functional/Virtual
-    // Ports)
-    tc->connectMemPorts();
-#endif
 
     // kick things off by initiating the fetch of the next instruction
     fetchEvent =
@@ -298,13 +275,13 @@ TimingSimpleCPU::read(Addr addr, T &data, unsigned flags)
             // memory system takes ownership of packet
             dcache_pkt = NULL;
         }
+
+        // This will need a new way to tell if it has a dcache attached.
+        if (req->isUncacheable())
+            recordEvent("Uncached Read");
     } else {
         delete req;
     }
-
-    // This will need a new way to tell if it has a dcache attached.
-    if (req->isUncacheable())
-        recordEvent("Uncached Read");
 
     return fault;
 }
@@ -404,13 +381,13 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
                 dcache_pkt = NULL;
             }
         }
+        // This will need a new way to tell if it's hooked up to a cache or not.
+        if (req->isUncacheable())
+            recordEvent("Uncached Write");
     } else {
         delete req;
     }
 
-    // This will need a new way to tell if it's hooked up to a cache or not.
-    if (req->isUncacheable())
-        recordEvent("Uncached Write");
 
     // If the write needs to have a fault on the access, consider calling
     // changeStatus() and changing it to "bad addr write" or something.
@@ -419,6 +396,16 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
+template
+Fault
+TimingSimpleCPU::write(Twin32_t data, Addr addr,
+                       unsigned flags, uint64_t *res);
+
+template
+Fault
+TimingSimpleCPU::write(Twin64_t data, Addr addr,
+                       unsigned flags, uint64_t *res);
+
 template
 Fault
 TimingSimpleCPU::write(uint64_t data, Addr addr,
@@ -647,6 +634,18 @@ TimingSimpleCPU::completeDrain()
     DPRINTF(Config, "Done draining\n");
     changeState(SimObject::Drained);
     drainEvent->process();
+}
+
+void
+TimingSimpleCPU::DcachePort::setPeer(Port *port)
+{
+    Port::setPeer(port);
+
+#if FULL_SYSTEM
+    // Update the ThreadContext's memory ports (Functional/Virtual
+    // Ports)
+    cpu->tcBase()->connectMemPorts();
+#endif
 }
 
 bool

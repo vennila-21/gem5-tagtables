@@ -26,11 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "arch/sparc/kernel_stats.hh"
 #include "arch/sparc/miscregfile.hh"
 #include "base/bitfield.hh"
 #include "base/trace.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
+#include "sim/system.hh"
 
 using namespace SparcISA;
 
@@ -59,8 +61,7 @@ MiscRegFile::checkSoftInt(ThreadContext *tc)
 
 
 void
-MiscRegFile::setFSRegWithEffect(int miscReg, const MiscReg &val,
-                                ThreadContext *tc)
+MiscRegFile::setFSReg(int miscReg, const MiscReg &val, ThreadContext *tc)
 {
     int64_t time;
     switch (miscReg) {
@@ -186,8 +187,20 @@ MiscRegFile::setFSRegWithEffect(int miscReg, const MiscReg &val,
 #endif
         break;
       case MISCREG_HTSTATE:
-      case MISCREG_STRAND_STS_REG:
         setRegNoEffect(miscReg, val);
+        break;
+
+      case MISCREG_STRAND_STS_REG:
+        if (bits(val,2,2))
+            panic("No support for setting spec_en bit\n");
+        setRegNoEffect(miscReg, bits(val,0,0));
+        if (!bits(val,0,0)) {
+            DPRINTF(Quiesce, "Cpu executed quiescing instruction\n");
+            // Time to go to sleep
+            tc->suspend();
+            if (tc->getKernelStats())
+                tc->getKernelStats()->quiesce();
+            }
         break;
 
       default:
@@ -196,8 +209,10 @@ MiscRegFile::setFSRegWithEffect(int miscReg, const MiscReg &val,
 }
 
 MiscReg
-MiscRegFile::readFSRegWithEffect(int miscReg, ThreadContext * tc)
+MiscRegFile::readFSReg(int miscReg, ThreadContext * tc)
 {
+    uint64_t temp;
+
     switch (miscReg) {
         /* Privileged registers. */
       case MISCREG_QUEUE_CPU_MONDO_HEAD:
@@ -215,15 +230,52 @@ MiscRegFile::readFSRegWithEffect(int miscReg, ThreadContext * tc)
       case MISCREG_HPSTATE:
       case MISCREG_HINTP:
       case MISCREG_HTSTATE:
-      case MISCREG_STRAND_STS_REG:
       case MISCREG_HSTICK_CMPR:
         return readRegNoEffect(miscReg) ;
 
       case MISCREG_HTBA:
         return readRegNoEffect(miscReg) & ULL(~0x7FFF);
       case MISCREG_HVER:
-        return NWindows | MaxTL << 8 | MaxGL << 16;
+        // XXX set to match Legion
+        return ULL(0x3e) << 48 |
+               ULL(0x23) << 32 |
+               ULL(0x20) << 24 |
+                   //MaxGL << 16 | XXX For some reason legion doesn't set GL
+                   MaxTL << 8  |
+           (NWindows -1) << 0;
 
+      case MISCREG_STRAND_STS_REG:
+        System *sys;
+        int x;
+        sys = tc->getSystemPtr();
+
+        temp = readRegNoEffect(miscReg) & (STS::active | STS::speculative);
+        // Check that the CPU array is fully populated (by calling getNumCPus())
+        assert(sys->getNumCPUs() > tc->readCpuId());
+
+        temp |= tc->readCpuId()  << STS::shft_id;
+
+        for (x = tc->readCpuId() & ~3; x < sys->threadContexts.size(); x++) {
+            switch (sys->threadContexts[x]->status()) {
+              case ThreadContext::Active:
+                temp |= STS::st_run << (STS::shft_fsm0 -
+                        ((x & 0x3) * (STS::shft_fsm0-STS::shft_fsm1)));
+                break;
+              case ThreadContext::Suspended:
+                // should this be idle?
+                temp |= STS::st_idle << (STS::shft_fsm0 -
+                        ((x & 0x3) * (STS::shft_fsm0-STS::shft_fsm1)));
+                break;
+              case ThreadContext::Halted:
+                temp |= STS::st_halt << (STS::shft_fsm0 -
+                        ((x & 0x3) * (STS::shft_fsm0-STS::shft_fsm1)));
+                break;
+              default:
+                panic("What state are we in?!\n");
+            } // switch
+        } // for
+
+        return temp;
       default:
         panic("Invalid read to FS misc register\n");
     }
@@ -256,7 +308,7 @@ MiscRegFile::processSTickCompare(ThreadContext *tc)
         tc->getCpuPtr()->instCount();
     assert(ticks >= 0 && "stick compare missed interrupt cycle");
 
-    if (ticks == 0) {
+    if (ticks == 0 || tc->status() == ThreadContext::Suspended) {
         DPRINTF(Timer, "STick compare cycle reached at %#x\n",
                 (stick_cmpr & mask(63)));
         if (!(tc->readMiscRegNoEffect(MISCREG_STICK_CMPR) & (ULL(1) << 63))) {
@@ -273,11 +325,15 @@ MiscRegFile::processHSTickCompare(ThreadContext *tc)
     // we're actually at the correct cycle or we need to wait a little while
     // more
     int ticks;
+    if ( tc->status() == ThreadContext::Halted ||
+         tc->status() == ThreadContext::Unallocated)
+       return;
+
     ticks = ((int64_t)(hstick_cmpr & mask(63)) - (int64_t)stick) -
         tc->getCpuPtr()->instCount();
     assert(ticks >= 0 && "hstick compare missed interrupt cycle");
 
-    if (ticks == 0) {
+    if (ticks == 0 || tc->status() == ThreadContext::Suspended) {
         DPRINTF(Timer, "HSTick compare cycle reached at %#x\n",
                 (stick_cmpr & mask(63)));
         if (!(tc->readMiscRegNoEffect(MISCREG_HSTICK_CMPR) & (ULL(1) << 63))) {

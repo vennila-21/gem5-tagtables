@@ -87,6 +87,11 @@ namespace MipsISA {
         panic("makeRegisterCopy not implemented");
         return 0;
     }
+
+    inline void startupCPU(ThreadContext *tc, int cpuId)
+    {
+        tc->activate(0);
+    }
 };
 
 
