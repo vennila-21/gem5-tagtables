@@ -185,25 +185,25 @@ decode OP default Unknown::unknown()
                     }}, ',a');
                 }
                 default: decode BPCC {
-                    0x0: fbpcc0(22, {{
+                    0x0: fbpfcc0(19, {{
                         if(passesFpCondition(Fsr<11:10>, COND2))
                             NNPC = xc->readPC() + disp;
                         else
                             handle_annul
                     }});
-                    0x1: fbpcc1(22, {{
+                    0x1: fbpfcc1(19, {{
                         if(passesFpCondition(Fsr<33:32>, COND2))
                             NNPC = xc->readPC() + disp;
                         else
                             handle_annul
                     }});
-                    0x2: fbpcc2(22, {{
+                    0x2: fbpfcc2(19, {{
                         if(passesFpCondition(Fsr<35:34>, COND2))
                             NNPC = xc->readPC() + disp;
                         else
                             handle_annul
                     }});
-                    0x3: fbpcc3(22, {{
+                    0x3: fbpfcc3(19, {{
                         if(passesFpCondition(Fsr<37:36>, COND2))
                             NNPC = xc->readPC() + disp;
                         else
@@ -426,19 +426,22 @@ decode OP default Unknown::unknown()
                 {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
             );
             0x24: mulscc({{
-                int64_t resTemp, multiplicand = Rs2_or_imm13;
-                int32_t multiplier = Rs1<31:0>;
                 int32_t savedLSB = Rs1<0:>;
-                multiplier = multiplier<31:1> |
-                    ((Ccr<3:3> ^ Ccr<1:1>) << 32);
-                if(!Y<0:>)
-                    multiplicand = 0;
-                Rd = resTemp = multiplicand + multiplier;
+
+                //Step 1
+                int64_t multiplicand = Rs2_or_imm13;
+                //Step 2
+                int32_t partialP = Rs1<31:1> |
+                    ((Ccr<3:3> ^ Ccr<1:1>) << 31);
+                //Step 3
+                int32_t added = Y<0:> ? multiplicand : 0;
+                Rd = partialP + added;
+                //Steps 4 & 5
                 Y = Y<31:1> | (savedLSB << 31);}},
-                {{((multiplicand<31:0> + multiplier<31:0>)<32:0>)}},
-                {{multiplicand<31:> == multiplier<31:> && multiplier<31:> != resTemp<31:>}},
-                {{((multiplicand >> 1) + (multiplier >> 1) + (multiplicand & multiplier & 0x1))<63:>}},
-                {{multiplicand<63:> == multiplier<63:> && multiplier<63:> != resTemp<63:>}}
+                {{((partialP<31:0> + added<31:0>)<32:0>)}},
+                {{partialP<31:> == added<31:> && added<31:> != Rd<31:>}},
+                {{((partialP >> 1) + (added >> 1) + (partialP & added & 0x1))<63:>}},
+                {{partialP<63:> == added<63:> && partialP<63:> != Rd<63:>}}
             );
         }
         format IntOp
@@ -620,10 +623,6 @@ decode OP default Unknown::unknown()
                 }});
                 0x19: Priv::wrstick_cmpr({{StickCmpr = Rs1 ^ Rs2_or_imm13;}});
                 0x1A: Priv::wrstrand_sts_reg({{
-                    if(Pstate<2:> && !Hpstate<2:>)
-                        StrandStsReg = StrandStsReg<63:1> |
-                                (Rs1 ^ Rs2_or_imm13)<0:>;
-                    else
                         StrandStsReg = Rs1 ^ Rs2_or_imm13;
                 }});
                 //0x1A is supposed to be reserved, but it writes the strand
@@ -820,6 +819,58 @@ decode OP default Unknown::unknown()
             }
             0x35: decode OPF{
                 format FpBasic{
+                    0x01: fmovs_fcc0({{
+                        if(passesFpCondition(Fsr<11:10>, COND4))
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0x02: fmovd_fcc0({{
+                        if(passesFpCondition(Fsr<11:10>, COND4))
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0x03: FpUnimpl::fmovq_fcc0();
+                    0x25: fmovrsz({{
+                        if(Rs1 == 0)
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0x26: fmovrdz({{
+                        if(Rs1 == 0)
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0x27: FpUnimpl::fmovrqz();
+                    0x41: fmovs_fcc1({{
+                        if(passesFpCondition(Fsr<33:32>, COND4))
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0x42: fmovd_fcc1({{
+                        if(passesFpCondition(Fsr<33:32>, COND4))
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0x43: FpUnimpl::fmovq_fcc1();
+                    0x45: fmovrslez({{
+                        if(Rs1 <= 0)
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0x46: fmovrdlez({{
+                        if(Rs1 <= 0)
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0x47: FpUnimpl::fmovrqlez();
                     0x51: fcmps({{
                           uint8_t fcc;
                           if(isnan(Frs1s) || isnan(Frs2s))
@@ -878,6 +929,110 @@ decode OP default Unknown::unknown()
                           Fsr = insertBits(Fsr, firstbit +1, firstbit, fcc);
                     }});
                     0x57: FpUnimpl::fcmpeq();
+                    0x65: fmovrslz({{
+                        if(Rs1 < 0)
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0x66: fmovrdlz({{
+                        if(Rs1 < 0)
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0x67: FpUnimpl::fmovrqlz();
+                    0x81: fmovs_fcc2({{
+                        if(passesFpCondition(Fsr<35:34>, COND4))
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0x82: fmovd_fcc2({{
+                        if(passesFpCondition(Fsr<35:34>, COND4))
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0x83: FpUnimpl::fmovq_fcc2();
+                    0xA5: fmovrsnz({{
+                        if(Rs1 != 0)
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0xA6: fmovrdnz({{
+                        if(Rs1 != 0)
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0xA7: FpUnimpl::fmovrqnz();
+                    0xC1: fmovs_fcc3({{
+                        if(passesFpCondition(Fsr<37:36>, COND4))
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0xC2: fmovd_fcc3({{
+                        if(passesFpCondition(Fsr<37:36>, COND4))
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0xC3: FpUnimpl::fmovq_fcc3();
+                    0xC5: fmovrsgz({{
+                        if(Rs1 > 0)
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0xC6: fmovrdgz({{
+                        if(Rs1 > 0)
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0xC7: FpUnimpl::fmovrqgz();
+                    0xE5: fmovrsgez({{
+                        if(Rs1 >= 0)
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0xE6: fmovrdgez({{
+                        if(Rs1 >= 0)
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0xE7: FpUnimpl::fmovrqgez();
+                    0x101: fmovs_icc({{
+                        if(passesCondition(Ccr<3:0>, COND4))
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0x102: fmovd_icc({{
+                        if(passesCondition(Ccr<3:0>, COND4))
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0x103: FpUnimpl::fmovq_icc();
+                    0x181: fmovs_xcc({{
+                        if(passesCondition(Ccr<7:4>, COND4))
+                            Frds = Frs2s;
+                        else
+                            Frds = Frds;
+                    }});
+                    0x182: fmovd_xcc({{
+                        if(passesCondition(Ccr<7:4>, COND4))
+                            Frd = Frs2;
+                        else
+                            Frd = Frd;
+                    }});
+                    0x183: FpUnimpl::fmovq_xcc();
                     default: FailUnimpl::fpop2();
                 }
             }
@@ -1168,7 +1323,10 @@ decode OP default Unknown::unknown()
             0x04: stw({{Mem.uw = Rd.sw;}});
             0x05: stb({{Mem.ub = Rd.sb;}});
             0x06: sth({{Mem.uhw = Rd.shw;}});
-            0x07: sttw({{Mem.udw = RdLow<31:0> | (RdHigh<31:0> << 32);}});
+            0x07: sttw({{
+                      (Mem.tuw).a = RdLow<31:0>;
+                      (Mem.tuw).b = RdHigh<31:0>;
+                  }});
         }
         format Load {
             0x08: ldsw({{Rd = (int32_t)Mem.sw;}});
@@ -1258,7 +1416,10 @@ decode OP default Unknown::unknown()
             0x14: stwa({{Mem.uw = Rd;}}, {{EXT_ASI}});
             0x15: stba({{Mem.ub = Rd;}}, {{EXT_ASI}});
             0x16: stha({{Mem.uhw = Rd;}}, {{EXT_ASI}});
-            0x17: sttwa({{Mem.udw = RdLow<31:0> | RdHigh<31:0> << 32;}}, {{EXT_ASI}});
+            0x17: sttwa({{
+                      (Mem.tuw).a = RdLow<31:0>;
+                      (Mem.tuw).b = RdHigh<31:0>;
+                  }}, {{EXT_ASI}});
         }
         format LoadAlt {
             0x18: ldswa({{Rd = (int32_t)Mem.sw;}}, {{EXT_ASI}});

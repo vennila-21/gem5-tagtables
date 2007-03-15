@@ -231,14 +231,6 @@ MiscReg MiscRegFile::readRegNoEffect(int miscReg)
         return hintp;
       case MISCREG_HTBA:
         return htba;
-      case MISCREG_HVER:
-        // XXX set to match Legion
-        return ULL(0x3e) << 48 |
-               ULL(0x23) << 32 |
-               ULL(0x20) << 24 |
-                   //MaxGL << 16 | XXX For some reason legion doesn't set GL
-                   MaxTL << 8  |
-           (NWindows -1) << 0;
       case MISCREG_STRAND_STS_REG:
         return strandStatusReg;
       case MISCREG_HSTICK_CMPR:
@@ -374,7 +366,7 @@ MiscReg MiscRegFile::readReg(int miscReg, ThreadContext * tc)
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
 #if FULL_SYSTEM
       case MISCREG_HPSTATE:
-        return readFSRegWithEffect(miscReg, tc);
+        return readFSReg(miscReg, tc);
 #else
       case MISCREG_HPSTATE:
         //HPSTATE is special because because sometimes in privilege checks for instructions
@@ -654,7 +646,12 @@ void MiscRegFile::setReg(int miscReg,
 #endif
         return;
       case MISCREG_CWP:
-        new_val = val > NWindows ? NWindows - 1 : val;
+        new_val = val >= NWindows ? NWindows - 1 : val;
+        if (val >= NWindows) {
+            new_val = NWindows - 1;
+            warn("Attempted to set the CWP to %d with NWindows = %d\n",
+                    val, NWindows);
+        }
         tc->changeRegFileContext(CONTEXT_CWP, new_val);
         break;
       case MISCREG_GL:
@@ -682,7 +679,7 @@ void MiscRegFile::setReg(int miscReg,
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
 #if FULL_SYSTEM
       case MISCREG_HPSTATE:
-        setFSRegWithEffect(miscReg, val, tc);
+        setFSReg(miscReg, val, tc);
         return;
 #else
       case MISCREG_HPSTATE:
