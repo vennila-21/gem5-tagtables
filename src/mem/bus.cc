@@ -34,6 +34,8 @@
  */
 
 
+#include <limits>
+
 #include "base/misc.hh"
 #include "base/trace.hh"
 #include "mem/bus.hh"
@@ -52,20 +54,30 @@ Bus::getPort(const std::string &if_name, int idx)
     }
 
     // if_name ignored?  forced to be empty?
-    int id = interfaces.size();
+    int id = maxId++;
+    assert(maxId < std::numeric_limits<typeof(maxId)>::max());
     BusPort *bp = new BusPort(csprintf("%s-p%d", name(), id), this, id);
-    interfaces.push_back(bp);
+    interfaces[id] = bp;
     return bp;
+}
+
+void
+Bus::deletePortRefs(Port *p)
+{
+    BusPort *bp =  dynamic_cast<BusPort*>(p);
+    if (bp == NULL)
+        panic("Couldn't convert Port* to BusPort*\n");
+    interfaces.erase(bp->getId());
 }
 
 /** Get the ranges of anyone other buses that we are connected to. */
 void
 Bus::init()
 {
-    std::vector<BusPort*>::iterator intIter;
+    m5::hash_map<short,BusPort*>::iterator intIter;
 
     for (intIter = interfaces.begin(); intIter != interfaces.end(); intIter++)
-        (*intIter)->sendStatusChange(Port::RangeChange);
+        intIter->second->sendStatusChange(Port::RangeChange);
 }
 
 Bus::BusFreeEvent::BusFreeEvent(Bus *_bus) : Event(&mainEventQueue), bus(_bus)
@@ -184,12 +196,13 @@ Bus::recvTiming(PacketPtr pkt)
             }
         } else {
             //Snoop didn't succeed
-            DPRINTF(Bus, "Adding a retry to RETRY list %i\n", pktPort);
+            DPRINTF(Bus, "Adding a retry to RETRY list %d\n",
+                    pktPort->getId());
             addToRetryList(pktPort);
             return false;
         }
     } else {
-        assert(dest >= 0 && dest < interfaces.size());
+        assert(dest >= 0 && dest < maxId);
         assert(dest != pkt->getSrc()); // catch infinite loops
         port = interfaces[dest];
     }
@@ -201,7 +214,8 @@ Bus::recvTiming(PacketPtr pkt)
             // Packet was successfully sent. Return true.
             // Also take care of retries
             if (inRetry) {
-                DPRINTF(Bus, "Remove retry from list %i\n", retryList.front());
+                DPRINTF(Bus, "Remove retry from list %d\n",
+                        retryList.front()->getId());
                 retryList.front()->onRetryList(false);
                 retryList.pop_front();
                 inRetry = false;
@@ -210,7 +224,8 @@ Bus::recvTiming(PacketPtr pkt)
         }
 
         // Packet not successfully sent. Leave or put it on the retry list.
-        DPRINTF(Bus, "Adding a retry to RETRY list %i\n", pktPort);
+        DPRINTF(Bus, "Adding a retry to RETRY list %d\n",
+                pktPort->getId());
         addToRetryList(pktPort);
         return false;
     }
@@ -436,7 +451,6 @@ Bus::recvStatusChange(Port::Status status, int id)
 {
     AddrRangeList ranges;
     AddrRangeList snoops;
-    int x;
     AddrRangeIter iter;
 
     assert(status == Port::RangeChange &&
@@ -458,7 +472,7 @@ Bus::recvStatusChange(Port::Status status, int id)
         }
     } else {
 
-        assert((id < interfaces.size() && id >= 0) || id == defaultId);
+        assert((id < maxId && id >= 0) || id == defaultId);
         Port *port = interfaces[id];
         range_map<Addr,int>::iterator portIter;
         std::vector<DevMap>::iterator snoopIter;
@@ -503,9 +517,11 @@ Bus::recvStatusChange(Port::Status status, int id)
 
     // tell all our peers that our address range has changed.
     // Don't tell the device that caused this change, it already knows
-    for (x = 0; x < interfaces.size(); x++)
-        if (x != id)
-            interfaces[x]->sendStatusChange(Port::RangeChange);
+    m5::hash_map<short,BusPort*>::iterator intIter;
+
+    for (intIter = interfaces.begin(); intIter != interfaces.end(); intIter++)
+        if (intIter->first != id)
+            intIter->second->sendStatusChange(Port::RangeChange);
 
     if (id != defaultId && defaultPort)
         defaultPort->sendStatusChange(Port::RangeChange);

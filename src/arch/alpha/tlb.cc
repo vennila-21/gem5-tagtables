@@ -46,8 +46,7 @@
 using namespace std;
 using namespace EV5;
 
-namespace AlphaISA
-{
+namespace AlphaISA {
 ///////////////////////////////////////////////////////////////////////
 //
 //  Alpha TLB
@@ -116,10 +115,11 @@ TLB::checkCacheability(RequestPtr &req)
 
 
 #if ALPHA_TLASER
-    if (req->getPaddr() & PAddrUncachedBit39) {
+    if (req->getPaddr() & PAddrUncachedBit39)
 #else
-    if (req->getPaddr() & PAddrUncachedBit43) {
+    if (req->getPaddr() & PAddrUncachedBit43)
 #endif
+    {
         // IPR memory space not implemented
         if (PAddrIprSpace(req->getPaddr())) {
             return new UnimpFault("IPR memory space not implemented!");
@@ -312,13 +312,14 @@ ITB::translate(RequestPtr &req, ThreadContext *tc) const
         // VA<42:41> == 2, VA<39:13> maps directly to PA<39:13> for EV5
         // VA<47:41> == 0x7e, VA<40:13> maps directly to PA<40:13> for EV6
 #if ALPHA_TLASER
-        if ((MCSR_SP(tc->readMiscReg(IPR_MCSR)) & 2) &&
-            VAddrSpaceEV5(req->getVaddr()) == 2) {
+        if ((MCSR_SP(tc->readMiscRegNoEffect(IPR_MCSR)) & 2) &&
+            VAddrSpaceEV5(req->getVaddr()) == 2)
 #else
-        if (VAddrSpaceEV6(req->getVaddr()) == 0x7e) {
+        if (VAddrSpaceEV6(req->getVaddr()) == 0x7e)
 #endif
+        {
             // only valid in kernel mode
-            if (ICM_CM(tc->readMiscReg(IPR_ICM)) !=
+            if (ICM_CM(tc->readMiscRegNoEffect(IPR_ICM)) !=
                 mode_kernel) {
                 acv++;
                 return new ItbAcvFault(req->getVaddr());
@@ -336,7 +337,7 @@ ITB::translate(RequestPtr &req, ThreadContext *tc) const
 
         } else {
             // not a physical address: need to look up pte
-            int asn = DTB_ASN_ASN(tc->readMiscReg(IPR_DTB_ASN));
+            int asn = DTB_ASN_ASN(tc->readMiscRegNoEffect(IPR_DTB_ASN));
             PTE *pte = lookup(VAddr(req->getVaddr()).vpn(),
                               asn);
 
@@ -351,7 +352,7 @@ ITB::translate(RequestPtr &req, ThreadContext *tc) const
 
             // check permissions for this access
             if (!(pte->xre &
-                  (1 << ICM_CM(tc->readMiscReg(IPR_ICM))))) {
+                  (1 << ICM_CM(tc->readMiscRegNoEffect(IPR_ICM))))) {
                 // instruction access fault
                 acv++;
                 return new ItbAcvFault(req->getVaddr());
@@ -452,7 +453,7 @@ DTB::translate(RequestPtr &req, ThreadContext *tc, bool write) const
     Addr pc = tc->readPC();
 
     mode_type mode =
-        (mode_type)DTB_CM_CM(tc->readMiscReg(IPR_DTB_CM));
+        (mode_type)DTB_CM_CM(tc->readMiscRegNoEffect(IPR_DTB_CM));
 
 
     /**
@@ -468,7 +469,7 @@ DTB::translate(RequestPtr &req, ThreadContext *tc, bool write) const
     if (PcPAL(pc)) {
         mode = (req->getFlags() & ALTMODE) ?
             (mode_type)ALT_MODE_AM(
-                tc->readMiscReg(IPR_ALT_MODE))
+                tc->readMiscRegNoEffect(IPR_ALT_MODE))
             : mode_kernel;
     }
 
@@ -486,14 +487,15 @@ DTB::translate(RequestPtr &req, ThreadContext *tc, bool write) const
 
         // Check for "superpage" mapping
 #if ALPHA_TLASER
-        if ((MCSR_SP(tc->readMiscReg(IPR_MCSR)) & 2) &&
-            VAddrSpaceEV5(req->getVaddr()) == 2) {
+        if ((MCSR_SP(tc->readMiscRegNoEffect(IPR_MCSR)) & 2) &&
+            VAddrSpaceEV5(req->getVaddr()) == 2)
 #else
-        if (VAddrSpaceEV6(req->getVaddr()) == 0x7e) {
+        if (VAddrSpaceEV6(req->getVaddr()) == 0x7e)
 #endif
+        {
 
             // only valid in kernel mode
-            if (DTB_CM_CM(tc->readMiscReg(IPR_DTB_CM)) !=
+            if (DTB_CM_CM(tc->readMiscRegNoEffect(IPR_DTB_CM)) !=
                 mode_kernel) {
                 if (write) { write_acv++; } else { read_acv++; }
                 uint64_t flags = ((write ? MM_STAT_WR_MASK : 0) |
@@ -517,7 +519,7 @@ DTB::translate(RequestPtr &req, ThreadContext *tc, bool write) const
             else
                 read_accesses++;
 
-            int asn = DTB_ASN_ASN(tc->readMiscReg(IPR_DTB_ASN));
+            int asn = DTB_ASN_ASN(tc->readMiscRegNoEffect(IPR_DTB_ASN));
 
             // not a physical address: need to look up pte
             PTE *pte = lookup(VAddr(req->getVaddr()).vpn(),
@@ -592,6 +594,8 @@ TLB::index(bool advance)
     return *pte;
 }
 
+/* end namespace AlphaISA */ }
+
 DEFINE_SIM_OBJECT_CLASS_NAME("AlphaTLB", TLB)
 
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(ITB)
@@ -633,4 +637,3 @@ CREATE_SIM_OBJECT(DTB)
 }
 
 REGISTER_SIM_OBJECT("AlphaDTB", DTB)
-}

@@ -28,12 +28,12 @@
  * Authors: Nathan Binkert
  */
 
-#ifndef __ARCH_ALPHA_REMOTE_GDB_HH__
-#define __ARCH_ALPHA_REMOTE_GDB_HH__
+#ifndef __ARCH_SPARC_REMOTE_GDB_HH__
+#define __ARCH_SPARC_REMOTE_GDB_HH__
 
 #include <map>
 
-#include "arch/types.hh"
+#include "arch/sparc/types.hh"
 #include "base/remote_gdb.hh"
 #include "cpu/pc_event.hh"
 #include "base/pollevent.hh"
@@ -50,15 +50,12 @@ namespace SparcISA
         enum RegisterConstants
         {
             RegG0 = 0, RegO0 = 8, RegL0 = 16, RegI0 = 24,
-            RegF0 = 32, RegF32 = 64,
-            RegPc = 80, RegNpc, RegCcr, RegFsr, RegFprs, RegY, RegAsi,
-            RegVer, RegTick, RegPil, RegPstate,
-            RegTstate, RegTba, RegTl, RegTt, RegTpc, RegTnpc, RegWstate,
-            RegCwp, RegCansave, RegCanrestore, RegCleanwin, RegOtherwin,
-            RegAsr16 = 103,
-            RegIcc = 119, RegXcc,
-            RegFcc0 = 121,
-            NumGDBRegs
+            RegF0 = 32,
+            RegPc = 64, RegNpc, RegState, RegFsr, RegFprs, RegY,
+            /*RegState contains data in same format as tstate */
+            Reg32Y = 64, Reg32Psr = 65, Reg32Tbr = 66, Reg32Pc = 67,
+            Reg32Npc = 68, Reg32Fsr = 69, Reg32Csr = 70,
+            NumGDBRegs = RegY
         };
 
       public:
@@ -72,7 +69,9 @@ namespace SparcISA
 
         void clearSingleStep();
         void setSingleStep();
+
+        Addr nextBkpt;
     };
 }
 
-#endif /* __ARCH_ALPHA_REMOTE_GDB_H__ */
+#endif /* __ARCH_SPARC_REMOTE_GDB_H__ */

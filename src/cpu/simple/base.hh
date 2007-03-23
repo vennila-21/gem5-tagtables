@@ -33,6 +33,7 @@
 #ifndef __CPU_SIMPLE_BASE_HH__
 #define __CPU_SIMPLE_BASE_HH__
 
+#include "arch/predecoder.hh"
 #include "base/statistics.hh"
 #include "config/full_system.hh"
 #include "cpu/base.hh"
@@ -63,6 +64,10 @@ class Process;
 class RemoteGDB;
 class GDBListener;
 
+namespace TheISA
+{
+    class Predecoder;
+}
 class ThreadContext;
 class Checkpoint;
 
@@ -74,7 +79,6 @@ namespace Trace {
 class BaseSimpleCPU : public BaseCPU
 {
   protected:
-    typedef TheISA::MachInst MachInst;
     typedef TheISA::MiscReg MiscReg;
     typedef TheISA::FloatReg FloatReg;
     typedef TheISA::FloatRegBits FloatRegBits;
@@ -122,10 +126,13 @@ class BaseSimpleCPU : public BaseCPU
 #endif
 
     // current instruction
-    MachInst inst;
+    TheISA::MachInst inst;
+
+    // The predecoder
+    TheISA::Predecoder predecoder;
 
     // Static data storage
-    TheISA::IntReg dataReg;
+    TheISA::LargestRead dataReg;
 
     StaticInstPtr curStaticInst;
     StaticInstPtr curMacroStaticInst;
@@ -284,14 +291,19 @@ class BaseSimpleCPU : public BaseCPU
     void setNextPC(uint64_t val) { thread->setNextPC(val); }
     void setNextNPC(uint64_t val) { thread->setNextNPC(val); }
 
+    MiscReg readMiscRegNoEffect(int misc_reg)
+    {
+        return thread->readMiscRegNoEffect(misc_reg);
+    }
+
     MiscReg readMiscReg(int misc_reg)
     {
         return thread->readMiscReg(misc_reg);
     }
 
-    MiscReg readMiscRegWithEffect(int misc_reg)
+    void setMiscRegNoEffect(int misc_reg, const MiscReg &val)
     {
-        return thread->readMiscRegWithEffect(misc_reg);
+        return thread->setMiscRegNoEffect(misc_reg, val);
     }
 
     void setMiscReg(int misc_reg, const MiscReg &val)
@@ -299,9 +311,10 @@ class BaseSimpleCPU : public BaseCPU
         return thread->setMiscReg(misc_reg, val);
     }
 
-    void setMiscRegWithEffect(int misc_reg, const MiscReg &val)
+    MiscReg readMiscRegOperandNoEffect(const StaticInst *si, int idx)
     {
-        return thread->setMiscRegWithEffect(misc_reg, val);
+        int reg_idx = si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        return thread->readMiscRegNoEffect(reg_idx);
     }
 
     MiscReg readMiscRegOperand(const StaticInst *si, int idx)
@@ -310,23 +323,25 @@ class BaseSimpleCPU : public BaseCPU
         return thread->readMiscReg(reg_idx);
     }
 
-    MiscReg readMiscRegOperandWithEffect(const StaticInst *si, int idx)
+    void setMiscRegOperandNoEffect(const StaticInst *si, int idx, const MiscReg &val)
     {
-        int reg_idx = si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
-        return thread->readMiscRegWithEffect(reg_idx);
+        int reg_idx = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        return thread->setMiscRegNoEffect(reg_idx, val);
     }
 
-    void setMiscRegOperand(const StaticInst *si, int idx, const MiscReg &val)
+    void setMiscRegOperand(
+            const StaticInst *si, int idx, const MiscReg &val)
     {
         int reg_idx = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
         return thread->setMiscReg(reg_idx, val);
     }
 
-    void setMiscRegOperandWithEffect(
-            const StaticInst *si, int idx, const MiscReg &val)
-    {
-        int reg_idx = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
-        return thread->setMiscRegWithEffect(reg_idx, val);
+    unsigned readStCondFailures() {
+        return thread->readStCondFailures();
+    }
+
+    void setStCondFailures(unsigned sc_failures) {
+        thread->setStCondFailures(sc_failures);
     }
 
 #if FULL_SYSTEM

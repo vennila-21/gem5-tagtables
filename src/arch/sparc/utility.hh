@@ -44,24 +44,8 @@ namespace SparcISA
     static inline bool
     inUserMode(ThreadContext *tc)
     {
-        return !(tc->readMiscReg(MISCREG_PSTATE & (1 << 2)) ||
-                tc->readMiscReg(MISCREG_HPSTATE & (1 << 2)));
-    }
-
-    inline ExtMachInst
-    makeExtMI(MachInst inst, ThreadContext * xc) {
-        ExtMachInst emi = (MachInst) inst;
-        //The I bit, bit 13, is used to figure out where the ASI
-        //should come from. Use that in the ExtMachInst. This is
-        //slightly redundant, but it removes the need to put a condition
-        //into all the execute functions
-        if(inst & (1 << 13))
-            emi |= (static_cast<ExtMachInst>(xc->readMiscReg(MISCREG_ASI))
-                    << (sizeof(MachInst) * 8));
-        else
-            emi |= (static_cast<ExtMachInst>(bits(inst, 12, 5))
-                    << (sizeof(MachInst) * 8));
-        return emi;
+        return !(tc->readMiscRegNoEffect(MISCREG_PSTATE & (1 << 2)) ||
+                tc->readMiscRegNoEffect(MISCREG_HPSTATE & (1 << 2)));
     }
 
     inline bool isCallerSaveIntegerRegister(unsigned int reg) {
@@ -112,7 +96,20 @@ namespace SparcISA
     inline void initCPU(ThreadContext *tc, int cpuId)
     {
         static Fault por = new PowerOnReset();
-        por->invoke(tc);
+        if (cpuId == 0)
+            por->invoke(tc);
+
+    }
+
+    inline void startupCPU(ThreadContext *tc, int cpuId)
+    {
+#if FULL_SYSTEM
+        // Other CPUs will get activated by IPIs
+        if (cpuId == 0)
+            tc->activate(0);
+#else
+        tc->activate(0);
+#endif
     }
 
 } // namespace SparcISA

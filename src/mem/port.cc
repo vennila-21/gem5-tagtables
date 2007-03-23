@@ -36,6 +36,7 @@
 
 #include "base/chunk_generator.hh"
 #include "base/trace.hh"
+#include "mem/mem_object.hh"
 #include "mem/port.hh"
 
 void
@@ -46,7 +47,16 @@ Port::setPeer(Port *port)
 }
 
 void
-Port::blobHelper(Addr addr, uint8_t *p, int size, Packet::Command cmd)
+Port::removeConn()
+{
+    if (peer->getOwner())
+        peer->getOwner()->deletePortRefs(peer);
+    delete peer;
+    peer = NULL;
+}
+
+void
+Port::blobHelper(Addr addr, uint8_t *p, int size, MemCmd cmd)
 {
     Request req;
     Packet pkt(&req, cmd, Packet::Broadcast);
@@ -64,13 +74,13 @@ Port::blobHelper(Addr addr, uint8_t *p, int size, Packet::Command cmd)
 void
 Port::writeBlob(Addr addr, uint8_t *p, int size)
 {
-    blobHelper(addr, p, size, Packet::WriteReq);
+    blobHelper(addr, p, size, MemCmd::WriteReq);
 }
 
 void
 Port::readBlob(Addr addr, uint8_t *p, int size)
 {
-    blobHelper(addr, p, size, Packet::ReadReq);
+    blobHelper(addr, p, size, MemCmd::ReadReq);
 }
 
 void
@@ -80,7 +90,7 @@ Port::memsetBlob(Addr addr, uint8_t val, int size)
     uint8_t *buf = new uint8_t[size];
 
     std::memset(buf, val, size);
-    blobHelper(addr, buf, size, Packet::WriteReq);
+    blobHelper(addr, buf, size, MemCmd::WriteReq);
 
     delete [] buf;
 }

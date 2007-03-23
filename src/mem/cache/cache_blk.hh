@@ -37,7 +37,7 @@
 
 #include <list>
 
-#include "sim/root.hh"		// for Tick
+#include "sim/core.hh"		// for Tick
 #include "arch/isa_traits.hh"	// for Addr
 #include "mem/request.hh"
 
@@ -249,7 +249,7 @@ class CacheBlk
                 }
             }
 
-            req->setScResult(success ? 1 : 0);
+            req->setExtraData(success ? 1 : 0);
             clearLoadLocks();
             return success;
         } else {

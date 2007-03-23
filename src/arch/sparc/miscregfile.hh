@@ -39,6 +39,8 @@
 
 #include <string>
 
+class Checkpoint;
+
 namespace SparcISA
 {
     //These functions map register indices to names
@@ -161,6 +163,23 @@ namespace SparcISA
         const static int ie = 0x2;
     };
 
+    struct STS {
+        const static int st_idle     = 0x00;
+        const static int st_wait     = 0x01;
+        const static int st_halt     = 0x02;
+        const static int st_run      = 0x05;
+        const static int st_spec_run = 0x07;
+        const static int st_spec_rdy = 0x13;
+        const static int st_ready    = 0x19;
+        const static int active      = 0x01;
+        const static int speculative = 0x04;
+        const static int shft_id     = 8;
+        const static int shft_fsm0   = 31;
+        const static int shft_fsm1   = 26;
+        const static int shft_fsm2   = 21;
+        const static int shft_fsm3   = 16;
+    };
+
 
     const int NumMiscArchRegs = MISCREG_NUMMISCREGS;
     const int NumMiscRegs = MISCREG_NUMMISCREGS;
@@ -255,9 +274,11 @@ namespace SparcISA
         // These need to check the int_dis field and if 0 then
         // set appropriate bit in softint and checkinterrutps on the cpu
 #if FULL_SYSTEM
-        void  setFSRegWithEffect(int miscReg, const MiscReg &val,
-                ThreadContext *tc);
-        MiscReg readFSRegWithEffect(int miscReg, ThreadContext * tc);
+        void  setFSReg(int miscReg, const MiscReg &val, ThreadContext *tc);
+        MiscReg readFSReg(int miscReg, ThreadContext * tc);
+
+        // Update interrupt state on softint or pil change
+        void checkSoftInt(ThreadContext *tc);
 
         /** Process a tick compare event and generate an interrupt on the cpu if
          * appropriate. */
@@ -286,13 +307,13 @@ namespace SparcISA
             clear();
         }
 
-        MiscReg readReg(int miscReg);
+        MiscReg readRegNoEffect(int miscReg);
 
-        MiscReg readRegWithEffect(int miscReg, ThreadContext *tc);
+        MiscReg readReg(int miscReg, ThreadContext *tc);
 
-        void setReg(int miscReg, const MiscReg &val);
+        void setRegNoEffect(int miscReg, const MiscReg &val);
 
-        void setRegWithEffect(int miscReg,
+        void setReg(int miscReg,
                 const MiscReg &val, ThreadContext * tc);
 
         int getInstAsid()

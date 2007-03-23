@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006 The Regents of The University of Michigan
+ * Copyright (c) 2006-2007 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,8 +36,9 @@
 
 using namespace std;
 
-bool TraceChild::startTracing(const char * pathToFile, const char * arg)
+bool TraceChild::startTracing(const char * pathToFile, char * const argv[])
 {
+        instructions = 0;
         pid = fork();
         if(pid == -1)
         {
@@ -50,12 +51,23 @@ bool TraceChild::startTracing(const char * pathToFile, const char * arg)
                 //program to trace.
 
                 //Let our parent trace us
-                ptrace(PTRACE_TRACEME, 0, 0, 0);
+                if(ptrace(PTRACE_TRACEME, 0, 0, 0) == -1)
+                {
+                        cout << "Failure calling TRACEME\n";
+                        cout << strerror(errno) << endl;
+                        return false;
+                }
+
+                //Set up an empty environment for the child...
+                //We would want to specify this somehow at some point
+                char * env[] = {NULL};
 
                 //Start the program to trace
-                execl(pathToFile, arg);
+                execve(pathToFile, argv, env);
 
                 //We should never get here, so this is an error!
+                cout << "Exec failed\n";
+                cout <<  strerror(errno) << endl;
                 return false;
         }
 
@@ -121,6 +133,8 @@ bool TraceChild::doWait()
         {
                 cerr << "Program exited! Exit status is "
                         << WEXITSTATUS(wait_val) << endl;
+                cerr << "Executed " << instructions
+                        << " instructions." << endl;
                 tracing = false;
                 return false;
         }
@@ -132,6 +146,8 @@ bool TraceChild::doWait()
                 if(WCOREDUMP(wait_val))
                         cerr << "Program core dumped!" << endl;
                 tracing = false;
+                cerr << "Executed " << instructions
+                        << " instructions." << endl;
                 return false;
         }
         if(WIFSTOPPED(wait_val) && WSTOPSIG(wait_val) != SIGTRAP)
@@ -139,6 +155,8 @@ bool TraceChild::doWait()
                 cerr << "Program stopped by signal "
                         << WSTOPSIG(wait_val) << endl;
                 tracing = false;
+                cerr << "Executed " << instructions
+                        << " instructions." << endl;
                 return false;
         }
         return true;

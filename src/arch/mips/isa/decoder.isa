@@ -289,8 +289,8 @@ decode OPCODE_HI default Unknown::unknown() {
         0x0: decode RS_MSB {
             0x0: decode RS {
                 format CP0Control {
-                    0x0: mfc0({{ Rt = xc->readMiscReg(RD << 5 | SEL); }});
-                    0x4: mtc0({{ xc->setMiscReg(RD << 5 | SEL, Rt); }});
+                    0x0: mfc0({{ Rt = xc->readMiscRegNoEffect(RD << 5 | SEL); }});
+                    0x4: mtc0({{ xc->setMiscRegNoEffect(RD << 5 | SEL, Rt); }});
                 }
 
                 format MipsMT {
@@ -1093,6 +1093,9 @@ decode OPCODE_HI default Unknown::unknown() {
         0x0: StoreCond::sc({{ Mem.uw = Rt.uw;}},
                            {{ uint64_t tmp = write_result;
                               Rt.uw = (tmp == 0 || tmp == 1) ? tmp : Rt.uw;
+                              if (tmp == 1) {
+                                  xc->setStCondFailures(0);
+                              }
                            }}, mem_flags=LOCKED, inst_flags = IsStoreConditional);
 
         format StoreMemory {

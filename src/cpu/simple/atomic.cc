@@ -31,6 +31,7 @@
 #include "arch/locked_mem.hh"
 #include "arch/mmaped_ipr.hh"
 #include "arch/utility.hh"
+#include "base/bigint.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/simple/atomic.hh"
 #include "mem/packet.hh"
@@ -125,6 +126,17 @@ AtomicSimpleCPU::CpuPort::recvRetry()
     panic("AtomicSimpleCPU doesn't expect recvRetry callback!");
 }
 
+void
+AtomicSimpleCPU::DcachePort::setPeer(Port *port)
+{
+    Port::setPeer(port);
+
+#if FULL_SYSTEM
+    // Update the ThreadContext's memory ports (Functional/Virtual
+    // Ports)
+    cpu->tcBase()->connectMemPorts();
+#endif
+}
 
 AtomicSimpleCPU::AtomicSimpleCPU(Params *p)
     : BaseSimpleCPU(p), tickEvent(this),
@@ -138,18 +150,20 @@ AtomicSimpleCPU::AtomicSimpleCPU(Params *p)
 
     ifetch_req = new Request();
     ifetch_req->setThreadContext(p->cpu_id, 0); // Add thread ID if we add MT
-    ifetch_pkt = new Packet(ifetch_req, Packet::ReadReq, Packet::Broadcast);
+    ifetch_pkt = new Packet(ifetch_req, MemCmd::ReadReq, Packet::Broadcast);
     ifetch_pkt->dataStatic(&inst);
 
     data_read_req = new Request();
     data_read_req->setThreadContext(p->cpu_id, 0); // Add thread ID here too
-    data_read_pkt = new Packet(data_read_req, Packet::ReadReq,
+    data_read_pkt = new Packet(data_read_req, MemCmd::ReadReq,
                                Packet::Broadcast);
     data_read_pkt->dataStatic(&dataReg);
 
     data_write_req = new Request();
     data_write_req->setThreadContext(p->cpu_id, 0); // Add thread ID here too
-    data_write_pkt = new Packet(data_write_req, Packet::WriteReq,
+    data_write_pkt = new Packet(data_write_req, MemCmd::WriteReq,
+                                Packet::Broadcast);
+    data_swap_pkt = new Packet(data_write_req, MemCmd::SwapReq,
                                 Packet::Broadcast);
 }
 
@@ -208,7 +222,7 @@ AtomicSimpleCPU::switchOut()
 void
 AtomicSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
 {
-    BaseCPU::takeOverFrom(oldCPU);
+    BaseCPU::takeOverFrom(oldCPU, &icachePort, &dcachePort);
 
     assert(!tickEvent.scheduled());
 
@@ -238,12 +252,6 @@ AtomicSimpleCPU::activateContext(int thread_num, int delay)
     assert(!tickEvent.scheduled());
 
     notIdleFraction++;
-
-#if FULL_SYSTEM
-    // Connect the ThreadContext's memory ports (Functional/Virtual
-    // Ports)
-    tc->connectMemPorts();
-#endif
 
     //Make sure ticks are still on multiples of cycles
     tickEvent.schedule(nextCycle(curTick + cycles(delay)));
@@ -318,6 +326,14 @@ AtomicSimpleCPU::read(Addr addr, T &data, unsigned flags)
 
 template
 Fault
+AtomicSimpleCPU::read(Addr addr, Twin32_t &data, unsigned flags);
+
+template
+Fault
+AtomicSimpleCPU::read(Addr addr, Twin64_t &data, unsigned flags);
+
+template
+Fault
 AtomicSimpleCPU::read(Addr addr, uint64_t &data, unsigned flags);
 
 template
@@ -363,9 +379,14 @@ AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 {
     // use the CPU's statically allocated write request and packet objects
     Request *req = data_write_req;
-    PacketPtr pkt = data_write_pkt;
+    PacketPtr pkt;
 
     req->setVirt(0, addr, sizeof(T), flags, thread->readPC());
+
+    if (req->isSwap())
+        pkt = data_swap_pkt;
+    else
+        pkt = data_write_pkt;
 
     if (traceData) {
         traceData->setAddr(addr);
@@ -381,6 +402,11 @@ AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
         if (req->isLocked()) {
             do_access = TheISA::handleLockedWrite(thread, req);
         }
+        if (req->isCondSwap()) {
+             assert(res);
+             req->setExtraData(*res);
+        }
+
 
         if (do_access) {
             pkt->reinitFromRequest();
@@ -401,15 +427,11 @@ AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 #endif
         }
 
-        if (req->isLocked()) {
-            uint64_t scResult = req->getScResult();
-            if (scResult != 0) {
-                // clear failure counter
-                thread->setStCondFailures(0);
-            }
-            if (res) {
-                *res = req->getScResult();
-            }
+        if (req->isSwap()) {
+            assert(res);
+            *res = pkt->get<T>();
+        } else if (res) {
+            *res = req->getExtraData();
         }
     }
 
@@ -424,6 +446,17 @@ AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
+
+template
+Fault
+AtomicSimpleCPU::write(Twin32_t data, Addr addr,
+                       unsigned flags, uint64_t *res);
+
+template
+Fault
+AtomicSimpleCPU::write(Twin64_t data, Addr addr,
+                       unsigned flags, uint64_t *res);
+
 template
 Fault
 AtomicSimpleCPU::write(uint64_t data, Addr addr,
@@ -483,17 +516,28 @@ AtomicSimpleCPU::tick()
         Fault fault = setupFetchRequest(ifetch_req);
 
         if (fault == NoFault) {
-            ifetch_pkt->reinitFromRequest();
-
-            Tick icache_latency = icachePort.sendAtomic(ifetch_pkt);
-            // ifetch_req is initialized to read the instruction directly
-            // into the CPU object's inst field.
-
+            Tick icache_latency = 0;
+            bool icache_access = false;
             dcache_access = false; // assume no dcache access
+
+            //Fetch more instruction memory if necessary
+            if(predecoder.needMoreBytes())
+            {
+                icache_access = true;
+                ifetch_pkt->reinitFromRequest();
+
+                icache_latency = icachePort.sendAtomic(ifetch_pkt);
+                // ifetch_req is initialized to read the instruction directly
+                // into the CPU object's inst field.
+            }
+
             preExecute();
 
-            fault = curStaticInst->execute(this, traceData);
-            postExecute();
+            if(curStaticInst)
+            {
+                fault = curStaticInst->execute(this, traceData);
+                postExecute();
+            }
 
             // @todo remove me after debugging with legion done
             if (curStaticInst && (!curStaticInst->isMicroOp() ||
@@ -501,7 +545,8 @@ AtomicSimpleCPU::tick()
                 instCnt++;
 
             if (simulate_stalls) {
-                Tick icache_stall = icache_latency - cycles(1);
+                Tick icache_stall =
+                    icache_access ? icache_latency - cycles(1) : 0;
                 Tick dcache_stall =
                     dcache_access ? dcache_latency - cycles(1) : 0;
                 Tick stall_cycles = (icache_stall + dcache_stall) / cycles(1);
@@ -512,8 +557,8 @@ AtomicSimpleCPU::tick()
             }
 
         }
-
-        advancePC(fault);
+        if(predecoder.needMoreBytes())
+            advancePC(fault);
     }
 
     if (_status != Idle)

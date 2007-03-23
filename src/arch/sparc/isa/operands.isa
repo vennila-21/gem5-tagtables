@@ -37,6 +37,8 @@ def operand_types {{
     'uw' : ('unsigned int', 32),
     'sdw' : ('signed int', 64),
     'udw' : ('unsigned int', 64),
+    'tudw' : ('twin64 int', 64),
+    'tuw' : ('twin32 int', 32),
     'sf' : ('float', 32),
     'df' : ('float', 64),
     'qf' : ('float', 128)
@@ -99,6 +101,12 @@ def operands {{
     'R1':  		('IntReg', 'udw', '1', None, 7),
     'R15': 		('IntReg', 'udw', '15', 'IsInteger', 8),
     'R16': 		('IntReg', 'udw', '16', None, 9),
+    'O0':               ('IntReg', 'udw', '8', 'IsInteger', 10),
+    'O1':               ('IntReg', 'udw', '9', 'IsInteger', 11),
+    'O2':               ('IntReg', 'udw', '10', 'IsInteger', 12),
+    'O3':               ('IntReg', 'udw', '11', 'IsInteger', 13),
+    'O4':               ('IntReg', 'udw', '12', 'IsInteger', 14),
+    'O5':               ('IntReg', 'udw', '13', 'IsInteger', 15),
 
     # Control registers
 #   'Y':		('ControlReg', 'udw', 'MISCREG_Y', None, 40),

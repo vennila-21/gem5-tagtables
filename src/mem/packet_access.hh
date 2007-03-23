@@ -30,6 +30,7 @@
  */
 
 #include "arch/isa_traits.hh"
+#include "base/bigint.hh"
 #include "mem/packet.hh"
 #include "sim/byteswap.hh"
 

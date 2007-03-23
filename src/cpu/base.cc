@@ -63,7 +63,7 @@ int maxThreadsPerCPU = 1;
 
 CPUProgressEvent::CPUProgressEvent(EventQueue *q, Tick ival,
                                    BaseCPU *_cpu)
-    : Event(q, Event::Stat_Event_Pri), interval(ival),
+    : Event(q, Event::Progress_Event_Pri), interval(ival),
       lastNumInst(0), cpu(_cpu)
 {
     if (interval)
@@ -320,7 +320,7 @@ BaseCPU::switchOut()
 }
 
 void
-BaseCPU::takeOverFrom(BaseCPU *oldCPU)
+BaseCPU::takeOverFrom(BaseCPU *oldCPU, Port *ic, Port *dc)
 {
     assert(threadContexts.size() == oldCPU->threadContexts.size());
 
@@ -353,6 +353,26 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
 //    if (profileEvent)
 //        profileEvent->schedule(curTick);
 #endif
+
+    // Connect new CPU to old CPU's memory only if new CPU isn't
+    // connected to anything.  Also connect old CPU's memory to new
+    // CPU.
+    Port *peer;
+    if (ic->getPeer() == NULL) {
+        peer = oldCPU->getPort("icache_port")->getPeer();
+        ic->setPeer(peer);
+    } else {
+        peer = ic->getPeer();
+    }
+    peer->setPeer(ic);
+
+    if (dc->getPeer() == NULL) {
+        peer = oldCPU->getPort("dcache_port")->getPeer();
+        dc->setPeer(peer);
+    } else {
+        peer = dc->getPeer();
+    }
+    peer->setPeer(dc);
 }
 
 
@@ -373,12 +393,6 @@ BaseCPU::ProfileEvent::process()
 }
 
 void
-BaseCPU::post_interrupt(int int_type)
-{
-    interrupts.post(int_type);
-}
-
-void
 BaseCPU::post_interrupt(int int_num, int index)
 {
     interrupts.post(int_num, index);
@@ -396,6 +410,11 @@ BaseCPU::clear_interrupts()
     interrupts.clear_all();
 }
 
+uint64_t
+BaseCPU::get_interrupts(int int_num)
+{
+    return interrupts.get_vec(int_num);
+}
 
 void
 BaseCPU::serialize(std::ostream &os)

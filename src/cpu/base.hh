@@ -34,11 +34,11 @@
 
 #include <vector>
 
+#include "arch/isa_traits.hh"
 #include "base/statistics.hh"
 #include "config/full_system.hh"
 #include "sim/eventq.hh"
 #include "mem/mem_object.hh"
-#include "arch/isa_traits.hh"
 
 #if FULL_SYSTEM
 #include "arch/interrupts.hh"
@@ -49,6 +49,11 @@ class CheckerCPU;
 class ThreadContext;
 class System;
 class Port;
+
+namespace TheISA
+{
+    class Predecoder;
+}
 
 class CPUProgressEvent : public Event
 {
@@ -102,10 +107,10 @@ class BaseCPU : public MemObject
     TheISA::Interrupts interrupts;
 
   public:
-    virtual void post_interrupt(int int_type);
     virtual void post_interrupt(int int_num, int index);
     virtual void clear_interrupt(int int_num, int index);
     virtual void clear_interrupts();
+    virtual uint64_t get_interrupts(int int_num);
 
     bool check_interrupts(ThreadContext * tc) const
     { return interrupts.check_interrupts(tc); }
@@ -125,6 +130,7 @@ class BaseCPU : public MemObject
 
   protected:
     std::vector<ThreadContext *> threadContexts;
+    std::vector<TheISA::Predecoder *> predecoders;
 
   public:
 
@@ -196,7 +202,7 @@ class BaseCPU : public MemObject
 
     /// Take over execution from the given CPU.  Used for warm-up and
     /// sampling.
-    virtual void takeOverFrom(BaseCPU *);
+    virtual void takeOverFrom(BaseCPU *, Port *ic, Port *dc);
 
     /**
      *  Number of threads we're actually simulating (<= SMT_MAX_THREADS).

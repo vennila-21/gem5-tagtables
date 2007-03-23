@@ -33,19 +33,43 @@
 %{
 #include "python/swig/pyevent.hh"
 
-inline void
-create(PyObject *object, Tick when)
-{
-    new PythonEvent(object, when);
-}
+#include "sim/sim_events.hh"
+#include "sim/sim_exit.hh"
+#include "sim/simulate.hh"
 %}
 
 %include "stdint.i"
+%include "std_string.i"
 %include "sim/host.hh"
 
-%inline %{
-extern void create(PyObject *object, Tick when);
-%}
+void create(PyObject *object, Tick when);
+
+class Event;
+class CountedDrainEvent : public Event {
+  public:
+    void setCount(int _count);
+};
+
+CountedDrainEvent *createCountedDrain();
+void cleanupCountedDrain(Event *drain_event);
+
+// minimal definition of SimExitEvent interface to wrap
+class SimLoopExitEvent {
+  public:
+    std::string getCause();
+    int getCode();
+    SimLoopExitEvent(EventQueue *q, Tick _when, Tick _repeat,
+                     const std::string &_cause, int c = 0);
+};
+
+%exception simulate {
+    $action
+    if (!result) {
+        return NULL;
+    }
+}
+SimLoopExitEvent *simulate(Tick num_cycles = MaxTick);
+void exitSimLoop(const std::string &message, int exit_code);
 
 %wrapper %{
 // fix up module name to reflect the fact that it's inside the m5 package

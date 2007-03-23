@@ -60,6 +60,8 @@
 #include "arch/sparc/solaris/process.hh"
 #elif THE_ISA == MIPS_ISA
 #include "arch/mips/linux/process.hh"
+#elif THE_ISA == X86_ISA
+#include "arch/x86/linux/process.hh"
 #else
 #error "THE_ISA not set"
 #endif
@@ -300,24 +302,6 @@ DEFINE_SIM_OBJECT_CLASS_NAME("Process", Process)
 ////////////////////////////////////////////////////////////////////////
 
 
-void
-copyStringArray(vector<string> &strings, Addr array_ptr, Addr data_ptr,
-                TranslatingPort* memPort)
-{
-    Addr data_ptr_swap;
-    for (int i = 0; i < strings.size(); ++i) {
-        data_ptr_swap = htog(data_ptr);
-        memPort->writeBlob(array_ptr, (uint8_t*)&data_ptr_swap, sizeof(Addr));
-        memPort->writeString(data_ptr, strings[i].c_str());
-        array_ptr += sizeof(Addr);
-        data_ptr += strings[i].size() + 1;
-    }
-    // add NULL terminator
-    data_ptr = 0;
-
-    memPort->writeBlob(array_ptr, (uint8_t*)&data_ptr, sizeof(Addr));
-}
-
 LiveProcess::LiveProcess(const string &nm, ObjectFile *_objFile,
                          System *_system,
                          int stdin_fd, int stdout_fd, int stderr_fd,
@@ -475,14 +459,23 @@ LiveProcess::create(const std::string &nm, System *system, int stdin_fd,
         fatal("Unknown/unsupported operating system.");
     }
 #elif THE_ISA == SPARC_ISA
-    if (objFile->getArch() != ObjectFile::SPARC)
+    if (objFile->getArch() != ObjectFile::SPARC64 && objFile->getArch() != ObjectFile::SPARC32)
         fatal("Object file architecture does not match compiled ISA (SPARC).");
     switch (objFile->getOpSys()) {
       case ObjectFile::Linux:
-        process = new SparcLinuxProcess(nm, objFile, system,
-                                        stdin_fd, stdout_fd, stderr_fd,
-                                        argv, envp, cwd,
-                                        _uid, _euid, _gid, _egid, _pid, _ppid);
+        if (objFile->getArch() == ObjectFile::SPARC64) {
+            process = new Sparc64LinuxProcess(nm, objFile, system,
+                                              stdin_fd, stdout_fd, stderr_fd,
+                                              argv, envp, cwd,
+                                              _uid, _euid, _gid,
+                                              _egid, _pid, _ppid);
+        } else {
+            process = new Sparc32LinuxProcess(nm, objFile, system,
+                                              stdin_fd, stdout_fd, stderr_fd,
+                                              argv, envp, cwd,
+                                              _uid, _euid, _gid,
+                                              _egid, _pid, _ppid);
+        }
         break;
 
 
@@ -491,6 +484,20 @@ LiveProcess::create(const std::string &nm, System *system, int stdin_fd,
                                         stdin_fd, stdout_fd, stderr_fd,
                                         argv, envp, cwd,
                                         _uid, _euid, _gid, _egid, _pid, _ppid);
+        break;
+      default:
+        fatal("Unknown/unsupported operating system.");
+    }
+#elif THE_ISA == X86_ISA
+    if (objFile->getArch() != ObjectFile::X86)
+        fatal("Object file architecture does not match compiled ISA (x86).");
+    switch (objFile->getOpSys()) {
+      case ObjectFile::Linux:
+        process = new X86LinuxProcess(nm, objFile, system,
+                                          stdin_fd, stdout_fd, stderr_fd,
+                                          argv, envp, cwd,
+                                          _uid, _euid, _gid,
+                                          _egid, _pid, _ppid);
         break;
       default:
         fatal("Unknown/unsupported operating system.");

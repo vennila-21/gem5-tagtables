@@ -35,12 +35,12 @@
 #include "sim/builder.hh"
 #include "sim/host.hh"
 #include "sim/sim_object.hh"
-#include "sim/root.hh"
+#include "sim/core.hh"
 
 using namespace std;
 
 SimObjectBuilder::SimObjectBuilder(const std::string &_iniSection)
-    : ParamContext(_iniSection, NoAutoInit)
+    : ParamContext(_iniSection)
 {
 }
 

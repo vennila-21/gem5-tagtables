@@ -45,20 +45,7 @@ namespace AlphaISA
     static inline bool
     inUserMode(ThreadContext *tc)
     {
-        return (tc->readMiscReg(AlphaISA::IPR_DTB_CM) & 0x18) != 0;
-    }
-
-    static inline ExtMachInst
-    makeExtMI(MachInst inst, Addr pc) {
-#if FULL_SYSTEM
-        ExtMachInst ext_inst = inst;
-        if (pc && 0x1)
-            return ext_inst|=(static_cast<ExtMachInst>(pc & 0x1) << 32);
-        else
-            return ext_inst;
-#else
-        return ExtMachInst(inst);
-#endif
+        return (tc->readMiscRegNoEffect(AlphaISA::IPR_DTB_CM) & 0x18) != 0;
     }
 
     inline bool isCallerSaveIntegerRegister(unsigned int reg) {
@@ -123,6 +110,9 @@ namespace AlphaISA
 
     // Alpha IPR register accessors
     inline bool PcPAL(Addr addr) { return addr & 0x3; }
+    inline void startupCPU(ThreadContext *tc, int cpuId) {
+        tc->activate(0);
+    }
 #if FULL_SYSTEM
 
     ////////////////////////////////////////////////////////////////////////

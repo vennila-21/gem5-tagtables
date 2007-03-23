@@ -247,7 +247,8 @@ namespace SparcISA
     bool AsiIsCmt(ASI asi)
     {
         return
-            (asi == ASI_CMT_PER_STRAND);
+            (asi == ASI_CMT_PER_STRAND) ||
+            (asi == ASI_CMT_SHARED);
     }
 
     bool AsiIsQueue(ASI asi)
@@ -294,7 +295,9 @@ namespace SparcISA
 
     bool AsiIsReg(ASI asi)
     {
-        return AsiIsMmu(asi) || AsiIsScratchPad(asi) | AsiIsSparcError(asi);
+        return AsiIsMmu(asi) || AsiIsScratchPad(asi) ||
+               AsiIsSparcError(asi) || AsiIsInterrupt(asi)
+               || AsiIsCmt(asi);
     }
 
     bool AsiIsSparcError(ASI asi)

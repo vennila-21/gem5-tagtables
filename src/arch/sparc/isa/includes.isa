@@ -70,10 +70,15 @@ output exec {{
 #include <ieeefp.h>
 #endif
 
+#if FULL_SYSTEM
+#include "sim/pseudo_inst.hh"
+#endif
+
 #include <limits>
 
 #include <cmath>
 #include "arch/sparc/asi.hh"
+#include "base/bigint.hh"
 #include "cpu/base.hh"
 #include "cpu/exetrace.hh"
 #include "sim/sim_exit.hh"

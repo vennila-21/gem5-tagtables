@@ -251,6 +251,7 @@ VectorPrint::operator()(std::ostream &stream) const
     ScalarPrint print;
     print.name = name;
     print.desc = desc;
+    print.compat = compat;
     print.precision = precision;
     print.descriptions = descriptions;
     print.flags = flags;
@@ -724,5 +725,26 @@ Text::visit(const FormulaData &data)
 {
     visit((const VectorData &)data);
 }
+
+bool
+initText(const string &filename, bool desc, bool compat)
+{
+    static Text text;
+    static bool connected = false;
+
+    if (connected)
+        return false;
+
+    extern list<Output *> OutputList;
+
+    text.open(*simout.find(filename));
+    text.descriptions = desc;
+    text.compat = compat;
+    OutputList.push_back(&text);
+    connected = true;
+
+    return true;
+}
+
 
 /* namespace Stats */ }

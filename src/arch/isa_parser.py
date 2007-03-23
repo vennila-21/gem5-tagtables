@@ -81,12 +81,12 @@ tokens = reserved + (
     # code literal
     'CODELIT',
 
-    # ( ) [ ] { } < > , ; : :: *
+    # ( ) [ ] { } < > , ; . : :: *
     'LPAREN', 'RPAREN',
     'LBRACKET', 'RBRACKET',
     'LBRACE', 'RBRACE',
     'LESS', 'GREATER', 'EQUALS',
-    'COMMA', 'SEMI', 'COLON', 'DBLCOLON',
+    'COMMA', 'SEMI', 'DOT', 'COLON', 'DBLCOLON',
     'ASTERISK',
 
     # C preprocessor directives
@@ -113,6 +113,7 @@ t_GREATER          = r'\>'
 t_EQUALS           = r'='
 t_COMMA            = r','
 t_SEMI             = r';'
+t_DOT              = r'\.'
 t_COLON            = r':'
 t_DBLCOLON         = r'::'
 t_ASTERISK	   = r'\*'
@@ -261,6 +262,7 @@ def p_defs_and_outputs_1(t):
 def p_def_or_output(t):
     '''def_or_output : def_format
                      | def_bitfield
+                     | def_bitfield_struct
                      | def_template
                      | def_operand_types
                      | def_operands
@@ -362,6 +364,23 @@ def p_def_bitfield_1(t):
         expr = 'sext<%d>(%s)' % (1, expr)
     hash_define = '#undef %s\n#define %s\t%s\n' % (t[4], t[4], expr)
     t[0] = GenCode(header_output = hash_define)
+
+# alternate form for structure member: 'def bitfield <ID> <ID>'
+def p_def_bitfield_struct(t):
+    'def_bitfield_struct : DEF opt_signed BITFIELD ID id_with_dot SEMI'
+    if (t[2] != ''):
+        error(t.lineno(1), 'error: structure bitfields are always unsigned.')
+    expr = 'machInst.%s' % t[5]
+    hash_define = '#undef %s\n#define %s\t%s\n' % (t[4], t[4], expr)
+    t[0] = GenCode(header_output = hash_define)
+
+def p_id_with_dot_0(t):
+    'id_with_dot : ID'
+    t[0] = t[1]
+
+def p_id_with_dot_1(t):
+    'id_with_dot : ID DOT id_with_dot'
+    t[0] = t[1] + t[2] + t[3]
 
 def p_opt_signed_0(t):
     'opt_signed : SIGNED'
@@ -1124,6 +1143,12 @@ def buildOperandTypeMap(userDict, lineno):
                 ctype = 'float'
             elif size == 64:
                 ctype = 'double'
+        elif desc == 'twin64 int':
+            is_signed = 0
+            ctype = 'Twin64_t'
+        elif desc == 'twin32 int':
+            is_signed = 0
+            ctype = 'Twin32_t'
         if ctype == '':
             error(lineno, 'Unrecognized type description "%s" in userDict')
         operandTypeMap[ext] = (size, ctype, is_signed)
@@ -1156,7 +1181,10 @@ class Operand(object):
         # template must be careful not to use it if it doesn't apply.
         if self.isMem():
             self.mem_acc_size = self.makeAccSize()
-            self.mem_acc_type = self.ctype
+            if self.ctype in ['Twin32_t', 'Twin64_t']:
+                self.mem_acc_type = 'Twin'
+            else:
+                self.mem_acc_type = 'uint'
 
     # Finalize additional fields (primarily code fields).  This step
     # is done separately since some of these fields may depend on the
@@ -1359,7 +1387,7 @@ class ControlRegOperand(Operand):
         bit_select = 0
         if (self.ctype == 'float' or self.ctype == 'double'):
             error(0, 'Attempt to read control register as FP')
-        base = 'xc->readMiscRegOperandWithEffect(this, %s)' % self.src_reg_idx
+        base = 'xc->readMiscRegOperand(this, %s)' % self.src_reg_idx
         if self.size == self.dflt_size:
             return '%s = %s;\n' % (self.base_name, base)
         else:
@@ -1369,7 +1397,7 @@ class ControlRegOperand(Operand):
     def makeWrite(self):
         if (self.ctype == 'float' or self.ctype == 'double'):
             error(0, 'Attempt to write control register as FP')
-        wb = 'xc->setMiscRegOperandWithEffect(this, %s, %s);\n' % \
+        wb = 'xc->setMiscRegOperand(this, %s, %s);\n' % \
              (self.dest_reg_idx, self.base_name)
         wb += 'if (traceData) { traceData->setData(%s); }' % \
               self.base_name
@@ -1386,6 +1414,9 @@ class MemOperand(Operand):
         # Note that initializations in the declarations are solely
         # to avoid 'uninitialized variable' errors from the compiler.
         # Declare memory data variable.
+        if self.ctype in ['Twin32_t','Twin64_t']:
+            return "%s %s; %s.a = 0; %s.b = 0;\n" % (self.ctype, self.base_name,
+                    self.base_name, self.base_name)
         c = '%s %s = 0;\n' % (self.ctype, self.base_name)
         return c
 

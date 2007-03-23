@@ -138,7 +138,7 @@ using namespace std;
 using namespace TheISA;
 
 RemoteGDB::RemoteGDB(System *_system, ThreadContext *c)
-    : BaseRemoteGDB(_system, c, NumGDBRegs)
+    : BaseRemoteGDB(_system, c, NumGDBRegs), nextBkpt(0)
 {}
 
 ///////////////////////////////////////////////////////////
@@ -152,7 +152,9 @@ RemoteGDB::acc(Addr va, size_t len)
     //@Todo In NetBSD, this function checks if all addresses
     //from va to va + len have valid page mape entries. Not
     //sure how this will work for other OSes or in general.
-    return true;
+    if (va)
+        return true;
+    return false;
 }
 
 ///////////////////////////////////////////////////////////
@@ -165,10 +167,37 @@ RemoteGDB::getregs()
 {
     memset(gdbregs.regs, 0, gdbregs.size);
 
-    gdbregs.regs[RegPc] = context->readPC();
-    gdbregs.regs[RegNpc] = context->readNextPC();
-    for(int x = RegG0; x <= RegI0 + 7; x++)
-        gdbregs.regs[x] = context->readIntReg(x - RegG0);
+    if (context->readMiscReg(MISCREG_PSTATE) &
+           PSTATE::am) {
+        uint32_t *regs;
+        regs = (uint32_t*)gdbregs.regs;
+        regs[Reg32Pc] = htobe((uint32_t)context->readPC());
+        regs[Reg32Npc] = htobe((uint32_t)context->readNextPC());
+        for(int x = RegG0; x <= RegI0 + 7; x++)
+            regs[x] = htobe((uint32_t)context->readIntReg(x - RegG0));
+
+        regs[Reg32Y] = htobe((uint32_t)context->readIntReg(NumIntArchRegs + 1));
+        regs[Reg32Psr] = htobe((uint32_t)context->readMiscReg(MISCREG_PSTATE));
+        regs[Reg32Fsr] = htobe((uint32_t)context->readMiscReg(MISCREG_FSR));
+        regs[Reg32Csr] = htobe((uint32_t)context->readIntReg(NumIntArchRegs + 2));
+    } else {
+        gdbregs.regs[RegPc] = htobe(context->readPC());
+        gdbregs.regs[RegNpc] = htobe(context->readNextPC());
+        for(int x = RegG0; x <= RegI0 + 7; x++)
+            gdbregs.regs[x] = htobe(context->readIntReg(x - RegG0));
+
+        gdbregs.regs[RegFsr] = htobe(context->readMiscReg(MISCREG_FSR));
+        gdbregs.regs[RegFprs] = htobe(context->readMiscReg(MISCREG_FPRS));
+        gdbregs.regs[RegY] = htobe(context->readIntReg(NumIntArchRegs + 1));
+        gdbregs.regs[RegState] = htobe(
+            context->readMiscReg(MISCREG_CWP) |
+            context->readMiscReg(MISCREG_PSTATE) << 8 |
+            context->readMiscReg(MISCREG_ASI) << 24 |
+            context->readIntReg(NumIntArchRegs + 2) << 32);
+    }
+
+    DPRINTF(GDBRead, "PC=%#x\n", gdbregs.regs[RegPc]);
+
     //Floating point registers are left at 0 in netbsd
     //All registers other than the pc, npc and int regs
     //are ignored as well.
@@ -193,12 +222,13 @@ RemoteGDB::setregs()
 void
 RemoteGDB::clearSingleStep()
 {
-    warn("SPARC single stepping not implemented, "
-            "but clearSingleStep called\n");
+   if (nextBkpt)
+       clearTempBreakpoint(nextBkpt);
 }
 
 void
 RemoteGDB::setSingleStep()
 {
-    panic("SPARC single stepping not implemented.\n");
+    nextBkpt = context->readNextPC();
+    setTempBreakpoint(nextBkpt);
 }

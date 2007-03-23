@@ -211,6 +211,10 @@ SyscallReturn writeFunc(SyscallDesc *desc, int num,
 SyscallReturn lseekFunc(SyscallDesc *desc, int num,
                         LiveProcess *p, ThreadContext *tc);
 
+/// Target _llseek() handler.
+SyscallReturn _llseekFunc(SyscallDesc *desc, int num,
+                        LiveProcess *p, ThreadContext *tc);
+
 /// Target munmap() handler.
 SyscallReturn munmapFunc(SyscallDesc *desc, int num,
                          LiveProcess *p, ThreadContext *tc);
@@ -349,6 +353,8 @@ template <typename target_stat, typename host_stat>
 static void
 convertStatBuf(target_stat &tgt, host_stat *host, bool fakeTTY = false)
 {
+    using namespace TheISA;
+
     if (fakeTTY)
         tgt->st_dev = 0xA;
     else
@@ -377,7 +383,9 @@ convertStatBuf(target_stat &tgt, host_stat *host, bool fakeTTY = false)
     tgt->st_mtimeX = htog(tgt->st_mtimeX);
     tgt->st_ctimeX = host->st_ctime;
     tgt->st_ctimeX = htog(tgt->st_ctimeX);
-    tgt->st_blksize = host->st_blksize;
+    // Force the block size to be 8k. This helps to ensure buffered io works
+    // consistently across different hosts.
+    tgt->st_blksize = 0x2000;
     tgt->st_blksize = htog(tgt->st_blksize);
     tgt->st_blocks = host->st_blocks;
     tgt->st_blocks = htog(tgt->st_blocks);
@@ -389,6 +397,8 @@ template <typename target_stat, typename host_stat64>
 static void
 convertStat64Buf(target_stat &tgt, host_stat64 *host, bool fakeTTY = false)
 {
+    using namespace TheISA;
+
     convertStatBuf<target_stat, host_stat64>(tgt, host, fakeTTY);
 #if defined(STAT_HAVE_NSEC)
     tgt->st_atime_nsec = host->st_atime_nsec;
@@ -446,14 +456,14 @@ ioctlFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
     }
 
     switch (req) {
-      case OS::TIOCISATTY:
-      case OS::TIOCGETP:
-      case OS::TIOCSETP:
-      case OS::TIOCSETN:
-      case OS::TIOCSETC:
-      case OS::TIOCGETC:
-      case OS::TIOCGETS:
-      case OS::TIOCGETA:
+      case OS::TIOCISATTY_:
+      case OS::TIOCGETP_:
+      case OS::TIOCSETP_:
+      case OS::TIOCSETN_:
+      case OS::TIOCSETC_:
+      case OS::TIOCGETC_:
+      case OS::TIOCGETS_:
+      case OS::TIOCGETA_:
         return -ENOTTY;
 
       default:

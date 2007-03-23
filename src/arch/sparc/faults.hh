@@ -193,6 +193,8 @@ class HstickMatch : public SparcFault<HstickMatch> {};
 
 class TrapLevelZero : public SparcFault<TrapLevelZero> {};
 
+class InterruptVector : public SparcFault<InterruptVector> {};
+
 class PAWatchpoint : public SparcFault<PAWatchpoint> {};
 
 class VAWatchpoint : public SparcFault<VAWatchpoint> {};
@@ -246,26 +248,13 @@ class FillNOther : public EnumeratedFault<FillNOther>
 
 class TrapInstruction : public EnumeratedFault<TrapInstruction>
 {
-
   public:
     TrapInstruction(uint32_t n) : EnumeratedFault<TrapInstruction>(n) {;}
-};
-
+    //In SE, trap instructions are requesting services from the OS.
 #if !FULL_SYSTEM
-class PageTableFault : public SparcFault<PageTableFault>
-{
-  private:
-    Addr vaddr;
-  public:
-    PageTableFault(Addr va) : vaddr(va) {}
     void invoke(ThreadContext * tc);
-};
-
-static inline Fault genPageTableFault(Addr va)
-{
-    return new PageTableFault(va);
-}
 #endif
+};
 
 static inline Fault genMachineCheckFault()
 {

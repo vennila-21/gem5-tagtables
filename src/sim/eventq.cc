@@ -41,7 +41,7 @@
 
 #include "sim/eventq.hh"
 #include "base/trace.hh"
-#include "sim/root.hh"
+#include "sim/core.hh"
 
 using namespace std;
 
@@ -52,6 +52,10 @@ using namespace std;
 // cycle, before the pipeline simulation is performed.
 //
 EventQueue mainEventQueue("MainEventQueue");
+
+#ifndef NDEBUG
+Counter Event::instanceCounter = 0;
+#endif
 
 void
 EventQueue::insert(Event *event)
@@ -218,7 +222,6 @@ EventQueue::dump()
     cprintf("============================================================\n");
 }
 
-extern "C"
 void
 dumpMainQueue()
 {

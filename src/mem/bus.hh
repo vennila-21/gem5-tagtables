@@ -42,6 +42,7 @@
 #include <inttypes.h>
 
 #include "base/range.hh"
+#include "base/hashmap.hh"
 #include "base/range_map.hh"
 #include "mem/mem_object.hh"
 #include "mem/packet.hh"
@@ -156,6 +157,8 @@ class Bus : public MemObject
         void onRetryList(bool newVal)
         { _onRetryList = newVal; }
 
+        int getId() { return id; }
+
       protected:
 
         /** When reciving a timing request from the peer port (at id),
@@ -210,9 +213,12 @@ class Bus : public MemObject
 
     bool inRetry;
 
+    /** max number of bus ids we've handed out so far */
+    short maxId;
+
     /** An array of pointers to the peer port interfaces
         connected to this bus.*/
-    std::vector<BusPort*> interfaces;
+    m5::hash_map<short,BusPort*> interfaces;
 
     /** An array of pointers to ports that retry should be called on because the
      * original send failed for whatever reason.*/
@@ -250,6 +256,7 @@ class Bus : public MemObject
 
     /** A function used to return the port associated with this bus object. */
     virtual Port *getPort(const std::string &if_name, int idx = -1);
+    virtual void deletePortRefs(Port *p);
 
     virtual void init();
 
@@ -259,7 +266,7 @@ class Bus : public MemObject
         bool responder_set)
         : MemObject(n), busId(bus_id), clock(_clock), width(_width),
           tickNextIdle(0), drainEvent(NULL), busIdle(this), inRetry(false),
-          defaultPort(NULL), responderSet(responder_set)
+          maxId(0), defaultPort(NULL), responderSet(responder_set)
     {
         //Both the width and clock period must be positive
         if (width <= 0)

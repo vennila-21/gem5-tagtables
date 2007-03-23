@@ -653,15 +653,13 @@ class SimObject(object):
 
         instanceDict[self.path()] = self
 
-        if hasattr(self, 'type') and not isinstance(self, ParamContext):
+        if hasattr(self, 'type'):
             print 'type=%s' % self.type
 
         child_names = self._children.keys()
         child_names.sort()
-        np_child_names = [c for c in child_names \
-                          if not isinstance(self._children[c], ParamContext)]
-        if len(np_child_names):
-            print 'children=%s' % ' '.join(np_child_names)
+        if len(child_names):
+            print 'children=%s' % ' '.join(child_names)
 
         param_names = self._params.keys()
         param_names.sort()
@@ -695,7 +693,7 @@ class SimObject(object):
     def getCCObject(self):
         if not self._ccObject:
             self._ccObject = -1 # flag to catch cycles in recursion
-            self._ccObject = internal.main.createSimObject(self.path())
+            self._ccObject = internal.sim_object.createSimObject(self.path())
         elif self._ccObject == -1:
             raise RuntimeError, "%s: recursive call to getCCObject()" \
                   % self.path()
@@ -711,8 +709,7 @@ class SimObject(object):
 
     def startDrain(self, drain_event, recursive):
         count = 0
-        # ParamContexts don't serialize
-        if isinstance(self, SimObject) and not isinstance(self, ParamContext):
+        if isinstance(self, SimObject):
             count += self._ccObject.drain(drain_event)
         if recursive:
             for child in self._children.itervalues():
@@ -720,7 +717,7 @@ class SimObject(object):
         return count
 
     def resume(self):
-        if isinstance(self, SimObject) and not isinstance(self, ParamContext):
+        if isinstance(self, SimObject):
             self._ccObject.resume()
         for child in self._children.itervalues():
             child.resume()
@@ -730,13 +727,13 @@ class SimObject(object):
             # i don't know if there's a better way to do this - calling
             # setMemoryMode directly from self._ccObject results in calling
             # SimObject::setMemoryMode, not the System::setMemoryMode
-            system_ptr = internal.main.convertToSystemPtr(self._ccObject)
+            system_ptr = internal.sim_object.convertToSystemPtr(self._ccObject)
             system_ptr.setMemoryMode(mode)
         for child in self._children.itervalues():
             child.changeTiming(mode)
 
     def takeOverFrom(self, old_cpu):
-        cpu_ptr = internal.main.convertToBaseCPUPtr(old_cpu._ccObject)
+        cpu_ptr = internal.sim_object.convertToBaseCPUPtr(old_cpu._ccObject)
         self._ccObject.takeOverFrom(cpu_ptr)
 
     # generate output file for 'dot' to display as a pretty graph.
@@ -782,9 +779,6 @@ class SimObject(object):
         for c in self.children:
             c.outputDot(dot)
 
-class ParamContext(SimObject):
-    pass
-
 # Function to provide to C++ so it can look up instances based on paths
 def resolveSimObject(name):
     obj = instanceDict[name]
@@ -793,7 +787,7 @@ def resolveSimObject(name):
 # __all__ defines the list of symbols that get exported when
 # 'from config import *' is invoked.  Try to keep this reasonably
 # short to avoid polluting other namespaces.
-__all__ = ['SimObject', 'ParamContext']
+__all__ = ['SimObject']
 
 # see comment on imports at end of __init__.py.
 import proxy

@@ -35,14 +35,13 @@
 #include <string>
 
 #include "base/stats/output.hh"
+#include "config/use_mysql.hh"
 
 namespace MySQL { class Connection; }
 namespace Stats {
 
 class DistDataData;
 class MySqlRun;
-bool MySqlConnected();
-extern MySqlRun MySqlDB;
 
 struct SetupStat
 {
@@ -63,7 +62,7 @@ struct SetupStat
     uint16_t size;
 
     void init();
-    unsigned setup();
+    unsigned setup(MySqlRun *run);
 };
 
 class InsertData
@@ -85,18 +84,43 @@ class InsertData
     int16_t y;
 
   public:
-    InsertData();
+    InsertData(MySqlRun *_run);
     ~InsertData();
 
     void flush();
     void insert();
 };
 
+class InsertEvent
+{
+  private:
+    char *query;
+    int size;
+    bool first;
+    static const int maxsize = 1024*1024;
+
+    typedef std::map<std::string, uint32_t> event_map_t;
+    event_map_t events;
+
+    MySqlRun *run;
+
+  public:
+    InsertEvent(MySqlRun *_run);
+    ~InsertEvent();
+
+    void flush();
+    void insert(const std::string &stat);
+};
+
 class MySql : public Output
 {
   protected:
+    MySqlRun *run; /* Hide the implementation so we don't have a
+                      #include mess */
+
     SetupStat stat;
     InsertData newdata;
+    InsertEvent newevent;
     std::list<FormulaData *> formulas;
     bool configured;
 
@@ -116,6 +140,17 @@ class MySql : public Output
         assert(i != idmap.end());
         return (*i).second;
     }
+
+  public:
+    MySql();
+    ~MySql();
+
+    void connect(const std::string &host, const std::string &user,
+                 const std::string &passwd, const std::string &db,
+                 const std::string &name, const std::string &sample,
+                 const std::string &project);
+    bool connected() const;
+
   public:
     // Implement Visit
     virtual void visit(const ScalarData &data);
@@ -128,6 +163,9 @@ class MySql : public Output
     // Implement Output
     virtual bool valid() const;
     virtual void output();
+
+    // Implement Event Output
+    virtual void event(const std::string &event);
 
   protected:
     // Output helper
@@ -148,6 +186,20 @@ class MySql : public Output
     void configure(const Vector2dData &data);
     void configure(const FormulaData &data);
 };
+
+bool initMySQL(std::string host, std::string database, std::string user,
+               std::string passwd, std::string project, std::string name,
+               std::string sample);
+
+#if !USE_MYSQL
+inline bool
+initMySQL(std::string host, std::string user, std::string password,
+          std::string database, std::string project, std::string name,
+          std::string sample)
+{
+    return false;
+}
+#endif
 
 /* namespace Stats */ }
 

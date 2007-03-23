@@ -36,21 +36,23 @@
 #include <fstream>
 #include <vector>
 
-#include "sim/host.hh"
-#include "cpu/inst_seq.hh"	// for InstSeqNum
 #include "base/trace.hh"
-#include "cpu/thread_context.hh"
+#include "cpu/inst_seq.hh"	// for InstSeqNum
 #include "cpu/static_inst.hh"
+#include "cpu/thread_context.hh"
+#include "sim/host.hh"
 
 class ThreadContext;
 
 
 namespace Trace {
 
-class InstRecord : public Record
+class InstRecord
 {
   protected:
     typedef TheISA::IntRegFile IntRegFile;
+
+    Tick when;
 
     // The following fields are initialized by the constructor and
     // thus guaranteed to be valid.
@@ -95,10 +97,10 @@ class InstRecord : public Record
     bool regs_valid;
 
   public:
-    InstRecord(Tick _cycle, ThreadContext *_thread,
+    InstRecord(Tick _when, ThreadContext *_thread,
                const StaticInstPtr &_staticInst,
                Addr _pc, bool spec)
-        : Record(_cycle), thread(_thread),
+        : when(_when), thread(_thread),
           staticInst(_staticInst), PC(_pc),
           misspeculating(spec)
     {
@@ -110,12 +112,12 @@ class InstRecord : public Record
         cp_seq_valid = false;
     }
 
-    virtual ~InstRecord() { }
-
-    virtual void dump(std::ostream &outs);
+    ~InstRecord() { }
 
     void setAddr(Addr a) { addr = a; addr_valid = true; }
 
+    void setData(Twin64_t d) { data.as_int = d.a; data_status = DataInt64; }
+    void setData(Twin32_t d) { data.as_int = d.a; data_status = DataInt32; }
     void setData(uint64_t d) { data.as_int = d; data_status = DataInt64; }
     void setData(uint32_t d) { data.as_int = d; data_status = DataInt32; }
     void setData(uint16_t d) { data.as_int = d; data_status = DataInt16; }
@@ -136,31 +138,7 @@ class InstRecord : public Record
 
     void setRegs(const IntRegFile &regs);
 
-    void finalize() { theLog.append(this); }
-
-    enum InstExecFlagBits {
-        TRACE_MISSPEC = 0,
-        PRINT_CYCLE,
-        PRINT_OP_CLASS,
-        PRINT_THREAD_NUM,
-        PRINT_RESULT_DATA,
-        PRINT_EFF_ADDR,
-        PRINT_INT_REGS,
-        PRINT_FETCH_SEQ,
-        PRINT_CP_SEQ,
-        PRINT_REG_DELTA,
-        PC_SYMBOL,
-        INTEL_FORMAT,
-        LEGION_LOCKSTEP,
-        NUM_BITS
-    };
-
-    static std::vector<bool> flags;
-    static std::string trace_system;
-
-    static void setParams();
-
-    static bool traceMisspec() { return flags[TRACE_MISSPEC]; }
+    void dump();
 };
 
 
@@ -174,22 +152,22 @@ InstRecord::setRegs(const IntRegFile &regs)
     regs_valid = true;
 }
 
-inline
-InstRecord *
-getInstRecord(Tick cycle, ThreadContext *tc,
-              const StaticInstPtr staticInst,
+inline InstRecord *
+getInstRecord(Tick when, ThreadContext *tc, const StaticInstPtr staticInst,
               Addr pc)
 {
-    if (DTRACE(InstExec) &&
-        (InstRecord::traceMisspec() || !tc->misspeculating())) {
-        return new InstRecord(cycle, tc, staticInst, pc,
-                              tc->misspeculating());
-    }
+    if (!IsOn(ExecEnable))
+        return NULL;
 
-    return NULL;
+    if (!Trace::enabled)
+        return NULL;
+
+    if (!IsOn(ExecSpeculative) && tc->misspeculating())
+        return NULL;
+
+    return new InstRecord(when, tc, staticInst, pc, tc->misspeculating());
 }
 
-
-}
+/* namespace Trace */ }
 
 #endif // __EXETRACE_HH__

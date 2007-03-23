@@ -54,7 +54,15 @@ string SparcISA::getMiscRegName(RegIndex index)
          "wstate",*/ "gl",
          "hpstate", "htstate", "hintp", "htba", "hver", "strand_sts_reg",
          "hstick_cmpr",
-         "fsr"};
+         "fsr", "prictx", "secctx", "partId", "lsuCtrlReg", "itbTsbC0Ps0",
+         "itbTsbC0Ps1", "iTlbC0Cnfg", "itbTsbCXPs0", "itbTsbCXPs1",
+         "iTlbCXCnfg","iTlbSfsr", "iTlbTagAcs", "dtbTsbC0Ps0",
+         "dtbTsbC0Ps1", "dTlbC0Cnfg", "dtbTsbCXPs0", "dtbTsbCXPs1",
+         "dTlbCXCnfg","dTlbSfsr", "dTlbSfar", "dTlbTagAcs",
+         "scratch0", "scratch1", "scratch2", "scratch3", "scratch4",
+         "scratch5", "scratch6", "scratch7", "cpuMondoHead", "cpuMondoTail",
+         "devMondoHead", "devMondoTail", "resErrorHead", "resErrorTail",
+         "nresErrorHead", "nresErrorTail", "TlbData" };
 
     return miscRegName[index];
 }
@@ -132,7 +140,7 @@ void MiscRegFile::clear()
 #endif
 }
 
-MiscReg MiscRegFile::readReg(int miscReg)
+MiscReg MiscRegFile::readRegNoEffect(int miscReg)
 {
     switch (miscReg) {
       case MISCREG_TLB_DATA:
@@ -223,8 +231,6 @@ MiscReg MiscRegFile::readReg(int miscReg)
         return hintp;
       case MISCREG_HTBA:
         return htba;
-      case MISCREG_HVER:
-        return NWindows | MaxTL << 8 | MaxGL << 16;
       case MISCREG_STRAND_STS_REG:
         return strandStatusReg;
       case MISCREG_HSTICK_CMPR:
@@ -317,7 +323,7 @@ MiscReg MiscRegFile::readReg(int miscReg)
     }
 }
 
-MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
+MiscReg MiscRegFile::readReg(int miscReg, ThreadContext * tc)
 {
     switch (miscReg) {
         // tick and stick are aliased to each other in niagra
@@ -360,7 +366,7 @@ MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
 #if FULL_SYSTEM
       case MISCREG_HPSTATE:
-        return readFSRegWithEffect(miscReg, tc);
+        return readFSReg(miscReg, tc);
 #else
       case MISCREG_HPSTATE:
         //HPSTATE is special because because sometimes in privilege checks for instructions
@@ -372,10 +378,10 @@ MiscReg MiscRegFile::readRegWithEffect(int miscReg, ThreadContext * tc)
 #endif
 
     }
-    return readReg(miscReg);
+    return readRegNoEffect(miscReg);
 }
 
-void MiscRegFile::setReg(int miscReg, const MiscReg &val)
+void MiscRegFile::setRegNoEffect(int miscReg, const MiscReg &val)
 {
     switch (miscReg) {
 //      case MISCREG_Y:
@@ -602,13 +608,12 @@ void MiscRegFile::setReg(int miscReg, const MiscReg &val)
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
         nres_error_tail = val;
         break;
-
       default:
         panic("Miscellaneous register %d not implemented\n", miscReg);
     }
 }
 
-void MiscRegFile::setRegWithEffect(int miscReg,
+void MiscRegFile::setReg(int miscReg,
         const MiscReg &val, ThreadContext * tc)
 {
     MiscReg new_val = val;
@@ -633,9 +638,20 @@ void MiscRegFile::setRegWithEffect(int miscReg,
         return;
       case MISCREG_TL:
         tl = val;
+#if FULL_SYSTEM
+        if (hpstate & HPSTATE::tlz && tl == 0 && !(hpstate & HPSTATE::hpriv))
+            tc->getCpuPtr()->post_interrupt(IT_TRAP_LEVEL_ZERO,0);
+        else
+            tc->getCpuPtr()->clear_interrupt(IT_TRAP_LEVEL_ZERO,0);
+#endif
         return;
       case MISCREG_CWP:
-        new_val = val > NWindows ? NWindows - 1 : val;
+        new_val = val >= NWindows ? NWindows - 1 : val;
+        if (val >= NWindows) {
+            new_val = NWindows - 1;
+            warn("Attempted to set the CWP to %d with NWindows = %d\n",
+                    val, NWindows);
+        }
         tc->changeRegFileContext(CONTEXT_CWP, new_val);
         break;
       case MISCREG_GL:
@@ -663,7 +679,7 @@ void MiscRegFile::setRegWithEffect(int miscReg,
       case MISCREG_QUEUE_NRES_ERROR_TAIL:
 #if FULL_SYSTEM
       case MISCREG_HPSTATE:
-        setFSRegWithEffect(miscReg, val, tc);
+        setFSReg(miscReg, val, tc);
         return;
 #else
       case MISCREG_HPSTATE:
@@ -673,7 +689,7 @@ void MiscRegFile::setRegWithEffect(int miscReg,
       panic("Accessing Fullsystem register %s to %#x in SE mode\n", getMiscRegName(miscReg), val);
 #endif
     }
-    setReg(miscReg, new_val);
+    setRegNoEffect(miscReg, new_val);
 }
 
 void MiscRegFile::serialize(std::ostream & os)

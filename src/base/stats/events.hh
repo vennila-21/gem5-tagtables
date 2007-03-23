@@ -42,10 +42,9 @@ extern Tick EventStart;
 
 #if USE_MYSQL
 void __event(const std::string &stat);
-bool MySqlConnected();
+#else
+inline void __event(const std::string &stat) {}
 #endif
-
-bool ignoreEvent(const std::string &name);
 
 inline void
 recordEvent(const std::string &stat)
@@ -55,12 +54,7 @@ recordEvent(const std::string &stat)
 
     DPRINTF(StatEvents, "Statistics Event: %s\n", stat);
 
-#if USE_MYSQL
-    if (!MySqlConnected())
-        return;
-
     __event(stat);
-#endif
 }
 
 /* namespace Stats */ }

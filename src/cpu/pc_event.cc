@@ -40,7 +40,7 @@
 #include "cpu/thread_context.hh"
 #include "cpu/pc_event.hh"
 #include "sim/debug.hh"
-#include "sim/root.hh"
+#include "sim/core.hh"
 #include "sim/system.hh"
 
 using namespace std;
@@ -138,14 +138,12 @@ BreakPCEvent::process(ThreadContext *tc)
 }
 
 #if FULL_SYSTEM
-extern "C"
 void
 sched_break_pc_sys(System *sys, Addr addr)
 {
     new BreakPCEvent(&sys->pcEventQueue, "debug break", addr, true);
 }
 
-extern "C"
 void
 sched_break_pc(Addr addr)
 {

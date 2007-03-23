@@ -35,6 +35,14 @@
  * @file
  *
  * ISA-specific helper functions for locked memory accesses.
+ *
+ * Note that these functions are not embedded in the ISA description
+ * because they operate on the *physical* address rather than the
+ * virtual address.  In the current M5 design, the physical address is
+ * not accessible from the ISA description, only from the CPU model.
+ * Thus the CPU is responsible for calling back to the ISA (here)
+ * after the address translation has been performed to allow the ISA
+ * to do these manipulations based on the physical address.
  */
 
 #include "arch/alpha/miscregfile.hh"
@@ -48,8 +56,8 @@ template <class XC>
 inline void
 handleLockedRead(XC *xc, Request *req)
 {
-    xc->setMiscReg(MISCREG_LOCKADDR, req->getPaddr() & ~0xf);
-    xc->setMiscReg(MISCREG_LOCKFLAG, true);
+    xc->setMiscRegNoEffect(MISCREG_LOCKADDR, req->getPaddr() & ~0xf);
+    xc->setMiscRegNoEffect(MISCREG_LOCKFLAG, true);
 }
 
 
@@ -60,16 +68,16 @@ handleLockedWrite(XC *xc, Request *req)
     if (req->isUncacheable()) {
         // Funky Turbolaser mailbox access...don't update
         // result register (see stq_c in decoder.isa)
-        req->setScResult(2);
+        req->setExtraData(2);
     } else {
         // standard store conditional
-        bool lock_flag = xc->readMiscReg(MISCREG_LOCKFLAG);
-        Addr lock_addr = xc->readMiscReg(MISCREG_LOCKADDR);
+        bool lock_flag = xc->readMiscRegNoEffect(MISCREG_LOCKFLAG);
+        Addr lock_addr = xc->readMiscRegNoEffect(MISCREG_LOCKADDR);
         if (!lock_flag || (req->getPaddr() & ~0xf) != lock_addr) {
             // Lock flag not set or addr mismatch in CPU;
             // don't even bother sending to memory system
-            req->setScResult(0);
-            xc->setMiscReg(MISCREG_LOCKFLAG, false);
+            req->setExtraData(0);
+            xc->setMiscRegNoEffect(MISCREG_LOCKFLAG, false);
             // the rest of this code is not architectural;
             // it's just a debugging aid to help detect
             // livelock by warning on long sequences of failed

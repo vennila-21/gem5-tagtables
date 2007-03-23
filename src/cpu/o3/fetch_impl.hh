@@ -40,7 +40,7 @@
 #include "mem/request.hh"
 #include "sim/byteswap.hh"
 #include "sim/host.hh"
-#include "sim/root.hh"
+#include "sim/core.hh"
 
 #if FULL_SYSTEM
 #include "arch/tlb.hh"
@@ -103,6 +103,7 @@ DefaultFetch<Impl>::IcachePort::recvRetry()
 template<class Impl>
 DefaultFetch<Impl>::DefaultFetch(Params *params)
     : branchPred(params),
+      predecoder(NULL),
       decodeToFetchDelay(params->decodeToFetchDelay),
       renameToFetchDelay(params->renameToFetchDelay),
       iewToFetchDelay(params->iewToFetchDelay),
@@ -602,7 +603,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr fetch_PC, Fault &ret_fault, unsigned tid
 
         // Build packet here.
         PacketPtr data_pkt = new Packet(mem_req,
-                                        Packet::ReadReq, Packet::Broadcast);
+                                        MemCmd::ReadReq, Packet::Broadcast);
         data_pkt->dataDynamicArray(new uint8_t[cacheBlkSize]);
 
         cacheDataPC[tid] = block_PC;
@@ -1119,13 +1120,10 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             inst = TheISA::gtoh(*reinterpret_cast<TheISA::MachInst *>
                         (&cacheData[tid][offset]));
 
-#if THE_ISA == ALPHA_ISA
-            ext_inst = TheISA::makeExtMI(inst, fetch_PC);
-#elif THE_ISA == SPARC_ISA
-            ext_inst = TheISA::makeExtMI(inst, cpu->thread[tid]->getTC());
-#elif THE_ISA == MIPS_ISA
-            ext_inst = TheISA::makeExtMI(inst, cpu->thread[tid]->getTC());
-#endif
+            predecoder.setTC(cpu->thread[tid]->getTC());
+            predecoder.moreBytes(fetch_PC, 0, inst);
+
+            ext_inst = predecoder.getExtMachInst();
 
             // Create a new DynInst from the instruction fetched.
             DynInstPtr instruction = new DynInst(ext_inst,

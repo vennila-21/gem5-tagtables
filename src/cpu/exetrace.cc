@@ -31,14 +31,17 @@
  *          Steve Raasch
  */
 
+#include <errno.h>
 #include <fstream>
 #include <iomanip>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
+#include "arch/predecoder.hh"
 #include "arch/regfile.hh"
 #include "arch/utility.hh"
 #include "base/loader/symtab.hh"
+#include "base/socket.hh"
 #include "config/full_system.hh"
 #include "cpu/base.hh"
 #include "cpu/exetrace.hh"
@@ -64,6 +67,28 @@ static bool wasMicro = false;
 
 namespace Trace {
 SharedData *shared_data = NULL;
+ListenSocket *cosim_listener = NULL;
+
+void
+setupSharedData()
+{
+    int shmfd = shmget('M' << 24 | getuid(), sizeof(SharedData), 0777);
+    if (shmfd < 0)
+        fatal("Couldn't get shared memory fd. Is Legion running?");
+
+    shared_data = (SharedData*)shmat(shmfd, NULL, SHM_RND);
+    if (shared_data == (SharedData*)-1)
+        fatal("Couldn't allocate shared memory");
+
+    if (shared_data->flags != OWN_M5)
+        fatal("Shared memory has invalid owner");
+
+    if (shared_data->version != VERSION)
+        fatal("Shared Data is wrong version! M5: %d Legion: %d", VERSION,
+              shared_data->version);
+
+    // step legion forward one cycle so we can get register values
+    shared_data->flags = OWN_LEGION;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -123,12 +148,101 @@ inline void printLevelHeader(ostream & os, int level)
 #endif
 
 void
-Trace::InstRecord::dump(ostream &outs)
+Trace::InstRecord::dump()
 {
+    ostream &outs = Trace::output();
+
     DPRINTF(Sparc, "Instruction: %#X\n", staticInst->machInst);
-    if (flags[PRINT_REG_DELTA])
+    bool diff = true;
+    if (IsOn(ExecRegDelta))
     {
+        diff = false;
+#ifndef NDEBUG
 #if THE_ISA == SPARC_ISA
+        static int fd = 0;
+        //Don't print what happens for each micro-op, just print out
+        //once at the last op, and for regular instructions.
+        if(!staticInst->isMicroOp() || staticInst->isLastMicroOp())
+        {
+            if(!cosim_listener)
+            {
+                int port = 8000;
+                cosim_listener = new ListenSocket();
+                while(!cosim_listener->listen(port, true))
+                {
+                    DPRINTF(GDBMisc, "Can't bind port %d\n", port);
+                    port++;
+                }
+                ccprintf(cerr, "Listening for cosimulator on port %d\n", port);
+                fd = cosim_listener->accept();
+            }
+            char prefix[] = "goli";
+            for(int p = 0; p < 4; p++)
+            {
+                for(int i = 0; i < 8; i++)
+                {
+                    uint64_t regVal;
+                    int res = read(fd, &regVal, sizeof(regVal));
+                    if(res < 0)
+                        panic("First read call failed! %s\n", strerror(errno));
+                    regVal = TheISA::gtoh(regVal);
+                    uint64_t realRegVal = thread->readIntReg(p * 8 + i);
+                    if((regVal & 0xffffffffULL) != (realRegVal & 0xffffffffULL))
+                    {
+                        DPRINTF(ExecRegDelta, "Register %s%d should be %#x but is %#x.\n", prefix[p], i, regVal, realRegVal);
+                        diff = true;
+                    }
+                    //ccprintf(outs, "%s%d m5 = %#x statetrace = %#x\n", prefix[p], i, realRegVal, regVal);
+                }
+            }
+            /*for(int f = 0; f <= 62; f+=2)
+            {
+                uint64_t regVal;
+                int res = read(fd, &regVal, sizeof(regVal));
+                if(res < 0)
+                    panic("First read call failed! %s\n", strerror(errno));
+                regVal = TheISA::gtoh(regVal);
+                uint64_t realRegVal = thread->readFloatRegBits(f, 64);
+                if(regVal != realRegVal)
+                {
+                    DPRINTF(ExecRegDelta, "Register f%d should be %#x but is %#x.\n", f, regVal, realRegVal);
+                }
+            }*/
+            uint64_t regVal;
+            int res = read(fd, &regVal, sizeof(regVal));
+            if(res < 0)
+                panic("First read call failed! %s\n", strerror(errno));
+            regVal = TheISA::gtoh(regVal);
+            uint64_t realRegVal = thread->readNextPC();
+            if(regVal != realRegVal)
+            {
+                DPRINTF(ExecRegDelta, "Register pc should be %#x but is %#x.\n", regVal, realRegVal);
+                diff = true;
+            }
+            res = read(fd, &regVal, sizeof(regVal));
+            if(res < 0)
+                panic("First read call failed! %s\n", strerror(errno));
+            regVal = TheISA::gtoh(regVal);
+            realRegVal = thread->readNextNPC();
+            if(regVal != realRegVal)
+            {
+                DPRINTF(ExecRegDelta, "Register npc should be %#x but is %#x.\n", regVal, realRegVal);
+                diff = true;
+            }
+            res = read(fd, &regVal, sizeof(regVal));
+            if(res < 0)
+                panic("First read call failed! %s\n", strerror(errno));
+            regVal = TheISA::gtoh(regVal);
+            realRegVal = thread->readIntReg(SparcISA::NumIntArchRegs + 2);
+            if((regVal & 0xF) != (realRegVal & 0xF))
+            {
+                DPRINTF(ExecRegDelta, "Register ccr should be %#x but is %#x.\n", regVal, realRegVal);
+                diff = true;
+            }
+        }
+#endif
+#endif
+#if 0 //THE_ISA == SPARC_ISA
         //Don't print what happens for each micro-op, just print out
         //once at the last op, and for regular instructions.
         if(!staticInst->isMicroOp() || staticInst->isLastMicroOp())
@@ -148,14 +262,14 @@ Trace::InstRecord::dump(ostream &outs)
             outs << "PC = " << thread->readNextPC();
             outs << " NPC = " << thread->readNextNPC();
             newVal = thread->readIntReg(SparcISA::NumIntArchRegs + 2);
-            //newVal = thread->readMiscReg(SparcISA::MISCREG_CCR);
+            //newVal = thread->readMiscRegNoEffect(SparcISA::MISCREG_CCR);
             if(newVal != ccr)
             {
                 outs << " CCR = " << newVal;
                 ccr = newVal;
             }
             newVal = thread->readIntReg(SparcISA::NumIntArchRegs + 1);
-            //newVal = thread->readMiscReg(SparcISA::MISCREG_Y);
+            //newVal = thread->readMiscRegNoEffect(SparcISA::MISCREG_Y);
             if(newVal != y)
             {
                 outs << " Y = " << newVal;
@@ -187,34 +301,26 @@ Trace::InstRecord::dump(ostream &outs)
         }
 #endif
     }
-    else if (flags[INTEL_FORMAT]) {
-#if FULL_SYSTEM
-        bool is_trace_system = (thread->getCpuPtr()->system->name() == trace_system);
-#else
-        bool is_trace_system = true;
-#endif
-        if (is_trace_system) {
-            ccprintf(outs, "%7d ) ", cycle);
-            outs << "0x" << hex << PC << ":\t";
-            if (staticInst->isLoad()) {
-                outs << "<RD 0x" << hex << addr;
-                outs << ">";
-            } else if (staticInst->isStore()) {
-                outs << "<WR 0x" << hex << addr;
-                outs << ">";
-            }
-            outs << endl;
+    if(!diff) {
+    } else if (IsOn(ExecIntel)) {
+        ccprintf(outs, "%7d ) ", when);
+        outs << "0x" << hex << PC << ":\t";
+        if (staticInst->isLoad()) {
+            ccprintf(outs, "<RD %#x>", addr);
+        } else if (staticInst->isStore()) {
+            ccprintf(outs, "<WR %#x>", addr);
         }
+        outs << endl;
     } else {
-        if (flags[PRINT_CYCLE])
-            ccprintf(outs, "%7d: ", cycle);
+        if (IsOn(ExecTicks))
+            ccprintf(outs, "%7d: ", when);
 
         outs << thread->getCpuPtr()->name() << " ";
 
-        if (flags[TRACE_MISSPEC])
+        if (IsOn(ExecSpeculative))
             outs << (misspeculating ? "-" : "+") << " ";
 
-        if (flags[PRINT_THREAD_NUM])
+        if (IsOn(ExecThread))
             outs << "T" << thread->getThreadNum() << " : ";
 
 
@@ -222,7 +328,7 @@ Trace::InstRecord::dump(ostream &outs)
         Addr sym_addr;
         if (debugSymbolTable
             && debugSymbolTable->findNearestSymbol(PC, sym_str, sym_addr)
-            && flags[PC_SYMBOL]) {
+            && IsOn(ExecSymbol)) {
             if (PC != sym_addr)
                 sym_str += csprintf("+%d", PC - sym_addr);
             outs << "@" << sym_str << " : ";
@@ -248,11 +354,11 @@ Trace::InstRecord::dump(ostream &outs)
 
         outs << " : ";
 
-        if (flags[PRINT_OP_CLASS]) {
+        if (IsOn(ExecOpClass)) {
             outs << opClassStrings[staticInst->opClass()] << " : ";
         }
 
-        if (flags[PRINT_RESULT_DATA] && data_status != DataInvalid) {
+        if (IsOn(ExecResult) && data_status != DataInvalid) {
             outs << " D=";
 #if 0
             if (data_status == DataDouble)
@@ -264,10 +370,10 @@ Trace::InstRecord::dump(ostream &outs)
 #endif
         }
 
-        if (flags[PRINT_EFF_ADDR] && addr_valid)
+        if (IsOn(ExecEffAddr) && addr_valid)
             outs << " A=0x" << hex << addr;
 
-        if (flags[PRINT_INT_REGS] && regs_valid) {
+        if (IsOn(ExecIntRegs) && regs_valid) {
             for (int i = 0; i < TheISA::NumIntRegs;)
                 for (int j = i + 1; i <= j; i++)
                     ccprintf(outs, "r%02d = %#018x%s", i,
@@ -276,10 +382,10 @@ Trace::InstRecord::dump(ostream &outs)
             outs << "\n";
         }
 
-        if (flags[PRINT_FETCH_SEQ] && fetch_seq_valid)
+        if (IsOn(ExecFetchSeq) && fetch_seq_valid)
             outs << "  FetchSeq=" << dec << fetch_seq;
 
-        if (flags[PRINT_CP_SEQ] && cp_seq_valid)
+        if (IsOn(ExecCPSeq) && cp_seq_valid)
             outs << "  CPSeq=" << dec << cp_seq;
 
         //
@@ -288,8 +394,9 @@ Trace::InstRecord::dump(ostream &outs)
         outs << endl;
     }
 #if THE_ISA == SPARC_ISA && FULL_SYSTEM
+    static TheISA::Predecoder predecoder(NULL);
     // Compare
-    if (flags[LEGION_LOCKSTEP])
+    if (IsOn(ExecLegion))
     {
         bool compared = false;
         bool diffPC   = false;
@@ -321,10 +428,13 @@ Trace::InstRecord::dump(ostream &outs)
         bool diffTlb = false;
         Addr m5Pc, lgnPc;
 
+        if (!shared_data)
+            setupSharedData();
+
         // We took a trap on a micro-op...
         if (wasMicro && !staticInst->isMicroOp())
         {
-            // let's skip comparing this cycle
+            // let's skip comparing this tick
             while (!compared)
                 if (shared_data->flags == OWN_M5) {
                     shared_data->flags = OWN_LEGION;
@@ -370,30 +480,30 @@ Trace::InstRecord::dump(ostream &outs)
                             diffFpRegs = true;
                         }
                     }
-                            uint64_t oldTl = thread->readMiscReg(MISCREG_TL);
+                            uint64_t oldTl = thread->readMiscRegNoEffect(MISCREG_TL);
                     if (oldTl != shared_data->tl)
                         diffTl = true;
                     for (int i = 1; i <= MaxTL; i++) {
-                        thread->setMiscReg(MISCREG_TL, i);
-                        if (thread->readMiscReg(MISCREG_TPC) !=
+                        thread->setMiscRegNoEffect(MISCREG_TL, i);
+                        if (thread->readMiscRegNoEffect(MISCREG_TPC) !=
                                 shared_data->tpc[i-1])
                             diffTpc = true;
-                        if (thread->readMiscReg(MISCREG_TNPC) !=
+                        if (thread->readMiscRegNoEffect(MISCREG_TNPC) !=
                                 shared_data->tnpc[i-1])
                             diffTnpc = true;
-                        if (thread->readMiscReg(MISCREG_TSTATE) !=
+                        if (thread->readMiscRegNoEffect(MISCREG_TSTATE) !=
                                 shared_data->tstate[i-1])
                             diffTstate = true;
-                        if (thread->readMiscReg(MISCREG_TT) !=
+                        if (thread->readMiscRegNoEffect(MISCREG_TT) !=
                                 shared_data->tt[i-1])
                             diffTt = true;
-                        if (thread->readMiscReg(MISCREG_HTSTATE) !=
+                        if (thread->readMiscRegNoEffect(MISCREG_HTSTATE) !=
                                 shared_data->htstate[i-1])
                             diffHtstate = true;
                     }
-                    thread->setMiscReg(MISCREG_TL, oldTl);
+                    thread->setMiscRegNoEffect(MISCREG_TL, oldTl);
 
-                    if(shared_data->tba != thread->readMiscReg(MISCREG_TBA))
+                    if(shared_data->tba != thread->readMiscRegNoEffect(MISCREG_TBA))
                         diffTba = true;
                     //When the hpstate register is read by an instruction,
                     //legion has bit 11 set. When it's in storage, it doesn't.
@@ -401,50 +511,50 @@ Trace::InstRecord::dump(ostream &outs)
                     //of the registers like that, the bit is always set to 1 and
                     //we just don't compare it. It's not supposed to matter
                     //anyway.
-                    if((shared_data->hpstate | (1 << 11)) != thread->readMiscReg(MISCREG_HPSTATE))
+                    if((shared_data->hpstate | (1 << 11)) != thread->readMiscRegNoEffect(MISCREG_HPSTATE))
                         diffHpstate = true;
-                    if(shared_data->htba != thread->readMiscReg(MISCREG_HTBA))
+                    if(shared_data->htba != thread->readMiscRegNoEffect(MISCREG_HTBA))
                         diffHtba = true;
-                    if(shared_data->pstate != thread->readMiscReg(MISCREG_PSTATE))
+                    if(shared_data->pstate != thread->readMiscRegNoEffect(MISCREG_PSTATE))
                         diffPstate = true;
-                    //if(shared_data->y != thread->readMiscReg(MISCREG_Y))
+                    //if(shared_data->y != thread->readMiscRegNoEffect(MISCREG_Y))
                     if(shared_data->y !=
                             thread->readIntReg(NumIntArchRegs + 1))
                         diffY = true;
-                    if(shared_data->fsr != thread->readMiscReg(MISCREG_FSR)) {
+                    if(shared_data->fsr != thread->readMiscRegNoEffect(MISCREG_FSR)) {
                         diffFsr = true;
                         if (mbits(shared_data->fsr, 63,10) ==
-                                mbits(thread->readMiscReg(MISCREG_FSR), 63,10)) {
-                            thread->setMiscReg(MISCREG_FSR, shared_data->fsr);
+                                mbits(thread->readMiscRegNoEffect(MISCREG_FSR), 63,10)) {
+                            thread->setMiscRegNoEffect(MISCREG_FSR, shared_data->fsr);
                             diffFsr = false;
                         }
                     }
-                    //if(shared_data->ccr != thread->readMiscReg(MISCREG_CCR))
+                    //if(shared_data->ccr != thread->readMiscRegNoEffect(MISCREG_CCR))
                     if(shared_data->ccr !=
                             thread->readIntReg(NumIntArchRegs + 2))
                         diffCcr = true;
-                    if(shared_data->gl != thread->readMiscReg(MISCREG_GL))
+                    if(shared_data->gl != thread->readMiscRegNoEffect(MISCREG_GL))
                         diffGl = true;
-                    if(shared_data->asi != thread->readMiscReg(MISCREG_ASI))
+                    if(shared_data->asi != thread->readMiscRegNoEffect(MISCREG_ASI))
                         diffAsi = true;
-                    if(shared_data->pil != thread->readMiscReg(MISCREG_PIL))
+                    if(shared_data->pil != thread->readMiscRegNoEffect(MISCREG_PIL))
                         diffPil = true;
-                    if(shared_data->cwp != thread->readMiscReg(MISCREG_CWP))
+                    if(shared_data->cwp != thread->readMiscRegNoEffect(MISCREG_CWP))
                         diffCwp = true;
-                    //if(shared_data->cansave != thread->readMiscReg(MISCREG_CANSAVE))
+                    //if(shared_data->cansave != thread->readMiscRegNoEffect(MISCREG_CANSAVE))
                     if(shared_data->cansave !=
                             thread->readIntReg(NumIntArchRegs + 3))
                         diffCansave = true;
                     //if(shared_data->canrestore !=
-                    //	    thread->readMiscReg(MISCREG_CANRESTORE))
+                    //	    thread->readMiscRegNoEffect(MISCREG_CANRESTORE))
                     if(shared_data->canrestore !=
                             thread->readIntReg(NumIntArchRegs + 4))
                         diffCanrestore = true;
-                    //if(shared_data->otherwin != thread->readMiscReg(MISCREG_OTHERWIN))
+                    //if(shared_data->otherwin != thread->readMiscRegNoEffect(MISCREG_OTHERWIN))
                     if(shared_data->otherwin !=
                             thread->readIntReg(NumIntArchRegs + 6))
                         diffOtherwin = true;
-                    //if(shared_data->cleanwin != thread->readMiscReg(MISCREG_CLEANWIN))
+                    //if(shared_data->cleanwin != thread->readMiscRegNoEffect(MISCREG_CLEANWIN))
                     if(shared_data->cleanwin !=
                             thread->readIntReg(NumIntArchRegs + 5))
                         diffCleanwin = true;
@@ -539,9 +649,13 @@ Trace::InstRecord::dump(ostream &outs)
                              << staticInst->disassemble(m5Pc, debugSymbolTable)
                              << endl;
 
+                        predecoder.setTC(thread);
+                        predecoder.moreBytes(m5Pc, 0, shared_data->instruction);
+
+                        assert(predecoder.extMachInstRead());
+
                         StaticInstPtr legionInst =
-                            StaticInst::decode(makeExtMI(shared_data->instruction,
-                                        thread));
+                            StaticInst::decode(predecoder.getExtMachInst());
                         outs << setfill(' ') << setw(15)
                              << " Legion Inst: "
                              << "0x" << setw(8) << setfill('0') << hex
@@ -552,78 +666,78 @@ Trace::InstRecord::dump(ostream &outs)
                         printSectionHeader(outs, "General State");
                         printColumnLabels(outs);
                         printRegPair(outs, "HPstate",
-                                thread->readMiscReg(MISCREG_HPSTATE),
+                                thread->readMiscRegNoEffect(MISCREG_HPSTATE),
                                 shared_data->hpstate | (1 << 11));
                         printRegPair(outs, "Htba",
-                                thread->readMiscReg(MISCREG_HTBA),
+                                thread->readMiscRegNoEffect(MISCREG_HTBA),
                                 shared_data->htba);
                         printRegPair(outs, "Pstate",
-                                thread->readMiscReg(MISCREG_PSTATE),
+                                thread->readMiscRegNoEffect(MISCREG_PSTATE),
                                 shared_data->pstate);
                         printRegPair(outs, "Y",
-                                //thread->readMiscReg(MISCREG_Y),
+                                //thread->readMiscRegNoEffect(MISCREG_Y),
                                 thread->readIntReg(NumIntArchRegs + 1),
                                 shared_data->y);
                         printRegPair(outs, "FSR",
-                                thread->readMiscReg(MISCREG_FSR),
+                                thread->readMiscRegNoEffect(MISCREG_FSR),
                                 shared_data->fsr);
                         printRegPair(outs, "Ccr",
-                                //thread->readMiscReg(MISCREG_CCR),
+                                //thread->readMiscRegNoEffect(MISCREG_CCR),
                                 thread->readIntReg(NumIntArchRegs + 2),
                                 shared_data->ccr);
                         printRegPair(outs, "Tl",
-                                thread->readMiscReg(MISCREG_TL),
+                                thread->readMiscRegNoEffect(MISCREG_TL),
                                 shared_data->tl);
                         printRegPair(outs, "Gl",
-                                thread->readMiscReg(MISCREG_GL),
+                                thread->readMiscRegNoEffect(MISCREG_GL),
                                 shared_data->gl);
                         printRegPair(outs, "Asi",
-                                thread->readMiscReg(MISCREG_ASI),
+                                thread->readMiscRegNoEffect(MISCREG_ASI),
                                 shared_data->asi);
                         printRegPair(outs, "Pil",
-                                thread->readMiscReg(MISCREG_PIL),
+                                thread->readMiscRegNoEffect(MISCREG_PIL),
                                 shared_data->pil);
                         printRegPair(outs, "Cwp",
-                                thread->readMiscReg(MISCREG_CWP),
+                                thread->readMiscRegNoEffect(MISCREG_CWP),
                                 shared_data->cwp);
                         printRegPair(outs, "Cansave",
-                                //thread->readMiscReg(MISCREG_CANSAVE),
+                                //thread->readMiscRegNoEffect(MISCREG_CANSAVE),
                                 thread->readIntReg(NumIntArchRegs + 3),
                                 shared_data->cansave);
                         printRegPair(outs, "Canrestore",
-                                //thread->readMiscReg(MISCREG_CANRESTORE),
+                                //thread->readMiscRegNoEffect(MISCREG_CANRESTORE),
                                 thread->readIntReg(NumIntArchRegs + 4),
                                 shared_data->canrestore);
                         printRegPair(outs, "Otherwin",
-                                //thread->readMiscReg(MISCREG_OTHERWIN),
+                                //thread->readMiscRegNoEffect(MISCREG_OTHERWIN),
                                 thread->readIntReg(NumIntArchRegs + 6),
                                 shared_data->otherwin);
                         printRegPair(outs, "Cleanwin",
-                                //thread->readMiscReg(MISCREG_CLEANWIN),
+                                //thread->readMiscRegNoEffect(MISCREG_CLEANWIN),
                                 thread->readIntReg(NumIntArchRegs + 5),
                                 shared_data->cleanwin);
                         outs << endl;
                         for (int i = 1; i <= MaxTL; i++) {
                             printLevelHeader(outs, i);
                             printColumnLabels(outs);
-                            thread->setMiscReg(MISCREG_TL, i);
+                            thread->setMiscRegNoEffect(MISCREG_TL, i);
                             printRegPair(outs, "Tpc",
-                                    thread->readMiscReg(MISCREG_TPC),
+                                    thread->readMiscRegNoEffect(MISCREG_TPC),
                                     shared_data->tpc[i-1]);
                             printRegPair(outs, "Tnpc",
-                                    thread->readMiscReg(MISCREG_TNPC),
+                                    thread->readMiscRegNoEffect(MISCREG_TNPC),
                                     shared_data->tnpc[i-1]);
                             printRegPair(outs, "Tstate",
-                                    thread->readMiscReg(MISCREG_TSTATE),
+                                    thread->readMiscRegNoEffect(MISCREG_TSTATE),
                                     shared_data->tstate[i-1]);
                             printRegPair(outs, "Tt",
-                                    thread->readMiscReg(MISCREG_TT),
+                                    thread->readMiscRegNoEffect(MISCREG_TT),
                                     shared_data->tt[i-1]);
                             printRegPair(outs, "Htstate",
-                                    thread->readMiscReg(MISCREG_HTSTATE),
+                                    thread->readMiscRegNoEffect(MISCREG_HTSTATE),
                                     shared_data->htstate[i-1]);
                         }
-                        thread->setMiscReg(MISCREG_TL, oldTl);
+                        thread->setMiscRegNoEffect(MISCREG_TL, oldTl);
                         outs << endl;
 
                         printSectionHeader(outs, "General Purpose Registers");
@@ -684,110 +798,4 @@ Trace::InstRecord::dump(ostream &outs)
 #endif
 }
 
-
-vector<bool> Trace::InstRecord::flags(NUM_BITS);
-string Trace::InstRecord::trace_system;
-
-////////////////////////////////////////////////////////////////////////
-//
-// Parameter space for per-cycle execution address tracing options.
-// Derive from ParamContext so we can override checkParams() function.
-//
-class ExecutionTraceParamContext : public ParamContext
-{
-  public:
-    ExecutionTraceParamContext(const string &_iniSection)
-        : ParamContext(_iniSection)
-        {
-        }
-
-    void checkParams();	// defined at bottom of file
-};
-
-ExecutionTraceParamContext exeTraceParams("exetrace");
-
-Param<bool> exe_trace_spec(&exeTraceParams, "speculative",
-                           "capture speculative instructions", true);
-
-Param<bool> exe_trace_print_cycle(&exeTraceParams, "print_cycle",
-                                  "print cycle number", true);
-Param<bool> exe_trace_print_opclass(&exeTraceParams, "print_opclass",
-                                  "print op class", true);
-Param<bool> exe_trace_print_thread(&exeTraceParams, "print_thread",
-                                  "print thread number", true);
-Param<bool> exe_trace_print_effaddr(&exeTraceParams, "print_effaddr",
-                                  "print effective address", true);
-Param<bool> exe_trace_print_data(&exeTraceParams, "print_data",
-                                  "print result data", true);
-Param<bool> exe_trace_print_iregs(&exeTraceParams, "print_iregs",
-                                  "print all integer regs", false);
-Param<bool> exe_trace_print_fetchseq(&exeTraceParams, "print_fetchseq",
-                                  "print fetch sequence number", false);
-Param<bool> exe_trace_print_cp_seq(&exeTraceParams, "print_cpseq",
-                                  "print correct-path sequence number", false);
-Param<bool> exe_trace_print_reg_delta(&exeTraceParams, "print_reg_delta",
-                                  "print which registers changed to what", false);
-Param<bool> exe_trace_pc_symbol(&exeTraceParams, "pc_symbol",
-                                  "Use symbols for the PC if available", true);
-Param<bool> exe_trace_intel_format(&exeTraceParams, "intel_format",
-                                   "print trace in intel compatible format", false);
-Param<bool> exe_trace_legion_lockstep(&exeTraceParams, "legion_lockstep",
-                                   "Compare sim state to legion state every cycle",
-                                   false);
-Param<string> exe_trace_system(&exeTraceParams, "trace_system",
-                                   "print trace of which system (client or server)",
-                                   "client");
-
-
-//
-// Helper function for ExecutionTraceParamContext::checkParams() just
-// to get us into the InstRecord namespace
-//
-void
-Trace::InstRecord::setParams()
-{
-    flags[TRACE_MISSPEC]     = exe_trace_spec;
-
-    flags[PRINT_CYCLE]       = exe_trace_print_cycle;
-    flags[PRINT_OP_CLASS]    = exe_trace_print_opclass;
-    flags[PRINT_THREAD_NUM]  = exe_trace_print_thread;
-    flags[PRINT_RESULT_DATA] = exe_trace_print_effaddr;
-    flags[PRINT_EFF_ADDR]    = exe_trace_print_data;
-    flags[PRINT_INT_REGS]    = exe_trace_print_iregs;
-    flags[PRINT_FETCH_SEQ]   = exe_trace_print_fetchseq;
-    flags[PRINT_CP_SEQ]      = exe_trace_print_cp_seq;
-    flags[PRINT_REG_DELTA]   = exe_trace_print_reg_delta;
-    flags[PC_SYMBOL]         = exe_trace_pc_symbol;
-    flags[INTEL_FORMAT]      = exe_trace_intel_format;
-    flags[LEGION_LOCKSTEP]   = exe_trace_legion_lockstep;
-    trace_system	     = exe_trace_system;
-
-    // If were going to be in lockstep with Legion
-    // Setup shared memory, and get otherwise ready
-    if (flags[LEGION_LOCKSTEP]) {
-        int shmfd = shmget('M' << 24 | getuid(), sizeof(SharedData), 0777);
-        if (shmfd < 0)
-            fatal("Couldn't get shared memory fd. Is Legion running?");
-
-        shared_data = (SharedData*)shmat(shmfd, NULL, SHM_RND);
-        if (shared_data == (SharedData*)-1)
-            fatal("Couldn't allocate shared memory");
-
-        if (shared_data->flags != OWN_M5)
-            fatal("Shared memory has invalid owner");
-
-        if (shared_data->version != VERSION)
-            fatal("Shared Data is wrong version! M5: %d Legion: %d", VERSION,
-                    shared_data->version);
-
-        // step legion forward one cycle so we can get register values
-        shared_data->flags = OWN_LEGION;
-    }
-}
-
-void
-ExecutionTraceParamContext::checkParams()
-{
-    Trace::InstRecord::setParams();
-}
-
+/* namespace Trace */ }

@@ -30,6 +30,7 @@
 
 #include "arch/locked_mem.hh"
 #include "arch/utility.hh"
+#include "base/bigint.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/simple/timing.hh"
 #include "mem/packet.hh"
@@ -193,7 +194,7 @@ TimingSimpleCPU::switchOut()
 void
 TimingSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
 {
-    BaseCPU::takeOverFrom(oldCPU);
+    BaseCPU::takeOverFrom(oldCPU, &icachePort, &dcachePort);
 
     // if any of this CPU's ThreadContexts are active, mark the CPU as
     // running and schedule its tick event.
@@ -208,23 +209,6 @@ TimingSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
     if (_status != Running) {
         _status = Idle;
     }
-
-    Port *peer;
-    if (icachePort.getPeer() == NULL) {
-        peer = oldCPU->getPort("icache_port")->getPeer();
-        icachePort.setPeer(peer);
-    } else {
-        peer = icachePort.getPeer();
-    }
-    peer->setPeer(&icachePort);
-
-    if (dcachePort.getPeer() == NULL) {
-        peer = oldCPU->getPort("dcache_port")->getPeer();
-        dcachePort.setPeer(peer);
-    } else {
-        peer = dcachePort.getPeer();
-    }
-    peer->setPeer(&dcachePort);
 }
 
 
@@ -238,12 +222,6 @@ TimingSimpleCPU::activateContext(int thread_num, int delay)
 
     notIdleFraction++;
     _status = Running;
-
-#if FULL_SYSTEM
-    // Connect the ThreadContext's memory ports (Functional/Virtual
-    // Ports)
-    tc->connectMemPorts();
-#endif
 
     // kick things off by initiating the fetch of the next instruction
     fetchEvent =
@@ -286,7 +264,7 @@ TimingSimpleCPU::read(Addr addr, T &data, unsigned flags)
     // Now do the access.
     if (fault == NoFault) {
         PacketPtr pkt =
-            new Packet(req, Packet::ReadReq, Packet::Broadcast);
+            new Packet(req, MemCmd::ReadReq, Packet::Broadcast);
         pkt->dataDynamic<T>(new T);
 
         if (!dcachePort.sendTiming(pkt)) {
@@ -297,18 +275,26 @@ TimingSimpleCPU::read(Addr addr, T &data, unsigned flags)
             // memory system takes ownership of packet
             dcache_pkt = NULL;
         }
+
+        // This will need a new way to tell if it has a dcache attached.
+        if (req->isUncacheable())
+            recordEvent("Uncached Read");
     } else {
         delete req;
     }
-
-    // This will need a new way to tell if it has a dcache attached.
-    if (req->isUncacheable())
-        recordEvent("Uncached Read");
 
     return fault;
 }
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
+
+template
+Fault
+TimingSimpleCPU::read(Addr addr, Twin64_t &data, unsigned flags);
+
+template
+Fault
+TimingSimpleCPU::read(Addr addr, Twin32_t &data, unsigned flags);
 
 template
 Fault
@@ -359,13 +345,20 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
         new Request(/* asid */ 0, addr, sizeof(T), flags, thread->readPC(),
                     cpu_id, /* thread ID */ 0);
 
+    if (traceData) {
+        traceData->setAddr(req->getVaddr());
+    }
+
     // translate to physical address
     Fault fault = thread->translateDataWriteReq(req);
 
     // Now do the access.
     if (fault == NoFault) {
         assert(dcache_pkt == NULL);
-        dcache_pkt = new Packet(req, Packet::WriteReq, Packet::Broadcast);
+        if (req->isSwap())
+            dcache_pkt = new Packet(req, MemCmd::SwapReq, Packet::Broadcast);
+        else
+            dcache_pkt = new Packet(req, MemCmd::WriteReq, Packet::Broadcast);
         dcache_pkt->allocate();
         dcache_pkt->set(data);
 
@@ -373,6 +366,10 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 
         if (req->isLocked()) {
             do_access = TheISA::handleLockedWrite(thread, req);
+        }
+        if (req->isCondSwap()) {
+             assert(res);
+             req->setExtraData(*res);
         }
 
         if (do_access) {
@@ -384,13 +381,13 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
                 dcache_pkt = NULL;
             }
         }
+        // This will need a new way to tell if it's hooked up to a cache or not.
+        if (req->isUncacheable())
+            recordEvent("Uncached Write");
     } else {
         delete req;
     }
 
-    // This will need a new way to tell if it's hooked up to a cache or not.
-    if (req->isUncacheable())
-        recordEvent("Uncached Write");
 
     // If the write needs to have a fault on the access, consider calling
     // changeStatus() and changing it to "bad addr write" or something.
@@ -399,6 +396,16 @@ TimingSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
 
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
+template
+Fault
+TimingSimpleCPU::write(Twin32_t data, Addr addr,
+                       unsigned flags, uint64_t *res);
+
+template
+Fault
+TimingSimpleCPU::write(Twin64_t data, Addr addr,
+                       unsigned flags, uint64_t *res);
+
 template
 Fault
 TimingSimpleCPU::write(uint64_t data, Addr addr,
@@ -454,7 +461,7 @@ TimingSimpleCPU::fetch()
     ifetch_req->setThreadContext(cpu_id, /* thread ID */ 0);
     Fault fault = setupFetchRequest(ifetch_req);
 
-    ifetch_pkt = new Packet(ifetch_req, Packet::ReadReq, Packet::Broadcast);
+    ifetch_pkt = new Packet(ifetch_req, MemCmd::ReadReq, Packet::Broadcast);
     ifetch_pkt->dataStatic(&inst);
 
     if (fault == NoFault) {
@@ -627,6 +634,18 @@ TimingSimpleCPU::completeDrain()
     DPRINTF(Config, "Done draining\n");
     changeState(SimObject::Drained);
     drainEvent->process();
+}
+
+void
+TimingSimpleCPU::DcachePort::setPeer(Port *port)
+{
+    Port::setPeer(port);
+
+#if FULL_SYSTEM
+    // Update the ThreadContext's memory ports (Functional/Virtual
+    // Ports)
+    cpu->tcBase()->connectMemPorts();
+#endif
 }
 
 bool
