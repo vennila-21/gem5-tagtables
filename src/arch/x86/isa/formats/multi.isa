@@ -57,32 +57,50 @@
 
 ////////////////////////////////////////////////////////////////////
 //
-// X86 ISA description file.
-//
-////////////////////////////////////////////////////////////////////
-
-//Include the C++ include directives
-##include "includes.isa"
-
-////////////////////////////////////////////////////////////////////
-//
-// Namespace statement.  Everything below this line will be in the
-// SparcISAInst namespace.
+// Instructions that do the same thing to multiple sets of arguments.
 //
 
-namespace X86ISA;
+output header {{
+}};
 
-//Include the bitfield definitions
-##include "bitfields.isa"
+output decoder {{
+}};
 
-//Include the operand_types and operand definitions
-##include "operands.isa"
+output exec {{
+}};
 
-//Include the base class for x86 instructions, and some support code
-##include "base.isa"
+let {{
+    multiops = {}
+}};
 
-//Include the definitions for the instruction formats
-##include "formats/formats.isa"
+def format MultiOp(code, switchVal, opTags, *opt_flags) {{
+    # Loads and stores that bring in and write out values from the
+    # instructions. These are determined by the input and output tags,
+    # and the resulting instruction will have the right number of micro ops,
+    # or could be implemented as an atomic macro op.
+    instNames = []
+    for tagSet in opTags:
+        loads = []
+        stores = []
+        postfix = ''
+        for tag in tagSet:
+            postfix += '_' + tag
+        gather_inputs = ''
+        if len(loads) + len(stores) == 0:
+            # If there are no loads or stores, make this a single instruction.
+            iop = InstObjParams(name, Name + postfix, 'X86StaticInst',
+                    {"code": code, "gather_inputs": gather_inputs},
+                    opt_flags)
+        else:
+            # Build up a macro op. We'll punt on this for now
+            pass
 
-//Include the decoder definition
-##include "decoder/decoder.isa"
+    decodeBlob = 'switch(%s) {\n' % switchVal
+    counter = 0
+    for inst in instNames:
+        decodeBlob += '%d: return (X86StaticInst *)(new %s(machInst));\n' % \
+                      (counter, inst)
+        counter += 1
+    decodeBlob += '}\n'
+    # decode_block = BasicDecodeWithMnemonic.subst(iop)
+}};
