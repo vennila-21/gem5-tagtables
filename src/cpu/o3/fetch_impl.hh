@@ -103,6 +103,7 @@ DefaultFetch<Impl>::IcachePort::recvRetry()
 template<class Impl>
 DefaultFetch<Impl>::DefaultFetch(Params *params)
     : branchPred(params),
+      predecoder(NULL),
       decodeToFetchDelay(params->decodeToFetchDelay),
       renameToFetchDelay(params->renameToFetchDelay),
       iewToFetchDelay(params->iewToFetchDelay),
@@ -619,6 +620,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr fetch_PC, Fault &ret_fault, unsigned tid
                 fault = TheISA::genMachineCheckFault();
                 delete mem_req;
                 memReq[tid] = NULL;
+                warn("Bad address!\n");
             }
             assert(retryPkt == NULL);
             assert(retryTid == -1);
@@ -669,11 +671,12 @@ DefaultFetch<Impl>::doSquash(const Addr &new_PC,
     // Get rid of the retrying packet if it was from this thread.
     if (retryTid == tid) {
         assert(cacheBlocked);
-        cacheBlocked = false;
-        retryTid = -1;
-        delete retryPkt->req;
-        delete retryPkt;
+        if (retryPkt) {
+            delete retryPkt->req;
+            delete retryPkt;
+        }
         retryPkt = NULL;
+        retryTid = -1;
     }
 
     fetchStatus[tid] = Squashing;
@@ -1117,13 +1120,10 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             inst = TheISA::gtoh(*reinterpret_cast<TheISA::MachInst *>
                         (&cacheData[tid][offset]));
 
-#if THE_ISA == ALPHA_ISA
-            ext_inst = TheISA::makeExtMI(inst, fetch_PC);
-#elif THE_ISA == SPARC_ISA
-            ext_inst = TheISA::makeExtMI(inst, cpu->thread[tid]->getTC());
-#elif THE_ISA == MIPS_ISA
-            ext_inst = TheISA::makeExtMI(inst, cpu->thread[tid]->getTC());
-#endif
+            predecoder.setTC(cpu->thread[tid]->getTC());
+            predecoder.moreBytes(fetch_PC, 0, inst);
+
+            ext_inst = predecoder.getExtMachInst();
 
             // Create a new DynInst from the instruction fetched.
             DynInstPtr instruction = new DynInst(ext_inst,
@@ -1152,7 +1152,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
             ///FIXME This needs to be more robust in dealing with delay slots
 #if !ISA_HAS_DELAY_SLOT
-            predicted_branch |=
+//	    predicted_branch |=
 #endif
             lookupAndUpdateNextPC(instruction, next_PC, next_NPC);
             predicted_branch |= (next_PC != fetch_NPC);
@@ -1223,7 +1223,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         // until commit handles the fault.  The only other way it can
         // wake up is if a squash comes along and changes the PC.
 #if FULL_SYSTEM
-        assert(numInst != fetchWidth);
+        assert(numInst < fetchWidth);
         // Get a sequence number.
         inst_seq = cpu->getAndIncrementInstSeq();
         // We will use a nop in order to carry the fault.
