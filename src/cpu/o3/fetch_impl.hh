@@ -51,6 +51,15 @@
 #include <algorithm>
 
 template<class Impl>
+void
+DefaultFetch<Impl>::IcachePort::setPeer(Port *port)
+{
+    Port::setPeer(port);
+
+    fetch->setIcache();
+}
+
+template<class Impl>
 Tick
 DefaultFetch<Impl>::IcachePort::recvAtomic(PacketPtr pkt)
 {
@@ -103,6 +112,7 @@ DefaultFetch<Impl>::IcachePort::recvRetry()
 template<class Impl>
 DefaultFetch<Impl>::DefaultFetch(Params *params)
     : branchPred(params),
+      predecoder(NULL),
       decodeToFetchDelay(params->decodeToFetchDelay),
       renameToFetchDelay(params->renameToFetchDelay),
       iewToFetchDelay(params->iewToFetchDelay),
@@ -256,8 +266,8 @@ template<class Impl>
 void
 DefaultFetch<Impl>::setCPU(O3CPU *cpu_ptr)
 {
-    DPRINTF(Fetch, "Setting the CPU pointer.\n");
     cpu = cpu_ptr;
+    DPRINTF(Fetch, "Setting the CPU pointer.\n");
 
     // Name is finally available, so create the port.
     icachePort = new IcachePort(this);
@@ -282,7 +292,6 @@ template<class Impl>
 void
 DefaultFetch<Impl>::setTimeBuffer(TimeBuffer<TimeStruct> *time_buffer)
 {
-    DPRINTF(Fetch, "Setting the time buffer pointer.\n");
     timeBuffer = time_buffer;
 
     // Create wires to get information from proper places in time buffer.
@@ -296,7 +305,6 @@ template<class Impl>
 void
 DefaultFetch<Impl>::setActiveThreads(std::list<unsigned> *at_ptr)
 {
-    DPRINTF(Fetch, "Setting active threads list pointer.\n");
     activeThreads = at_ptr;
 }
 
@@ -304,7 +312,6 @@ template<class Impl>
 void
 DefaultFetch<Impl>::setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr)
 {
-    DPRINTF(Fetch, "Setting the fetch queue pointer.\n");
     fetchQueue = fq_ptr;
 
     // Create wire to write information to proper place in fetch queue.
@@ -322,12 +329,6 @@ DefaultFetch<Impl>::initStage()
         nextNPC[tid] = cpu->readNextNPC(tid);
     }
 
-    // Size of cache block.
-    cacheBlkSize = icachePort->peerBlockSize();
-
-    // Create mask to get rid of offset bits.
-    cacheBlkMask = (cacheBlkSize - 1);
-
     for (int tid=0; tid < numThreads; tid++) {
 
         fetchStatus[tid] = Running;
@@ -336,15 +337,28 @@ DefaultFetch<Impl>::initStage()
 
         memReq[tid] = NULL;
 
-        // Create space to store a cache line.
-        cacheData[tid] = new uint8_t[cacheBlkSize];
-        cacheDataPC[tid] = 0;
-        cacheDataValid[tid] = false;
-
         stalls[tid].decode = false;
         stalls[tid].rename = false;
         stalls[tid].iew = false;
         stalls[tid].commit = false;
+    }
+}
+
+template<class Impl>
+void
+DefaultFetch<Impl>::setIcache()
+{
+    // Size of cache block.
+    cacheBlkSize = icachePort->peerBlockSize();
+
+    // Create mask to get rid of offset bits.
+    cacheBlkMask = (cacheBlkSize - 1);
+
+    for (int tid=0; tid < numThreads; tid++) {
+        // Create space to store a cache line.
+        cacheData[tid] = new uint8_t[cacheBlkSize];
+        cacheDataPC[tid] = 0;
+        cacheDataValid[tid] = false;
     }
 }
 
@@ -619,6 +633,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr fetch_PC, Fault &ret_fault, unsigned tid
                 fault = TheISA::genMachineCheckFault();
                 delete mem_req;
                 memReq[tid] = NULL;
+                warn("Bad address!\n");
             }
             assert(retryPkt == NULL);
             assert(retryTid == -1);
@@ -669,11 +684,12 @@ DefaultFetch<Impl>::doSquash(const Addr &new_PC,
     // Get rid of the retrying packet if it was from this thread.
     if (retryTid == tid) {
         assert(cacheBlocked);
-        cacheBlocked = false;
-        retryTid = -1;
-        delete retryPkt->req;
-        delete retryPkt;
+        if (retryPkt) {
+            delete retryPkt->req;
+            delete retryPkt;
+        }
         retryPkt = NULL;
+        retryTid = -1;
     }
 
     fetchStatus[tid] = Squashing;
@@ -1117,13 +1133,10 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             inst = TheISA::gtoh(*reinterpret_cast<TheISA::MachInst *>
                         (&cacheData[tid][offset]));
 
-#if THE_ISA == ALPHA_ISA
-            ext_inst = TheISA::makeExtMI(inst, fetch_PC);
-#elif THE_ISA == SPARC_ISA
-            ext_inst = TheISA::makeExtMI(inst, cpu->thread[tid]->getTC());
-#elif THE_ISA == MIPS_ISA
-            ext_inst = TheISA::makeExtMI(inst, cpu->thread[tid]->getTC());
-#endif
+            predecoder.setTC(cpu->thread[tid]->getTC());
+            predecoder.moreBytes(fetch_PC, 0, inst);
+
+            ext_inst = predecoder.getExtMachInst();
 
             // Create a new DynInst from the instruction fetched.
             DynInstPtr instruction = new DynInst(ext_inst,
@@ -1152,7 +1165,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 
             ///FIXME This needs to be more robust in dealing with delay slots
 #if !ISA_HAS_DELAY_SLOT
-            predicted_branch |=
+//	    predicted_branch |=
 #endif
             lookupAndUpdateNextPC(instruction, next_PC, next_NPC);
             predicted_branch |= (next_PC != fetch_NPC);
@@ -1223,7 +1236,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         // until commit handles the fault.  The only other way it can
         // wake up is if a squash comes along and changes the PC.
 #if FULL_SYSTEM
-        assert(numInst != fetchWidth);
+        assert(numInst < fetchWidth);
         // Get a sequence number.
         inst_seq = cpu->getAndIncrementInstSeq();
         // We will use a nop in order to carry the fault.

@@ -81,12 +81,12 @@ tokens = reserved + (
     # code literal
     'CODELIT',
 
-    # ( ) [ ] { } < > , ; : :: *
+    # ( ) [ ] { } < > , ; . : :: *
     'LPAREN', 'RPAREN',
     'LBRACKET', 'RBRACKET',
     'LBRACE', 'RBRACE',
     'LESS', 'GREATER', 'EQUALS',
-    'COMMA', 'SEMI', 'COLON', 'DBLCOLON',
+    'COMMA', 'SEMI', 'DOT', 'COLON', 'DBLCOLON',
     'ASTERISK',
 
     # C preprocessor directives
@@ -113,6 +113,7 @@ t_GREATER          = r'\>'
 t_EQUALS           = r'='
 t_COMMA            = r','
 t_SEMI             = r';'
+t_DOT              = r'\.'
 t_COLON            = r':'
 t_DBLCOLON         = r'::'
 t_ASTERISK	   = r'\*'
@@ -261,6 +262,7 @@ def p_defs_and_outputs_1(t):
 def p_def_or_output(t):
     '''def_or_output : def_format
                      | def_bitfield
+                     | def_bitfield_struct
                      | def_template
                      | def_operand_types
                      | def_operands
@@ -309,12 +311,19 @@ def p_output_exec(t):
 def p_global_let(t):
     'global_let : LET CODELIT SEMI'
     updateExportContext()
+    exportContext["header_output"] = ''
+    exportContext["decoder_output"] = ''
+    exportContext["exec_output"] = ''
+    exportContext["decode_block"] = ''
     try:
         exec fixPythonIndentation(t[2]) in exportContext
     except Exception, exc:
         error(t.lineno(1),
               'error: %s in global let block "%s".' % (exc, t[2]))
-    t[0] = GenCode() # contributes nothing to the output C++ file
+    t[0] = GenCode(header_output = exportContext["header_output"],
+                   decoder_output = exportContext["decoder_output"],
+                   exec_output = exportContext["exec_output"],
+                   decode_block = exportContext["decode_block"])
 
 # Define the mapping from operand type extensions to C++ types and bit
 # widths (stored in operandTypeMap).
@@ -362,6 +371,23 @@ def p_def_bitfield_1(t):
         expr = 'sext<%d>(%s)' % (1, expr)
     hash_define = '#undef %s\n#define %s\t%s\n' % (t[4], t[4], expr)
     t[0] = GenCode(header_output = hash_define)
+
+# alternate form for structure member: 'def bitfield <ID> <ID>'
+def p_def_bitfield_struct(t):
+    'def_bitfield_struct : DEF opt_signed BITFIELD ID id_with_dot SEMI'
+    if (t[2] != ''):
+        error(t.lineno(1), 'error: structure bitfields are always unsigned.')
+    expr = 'machInst.%s' % t[5]
+    hash_define = '#undef %s\n#define %s\t%s\n' % (t[4], t[4], expr)
+    t[0] = GenCode(header_output = hash_define)
+
+def p_id_with_dot_0(t):
+    'id_with_dot : ID'
+    t[0] = t[1]
+
+def p_id_with_dot_1(t):
+    'id_with_dot : ID DOT id_with_dot'
+    t[0] = t[1] + t[2] + t[3]
 
 def p_opt_signed_0(t):
     'opt_signed : SIGNED'

@@ -59,13 +59,111 @@
 #define __ARCH_X86_TYPES_HH__
 
 #include <inttypes.h>
+#include <iostream>
+
+#include "base/bitfield.hh"
+#include "base/cprintf.hh"
 
 namespace X86ISA
 {
-    //XXX This won't work
-    typedef uint32_t MachInst;
-    //XXX This won't work either
-    typedef uint64_t ExtMachInst;
+    //This really determines how many bytes are passed to the predecoder.
+    typedef uint64_t MachInst;
+
+    enum Prefixes {
+        NoOverride = 0,
+        CSOverride = 1,
+        DSOverride = 2,
+        ESOverride = 3,
+        FSOverride = 4,
+        GSOverride = 5,
+        SSOverride = 6,
+        //The Rex prefix obviously doesn't fit in with the above, but putting
+        //it here lets us save double the space the enums take up.
+        RexPrefix = 7,
+        //There can be only one segment override, so they share the
+        //first 3 bits in the legacyPrefixes bitfield.
+        SegmentOverride = 0x7,
+        OperandSizeOverride = 8,
+        AddressSizeOverride = 16,
+        Lock = 32,
+        Rep = 64,
+        Repne = 128
+    };
+
+    BitUnion8(ModRM)
+        Bitfield<7,6> mod;
+        Bitfield<5,3> reg;
+        Bitfield<2,0> rm;
+    EndBitUnion(ModRM)
+
+    BitUnion8(Sib)
+        Bitfield<7,6> scale;
+        Bitfield<5,3> index;
+        Bitfield<2,0> base;
+    EndBitUnion(Sib)
+
+    BitUnion8(Rex)
+        Bitfield<3> w;
+        Bitfield<2> r;
+        Bitfield<1> x;
+        Bitfield<0> b;
+    EndBitUnion(Rex)
+
+    BitUnion8(Opcode)
+        Bitfield<7,3> top5;
+        Bitfield<2,0> bottom3;
+    EndBitUnion(Opcode)
+
+    //The intermediate structure the x86 predecoder returns.
+    struct ExtMachInst
+    {
+        //Prefixes
+        uint8_t legacy;
+        Rex rex;
+        //This holds all of the bytes of the opcode
+        struct
+        {
+            //The number of bytes in this opcode. Right now, we ignore that
+            //this can be 3 in some cases
+            uint8_t num;
+            //The first byte detected in a 2+ byte opcode. Should be 0xF0.
+            uint8_t prefixA;
+            //The second byte detected in a 3+ byte opcode. Could be 0xF0 for
+            //3dnow instructions, or 0x38-0x3F for some SSE instructions.
+            uint8_t prefixB;
+            //The main opcode byte. The highest addressed byte in the opcode.
+            Opcode op;
+        } opcode;
+        //Modifier bytes
+        ModRM modRM;
+        uint8_t sib;
+        //Immediate fields
+        uint64_t immediate;
+        uint64_t displacement;
+    };
+
+    inline static std::ostream &
+        operator << (std::ostream & os, const ExtMachInst & emi)
+    {
+        ccprintf(os, "\n{\n\tleg = %#x,\n\trex = %#x,\n\t"
+                     "op = {\n\t\tnum = %d,\n\t\top = %#x,\n\t\t"
+                           "prefixA = %#x,\n\t\tprefixB = %#x\n\t},\n\t"
+                     "modRM = %#x,\n\tsib = %#x,\n\t"
+                     "immediate = %#x,\n\tdisplacement = %#x\n}\n",
+                     emi.legacy, (uint8_t)emi.rex,
+                     emi.opcode.num, emi.opcode.op,
+                     emi.opcode.prefixA, emi.opcode.prefixB,
+                     (uint8_t)emi.modRM, (uint8_t)emi.sib,
+                     emi.immediate, emi.displacement);
+        return os;
+    }
+
+    inline static bool
+        operator == (const ExtMachInst &emi1, const ExtMachInst &emi2)
+    {
+        //Since this is empty, it's always equal
+        return true;
+    }
 
     typedef uint64_t IntReg;
     //XXX Should this be a 128 bit structure for XMM memory ops?

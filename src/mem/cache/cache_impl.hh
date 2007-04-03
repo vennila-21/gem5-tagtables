@@ -122,12 +122,15 @@ Cache<TagStore,Coherence>::handleAccess(PacketPtr &pkt, int & lat,
     if (blk != NULL) {
 
         if (!update) {
+
             if (pkt->isWrite()){
                 assert(offset < blkSize);
                 assert(pkt->getSize() <= blkSize);
                 assert(offset+pkt->getSize() <= blkSize);
                 std::memcpy(blk->data + offset, pkt->getPtr<uint8_t>(),
                        pkt->getSize());
+            } else if (pkt->isReadWrite()) {
+                cmpAndSwap(blk, pkt);
             } else if (!(pkt->flags & SATISFIED)) {
                 pkt->flags |= SATISFIED;
                 pkt->result = Packet::Success;
@@ -154,7 +157,8 @@ Cache<TagStore,Coherence>::handleAccess(PacketPtr &pkt, int & lat,
             }
         }
 
-        if ((pkt->isWrite() && blk->isWritable()) ||
+        if ((pkt->isReadWrite() && blk->isWritable()) ||
+            (pkt->isWrite() && blk->isWritable()) ||
             (pkt->isRead() && blk->isValid())) {
 
             // We are satisfying the request
@@ -180,13 +184,15 @@ Cache<TagStore,Coherence>::handleAccess(PacketPtr &pkt, int & lat,
                     std::memcpy(blk->data + offset, pkt->getPtr<uint8_t>(),
                            pkt->getSize());
                 }
+            } else if (pkt->isReadWrite()) {
+                cmpAndSwap(blk, pkt);
             } else {
                 assert(pkt->isRead());
                 if (pkt->req->isLocked()) {
                     blk->trackLoadLocked(pkt->req);
                 }
                 std::memcpy(pkt->getPtr<uint8_t>(), blk->data + offset,
-                       pkt->getSize());
+                            pkt->getSize());
             }
 
             if (write_data ||
@@ -212,6 +218,44 @@ Cache<TagStore,Coherence>::handleAccess(PacketPtr &pkt, int & lat,
     }
 
     return blk;
+}
+
+template<class TagStore, class Coherence>
+void
+Cache<TagStore,Coherence>::cmpAndSwap(BlkType *blk, PacketPtr &pkt){
+            uint64_t overwrite_val;
+            bool overwrite_mem;
+            uint64_t condition_val64;
+            uint32_t condition_val32;
+
+            int offset = tags->extractBlkOffset(pkt->getAddr());
+
+            assert(sizeof(uint64_t) >= pkt->getSize());
+
+            overwrite_mem = true;
+            // keep a copy of our possible write value, and copy what is at the
+            // memory address into the packet
+            std::memcpy(&overwrite_val, pkt->getPtr<uint8_t>(), pkt->getSize());
+            std::memcpy(pkt->getPtr<uint8_t>(), blk->data + offset,
+                        pkt->getSize());
+
+            if (pkt->req->isCondSwap()) {
+                if (pkt->getSize() == sizeof(uint64_t)) {
+                    condition_val64 = pkt->req->getExtraData();
+                    overwrite_mem = !std::memcmp(&condition_val64, blk->data + offset,
+                                                 sizeof(uint64_t));
+                } else if (pkt->getSize() == sizeof(uint32_t)) {
+                    condition_val32 = (uint32_t)pkt->req->getExtraData();
+                    overwrite_mem = !std::memcmp(&condition_val32, blk->data + offset,
+                                                 sizeof(uint32_t));
+                } else
+                    panic("Invalid size for conditional read/write\n");
+            }
+
+            if (overwrite_mem)
+                std::memcpy(blk->data + offset,
+                            &overwrite_val, pkt->getSize());
+
 }
 
 template<class TagStore, class Coherence>
@@ -244,8 +288,9 @@ Cache<TagStore,Coherence>::handleFill(BlkType *blk, PacketPtr &pkt,
             blk = NULL;
         }
 
-        if (blk && (target->isWrite() ? blk->isWritable() : blk->isValid())) {
-            assert(target->isWrite() || target->isRead());
+        if (blk && ((target->isWrite() || target->isReadWrite()) ?
+                    blk->isWritable() : blk->isValid())) {
+            assert(target->isWrite() || target->isReadWrite() || target->isRead());
             assert(target->getOffset(blkSize) + target->getSize() <= blkSize);
             if (target->isWrite()) {
                 if (blk->checkWrite(pkt->req)) {
@@ -253,6 +298,8 @@ Cache<TagStore,Coherence>::handleFill(BlkType *blk, PacketPtr &pkt,
                     std::memcpy(blk->data + target->getOffset(blkSize),
                            target->getPtr<uint8_t>(), target->getSize());
                 }
+            } else if (target->isReadWrite()) {
+                cmpAndSwap(blk, target);
             } else {
                 if (pkt->req->isLocked()) {
                     blk->trackLoadLocked(pkt->req);
@@ -332,8 +379,9 @@ Cache<TagStore,Coherence>::handleFill(BlkType *blk, MSHR * mshr,
             continue;
         }
 
-        if (blk && (target->isWrite() ? blk->isWritable() : blk->isValid())) {
-            assert(target->isWrite() || target->isRead());
+        if (blk && ((target->isWrite() || target->isReadWrite()) ?
+            blk->isWritable() : blk->isValid())) {
+            assert(target->isWrite() || target->isRead() || target->isReadWrite() );
             assert(target->getOffset(blkSize) + target->getSize() <= blkSize);
             if (target->isWrite()) {
                 if (blk->checkWrite(pkt->req)) {
@@ -341,6 +389,8 @@ Cache<TagStore,Coherence>::handleFill(BlkType *blk, MSHR * mshr,
                     std::memcpy(blk->data + target->getOffset(blkSize),
                            target->getPtr<uint8_t>(), target->getSize());
                 }
+            } else if (target->isReadWrite()) {
+                cmpAndSwap(blk, target);
             } else {
                 if (target->req->isLocked()) {
                     blk->trackLoadLocked(target->req);
@@ -545,8 +595,13 @@ Cache<TagStore,Coherence>::access(PacketPtr &pkt)
         //We are determining prefetches on access stream, call prefetcher
         prefetcher->handleMiss(pkt, curTick);
     }
+
+    Addr blk_addr = pkt->getAddr() & ~(Addr(blkSize-1));
+
     if (!pkt->req->isUncacheable()) {
-        blk = handleAccess(pkt, lat, writebacks);
+        if (!missQueue->findMSHR(blk_addr)) {
+            blk = handleAccess(pkt, lat, writebacks);
+        }
     } else {
         size = pkt->getSize();
     }
@@ -570,8 +625,10 @@ Cache<TagStore,Coherence>::access(PacketPtr &pkt)
         }
     }
     while (!writebacks.empty()) {
-        missQueue->doWriteback(writebacks.front());
+        PacketPtr wbPkt = writebacks.front();
+        missQueue->doWriteback(wbPkt);
         writebacks.pop_front();
+        delete wbPkt;
     }
 
     DPRINTF(Cache, "%s %x %s\n", pkt->cmdString(), pkt->getAddr(),
@@ -581,12 +638,7 @@ Cache<TagStore,Coherence>::access(PacketPtr &pkt)
         // Hit
         hits[pkt->cmdToIndex()][0/*pkt->req->getThreadNum()*/]++;
         // clear dirty bit if write through
-        if (pkt->needsResponse())
-            respond(pkt, curTick+lat);
-        if (pkt->cmd == MemCmd::Writeback) {
-            //Signal that you can kill the pkt/req
-            pkt->flags |= SATISFIED;
-        }
+        respond(pkt, curTick+lat);
         return true;
     }
 
@@ -604,14 +656,14 @@ Cache<TagStore,Coherence>::access(PacketPtr &pkt)
     if (pkt->flags & SATISFIED) {
         // happens when a store conditional fails because it missed
         // the cache completely
-        if (pkt->needsResponse())
-            respond(pkt, curTick+lat);
+        respond(pkt, curTick+lat);
     } else {
         missQueue->handleMiss(pkt, size, curTick + hitLatency);
     }
 
-    if (pkt->cmd == MemCmd::Writeback) {
+    if (!pkt->needsResponse()) {
         //Need to clean up the packet on a writeback miss, but leave the request
+        //for the next level.
         delete pkt;
     }
 
@@ -721,8 +773,10 @@ Cache<TagStore,Coherence>::handleResponse(PacketPtr &pkt)
             blk = handleFill(blk, (MSHR*)pkt->senderState,
                                    new_state, writebacks, pkt);
             while (!writebacks.empty()) {
-                    missQueue->doWriteback(writebacks.front());
-                    writebacks.pop_front();
+                PacketPtr wbPkt = writebacks.front();
+                missQueue->doWriteback(wbPkt);
+                writebacks.pop_front();
+                delete wbPkt;
             }
         }
         missQueue->handleResponse(pkt, curTick + hitLatency);
@@ -1040,8 +1094,10 @@ return 0;
             // There was a cache hit.
             // Handle writebacks if needed
             while (!writebacks.empty()){
-                memSidePort->sendAtomic(writebacks.front());
+                PacketPtr wbPkt = writebacks.front();
+                memSidePort->sendAtomic(wbPkt);
                 writebacks.pop_front();
+                delete wbPkt;
             }
 
             hits[pkt->cmdToIndex()][0/*pkt->req->getThreadNum()*/]++;

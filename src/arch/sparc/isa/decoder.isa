@@ -185,25 +185,25 @@ decode OP default Unknown::unknown()
                     }}, ',a');
                 }
                 default: decode BPCC {
-                    0x0: fbpcc0(22, {{
+                    0x0: fbpfcc0(19, {{
                         if(passesFpCondition(Fsr<11:10>, COND2))
                             NNPC = xc->readPC() + disp;
                         else
                             handle_annul
                     }});
-                    0x1: fbpcc1(22, {{
+                    0x1: fbpfcc1(19, {{
                         if(passesFpCondition(Fsr<33:32>, COND2))
                             NNPC = xc->readPC() + disp;
                         else
                             handle_annul
                     }});
-                    0x2: fbpcc2(22, {{
+                    0x2: fbpfcc2(19, {{
                         if(passesFpCondition(Fsr<35:34>, COND2))
                             NNPC = xc->readPC() + disp;
                         else
                             handle_annul
                     }});
-                    0x3: fbpcc3(22, {{
+                    0x3: fbpfcc3(19, {{
                         if(passesFpCondition(Fsr<37:36>, COND2))
                             NNPC = xc->readPC() + disp;
                         else
@@ -426,19 +426,22 @@ decode OP default Unknown::unknown()
                 {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
             );
             0x24: mulscc({{
-                int64_t resTemp, multiplicand = Rs2_or_imm13;
-                int32_t multiplier = Rs1<31:0>;
                 int32_t savedLSB = Rs1<0:>;
-                multiplier = multiplier<31:1> |
-                    ((Ccr<3:3> ^ Ccr<1:1>) << 32);
-                if(!Y<0:>)
-                    multiplicand = 0;
-                Rd = resTemp = multiplicand + multiplier;
+
+                //Step 1
+                int64_t multiplicand = Rs2_or_imm13;
+                //Step 2
+                int32_t partialP = Rs1<31:1> |
+                    ((Ccr<3:3> ^ Ccr<1:1>) << 31);
+                //Step 3
+                int32_t added = Y<0:> ? multiplicand : 0;
+                Rd = partialP + added;
+                //Steps 4 & 5
                 Y = Y<31:1> | (savedLSB << 31);}},
-                {{((multiplicand<31:0> + multiplier<31:0>)<32:0>)}},
-                {{multiplicand<31:> == multiplier<31:> && multiplier<31:> != resTemp<31:>}},
-                {{((multiplicand >> 1) + (multiplier >> 1) + (multiplicand & multiplier & 0x1))<63:>}},
-                {{multiplicand<63:> == multiplier<63:> && multiplier<63:> != resTemp<63:>}}
+                {{((partialP<31:0> + added<31:0>)<32:0>)}},
+                {{partialP<31:> == added<31:> && added<31:> != Rd<31:>}},
+                {{((partialP >> 1) + (added >> 1) + (partialP & added & 0x1))<63:>}},
+                {{partialP<63:> == added<63:> && partialP<63:> != Rd<63:>}}
             );
         }
         format IntOp
@@ -1321,8 +1324,14 @@ decode OP default Unknown::unknown()
             0x05: stb({{Mem.ub = Rd.sb;}});
             0x06: sth({{Mem.uhw = Rd.shw;}});
             0x07: sttw({{
-                      (Mem.tuw).a = RdLow<31:0>;
-                      (Mem.tuw).b = RdHigh<31:0>;
+                      //This temporary needs to be here so that the parser
+                      //will correctly identify this instruction as a store.
+                      //It's probably either the parenthesis or referencing
+                      //the member variable that throws confuses it.
+                      Twin32_t temp;
+                      temp.a = RdLow<31:0>;
+                      temp.b = RdHigh<31:0>;
+                      Mem.tuw = temp;
                   }});
         }
         format Load {
@@ -1414,8 +1423,14 @@ decode OP default Unknown::unknown()
             0x15: stba({{Mem.ub = Rd;}}, {{EXT_ASI}});
             0x16: stha({{Mem.uhw = Rd;}}, {{EXT_ASI}});
             0x17: sttwa({{
-                      (Mem.tuw).a = RdLow<31:0>;
-                      (Mem.tuw).b = RdHigh<31:0>;
+                      //This temporary needs to be here so that the parser
+                      //will correctly identify this instruction as a store.
+                      //It's probably either the parenthesis or referencing
+                      //the member variable that throws confuses it.
+                      Twin32_t temp;
+                      temp.a = RdLow<31:0>;
+                      temp.b = RdHigh<31:0>;
+                      Mem.tuw = temp;
                   }}, {{EXT_ASI}});
         }
         format LoadAlt {

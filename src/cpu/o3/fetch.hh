@@ -33,6 +33,7 @@
 #define __CPU_O3_FETCH_HH__
 
 #include "arch/utility.hh"
+#include "arch/predecoder.hh"
 #include "base/statistics.hh"
 #include "base/timebuf.hh"
 #include "cpu/pc_event.hh"
@@ -84,6 +85,8 @@ class DefaultFetch
         { }
 
         bool snoopRangeSent;
+
+        virtual void setPeer(Port *port);
 
       protected:
         /** Atomic version of receive.  Panics. */
@@ -182,6 +185,9 @@ class DefaultFetch
 
     /** Initialize stage. */
     void initStage();
+
+    /** Tells the fetch stage that the Icache is set. */
+    void setIcache();
 
     /** Processes cache completion event. */
     void processCacheCompletion(PacketPtr pkt);
@@ -337,6 +343,9 @@ class DefaultFetch
 
     /** BPredUnit. */
     BPredUnit branchPred;
+
+    /** Predecoder. */
+    TheISA::Predecoder predecoder;
 
     /** Per-thread fetch PC. */
     Addr PC[Impl::MaxThreads];

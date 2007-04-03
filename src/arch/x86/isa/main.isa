@@ -72,6 +72,9 @@
 
 namespace X86ISA;
 
+//Include the simple microcode assembler
+##include "microasm.isa"
+
 //Include the bitfield definitions
 ##include "bitfields.isa"
 
@@ -79,10 +82,13 @@ namespace X86ISA;
 ##include "operands.isa"
 
 //Include the base class for x86 instructions, and some support code
-//##include "base.isa"
+##include "base.isa"
 
 //Include the definitions for the instruction formats
 ##include "formats/formats.isa"
 
+//Include the definitions of the micro ops
+##include "microops/microops.isa"
+
 //Include the decoder definition
-##include "decoder.isa"
+##include "decoder/decoder.isa"

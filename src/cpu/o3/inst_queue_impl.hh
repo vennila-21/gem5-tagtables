@@ -81,8 +81,6 @@ InstructionQueue<Impl>::InstructionQueue(Params *params)
     // Set the number of physical registers as the number of int + float
     numPhysRegs = numPhysIntRegs + numPhysFloatRegs;
 
-    DPRINTF(IQ, "There are %i physical registers.\n", numPhysRegs);
-
     //Create an entry for each physical register within the
     //dependency graph.
     dependGraph.resize(numPhysRegs);
@@ -124,8 +122,10 @@ InstructionQueue<Impl>::InstructionQueue(Params *params)
             maxEntries[i] = part_amt;
         }
 
+/*
         DPRINTF(IQ, "IQ sharing policy set to Partitioned:"
                 "%i entries per thread.\n",part_amt);
+*/
 
     } else if (policy == "threshold") {
         iqPolicy = Threshold;
@@ -139,8 +139,10 @@ InstructionQueue<Impl>::InstructionQueue(Params *params)
             maxEntries[i] = thresholdIQ;
         }
 
+/*
         DPRINTF(IQ, "IQ sharing policy set to Threshold:"
                 "%i entries per thread.\n",thresholdIQ);
+*/
    } else {
        assert(0 && "Invalid IQ Sharing Policy.Options Are:{Dynamic,"
               "Partitioned, Threshold}");
@@ -360,7 +362,6 @@ template <class Impl>
 void
 InstructionQueue<Impl>::setActiveThreads(std::list<unsigned> *at_ptr)
 {
-    DPRINTF(IQ, "Setting active threads list pointer.\n");
     activeThreads = at_ptr;
 }
 
@@ -368,15 +369,13 @@ template <class Impl>
 void
 InstructionQueue<Impl>::setIssueToExecuteQueue(TimeBuffer<IssueStruct> *i2e_ptr)
 {
-    DPRINTF(IQ, "Set the issue to execute queue.\n");
-    issueToExecuteQueue = i2e_ptr;
+      issueToExecuteQueue = i2e_ptr;
 }
 
 template <class Impl>
 void
 InstructionQueue<Impl>::setTimeBuffer(TimeBuffer<TimeStruct> *tb_ptr)
 {
-    DPRINTF(IQ, "Set the time buffer.\n");
     timeBuffer = tb_ptr;
 
     fromCommit = timeBuffer->getWire(-commitToIEWDelay);
@@ -829,6 +828,8 @@ InstructionQueue<Impl>::scheduleNonSpec(const InstSeqNum &inst)
 
     unsigned tid = (*inst_it).second->threadNumber;
 
+    (*inst_it).second->setAtCommit();
+
     (*inst_it).second->setCanIssue();
 
     if (!(*inst_it).second->isMemRef()) {
@@ -960,6 +961,8 @@ template <class Impl>
 void
 InstructionQueue<Impl>::rescheduleMemInst(DynInstPtr &resched_inst)
 {
+    DPRINTF(IQ, "Rescheduling mem inst [sn:%lli]\n", resched_inst->seqNum);
+    resched_inst->clearCanIssue();
     memDepUnit[resched_inst->threadNumber].reschedule(resched_inst);
 }
 
@@ -984,7 +987,6 @@ InstructionQueue<Impl>::completeMemInst(DynInstPtr &completed_inst)
     completed_inst->memOpDone = true;
 
     memDepUnit[tid].completed(completed_inst);
-
     count[tid]--;
 }
 
@@ -1084,16 +1086,21 @@ InstructionQueue<Impl>::doSquash(unsigned tid)
 
                     ++iqSquashedOperandsExamined;
                 }
-            } else if (!squashed_inst->isStoreConditional() || !squashed_inst->isCompleted()) {
+            } else if (!squashed_inst->isStoreConditional() ||
+                       !squashed_inst->isCompleted()) {
                 NonSpecMapIt ns_inst_it =
                     nonSpecInsts.find(squashed_inst->seqNum);
                 assert(ns_inst_it != nonSpecInsts.end());
+                if (ns_inst_it == nonSpecInsts.end()) {
+                    assert(squashed_inst->getFault() != NoFault);
+                } else {
 
-                (*ns_inst_it).second = NULL;
+                    (*ns_inst_it).second = NULL;
 
-                nonSpecInsts.erase(ns_inst_it);
+                    nonSpecInsts.erase(ns_inst_it);
 
-                ++iqSquashedNonSpecRemoved;
+                    ++iqSquashedNonSpecRemoved;
+                }
             }
 
             // Might want to also clear out the head of the dependency graph.
