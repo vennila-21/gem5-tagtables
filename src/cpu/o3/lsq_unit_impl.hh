@@ -645,22 +645,10 @@ LSQUnit<Impl>::writebackStores()
         assert(!inst->memData);
         inst->memData = new uint8_t[64];
 
-        TheISA::IntReg convertedData =
-            TheISA::htog(storeQueue[storeWBIdx].data);
+        memcpy(inst->memData, storeQueue[storeWBIdx].data, req->getSize());
 
-        //FIXME This is a hack to get SPARC working. It, along with endianness
-        //in the memory system in general, need to be straightened out more
-        //formally. The problem is that the data's endianness is swapped when
-        //it's in the 64 bit data field in the store queue. The data that you
-        //want won't start at the beginning of the field anymore unless it was
-        //a 64 bit access.
-        memcpy(inst->memData,
-                (uint8_t *)&convertedData +
-                (TheISA::ByteOrderDiffers ?
-                 (sizeof(TheISA::IntReg) - req->getSize()) : 0),
-                req->getSize());
-
-        PacketPtr data_pkt = new Packet(req, MemCmd::WriteReq,
+        MemCmd command = req->isSwap() ? MemCmd::SwapReq : MemCmd::WriteReq;
+        PacketPtr data_pkt = new Packet(req, command,
                                         Packet::Broadcast);
         data_pkt->dataStatic(inst->memData);
 
@@ -677,7 +665,7 @@ LSQUnit<Impl>::writebackStores()
                 inst->seqNum);
 
         // @todo: Remove this SC hack once the memory system handles it.
-        if (req->isLocked()) {
+        if (inst->isStoreConditional()) {
             // Disable recording the result temporarily.  Writing to
             // misc regs normally updates the result, but this is not
             // the desired behavior when handling store conditionals.
