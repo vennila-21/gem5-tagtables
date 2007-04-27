@@ -1,0 +1,13 @@
+M5 Simulator System
+
+Copyright (c) 2001-2006
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Apr 22 2007 03:02:42
+M5 started Sun Apr 22 03:24:38 2007
+M5 executing on zed
+command line: build/ALPHA_FS/m5.fast -d build/ALPHA_FS/tests/fast/quick/80.netperf-stream/alpha/linux/twosys-tsunami-simple-atomic tests/run.py quick/80.netperf-stream/alpha/linux/twosys-tsunami-simple-atomic
+Global frequency set at 1000000000000 ticks per second
+Exiting @ tick 4300236341073 because checkpoint

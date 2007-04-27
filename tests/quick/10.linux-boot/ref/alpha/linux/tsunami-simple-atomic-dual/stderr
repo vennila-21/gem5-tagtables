@@ -1,0 +1,7 @@
+Warning: rounding error > tolerance
+    0.002000 rounded to 0
+Listening for system connection on port 3457
+0: system.remote_gdb.listener: listening for remote gdb on port 7001
+0: system.remote_gdb.listener: listening for remote gdb on port 7002
+warn: Entering event queue @ 0.  Starting simulation...
+warn: 195723: Trying to launch CPU number 1!
