@@ -43,21 +43,22 @@
 
 Bridge::BridgePort::BridgePort(const std::string &_name,
                                Bridge *_bridge, BridgePort *_otherPort,
-                               int _delay, int _queueLimit,
-                               bool fix_partial_write)
+                               int _delay, int _nack_delay, int _req_limit,
+                               int _resp_limit, bool fix_partial_write)
     : Port(_name), bridge(_bridge), otherPort(_otherPort),
-      delay(_delay), fixPartialWrite(fix_partial_write),
-      outstandingResponses(0), queueLimit(_queueLimit), sendEvent(this)
+      delay(_delay), nackDelay(_nack_delay), fixPartialWrite(fix_partial_write),
+      outstandingResponses(0), queuedRequests(0), inRetry(false),
+      reqQueueLimit(_req_limit), respQueueLimit(_resp_limit), sendEvent(this)
 {
 }
 
-Bridge::Bridge(const std::string &n, int qsa, int qsb,
-               Tick _delay, int write_ack, bool fix_partial_write_a,
-               bool fix_partial_write_b)
-    : MemObject(n),
-      portA(n + "-portA", this, &portB, _delay, qsa, fix_partial_write_a),
-      portB(n + "-portB", this, &portA, _delay, qsa, fix_partial_write_b),
-      ackWrites(write_ack)
+Bridge::Bridge(Params *p)
+    : MemObject(p->name),
+      portA(p->name + "-portA", this, &portB, p->delay, p->nack_delay,
+              p->req_size_a, p->resp_size_a, p->fix_partial_write_a),
+      portB(p->name + "-portB", this, &portA, p->delay, p->nack_delay,
+              p->req_size_b, p->resp_size_b, p->fix_partial_write_b),
+      ackWrites(p->write_ack), _params(p)
 {
     if (ackWrites)
         panic("No support for acknowledging writes\n");
@@ -92,34 +93,105 @@ Bridge::init()
         fatal("Busses don't have the same block size... Not supported.\n");
 }
 
+bool
+Bridge::BridgePort::respQueueFull()
+{
+    assert(outstandingResponses >= 0 && outstandingResponses <= respQueueLimit);
+    return outstandingResponses >= respQueueLimit;
+}
+
+bool
+Bridge::BridgePort::reqQueueFull()
+{
+    assert(queuedRequests >= 0 && queuedRequests <= reqQueueLimit);
+    return queuedRequests >= reqQueueLimit;
+}
 
 /** Function called by the port when the bus is receiving a Timing
  * transaction.*/
 bool
 Bridge::BridgePort::recvTiming(PacketPtr pkt)
 {
-    if (pkt->flags & SNOOP_COMMIT) {
-        DPRINTF(BusBridge, "recvTiming: src %d dest %d addr 0x%x\n",
+    if (!(pkt->flags & SNOOP_COMMIT))
+        return true;
+
+
+    DPRINTF(BusBridge, "recvTiming: src %d dest %d addr 0x%x\n",
                 pkt->getSrc(), pkt->getDest(), pkt->getAddr());
 
-        return otherPort->queueForSendTiming(pkt);
+    if (pkt->isRequest() && otherPort->reqQueueFull()) {
+        DPRINTF(BusBridge, "Remote queue full, nacking\n");
+        nackRequest(pkt);
+        return true;
     }
-    else {
-        // Else it's just a snoop, properly return if we are blocking
-        return !queueFull();
+
+    if (pkt->needsResponse() && pkt->result != Packet::Nacked)
+        if (respQueueFull()) {
+            DPRINTF(BusBridge, "Local queue full, no space for response, nacking\n");
+            DPRINTF(BusBridge, "queue size: %d outreq: %d outstanding resp: %d\n",
+                    sendQueue.size(), queuedRequests, outstandingResponses);
+            nackRequest(pkt);
+            return true;
+        } else {
+            DPRINTF(BusBridge, "Request Needs response, reserving space\n");
+            ++outstandingResponses;
+        }
+
+    otherPort->queueForSendTiming(pkt);
+
+    return true;
+}
+
+void
+Bridge::BridgePort::nackRequest(PacketPtr pkt)
+{
+    // Nack the packet
+    pkt->result = Packet::Nacked;
+    pkt->setDest(pkt->getSrc());
+
+    //put it on the list to send
+    Tick readyTime = curTick + nackDelay;
+    PacketBuffer *buf = new PacketBuffer(pkt, readyTime, true);
+
+    // nothing on the list, add it and we're done
+    if (sendQueue.empty()) {
+        assert(!sendEvent.scheduled());
+        sendEvent.schedule(readyTime);
+        sendQueue.push_back(buf);
+        return;
     }
+
+    assert(sendEvent.scheduled() || inRetry);
+
+    // does it go at the end?
+    if (readyTime >= sendQueue.back()->ready) {
+        sendQueue.push_back(buf);
+        return;
+    }
+
+    // ok, somewhere in the middle, fun
+    std::list<PacketBuffer*>::iterator i = sendQueue.begin();
+    std::list<PacketBuffer*>::iterator end = sendQueue.end();
+    std::list<PacketBuffer*>::iterator begin = sendQueue.begin();
+    bool done = false;
+
+    while (i != end && !done) {
+        if (readyTime < (*i)->ready) {
+            if (i == begin)
+                sendEvent.reschedule(readyTime);
+            sendQueue.insert(i,buf);
+            done = true;
+        }
+        i++;
+    }
+    assert(done);
 }
 
 
-bool
+void
 Bridge::BridgePort::queueForSendTiming(PacketPtr pkt)
 {
-    if (queueFull()) {
-        DPRINTF(BusBridge, "Queue full, returning false\n");
-        return false;
-    }
-
-   if (pkt->isResponse()) {
+   if (pkt->isResponse() || pkt->result == Packet::Nacked) {
         // This is a response for a request we forwarded earlier.  The
         // corresponding PacketBuffer should be stored in the packet's
         // senderState field.
@@ -128,6 +200,13 @@ Bridge::BridgePort::queueForSendTiming(PacketPtr pkt)
         // set up new packet dest & senderState based on values saved
         // from original request
         buf->fixResponse(pkt);
+
+        // Check if this packet was expecting a response (this is either it or
+        // its a nacked packet and we won't be seeing that response)
+        if (buf->expectResponse)
+            --outstandingResponses;
+
+
         DPRINTF(BusBridge, "restoring  sender state: %#X, from packet buffer: %#X\n",
                         pkt->senderState, buf);
         DPRINTF(BusBridge, "  is response, new dest %d\n", pkt->getDest());
@@ -146,10 +225,8 @@ Bridge::BridgePort::queueForSendTiming(PacketPtr pkt)
     if (sendQueue.empty()) {
         sendEvent.schedule(readyTime);
     }
-
+    ++queuedRequests;
     sendQueue.push_back(buf);
-
-    return true;
 }
 
 void
@@ -157,7 +234,6 @@ Bridge::BridgePort::trySend()
 {
     assert(!sendQueue.empty());
 
-    bool was_full = queueFull();
     int pbs = peerBlockSize();
 
     PacketBuffer *buf = sendQueue.front();
@@ -169,7 +245,8 @@ Bridge::BridgePort::trySend()
     pkt->flags &= ~SNOOP_COMMIT; //CLear it if it was set
 
     if (pkt->cmd == MemCmd::WriteInvalidateReq && fixPartialWrite &&
-            pkt->getOffset(pbs) && pkt->getSize() != pbs) {
+            pkt->result != Packet::Nacked && pkt->getOffset(pbs) &&
+            pkt->getSize() != pbs) {
         buf->partialWriteFix(this);
         pkt = buf->pkt;
     }
@@ -184,10 +261,7 @@ Bridge::BridgePort::trySend()
         buf->pkt = NULL; // we no longer own packet, so it's not safe to look at it
 
         if (buf->expectResponse) {
-            // Must wait for response.  We just need to count outstanding
-            // responses (in case we want to cap them); PacketBuffer
-            // pointer will be recovered on response.
-            ++outstandingResponses;
+            // Must wait for response
             DPRINTF(BusBridge, "  successful: awaiting response (%d)\n",
                     outstandingResponses);
         } else {
@@ -196,28 +270,34 @@ Bridge::BridgePort::trySend()
             delete buf;
         }
 
+        if (!buf->nacked)
+                --queuedRequests;
+
         // If there are more packets to send, schedule event to try again.
         if (!sendQueue.empty()) {
             buf = sendQueue.front();
+            DPRINTF(BusBridge, "Scheduling next send\n");
             sendEvent.schedule(std::max(buf->ready, curTick + 1));
         }
-        // Let things start sending again
-        if (was_full) {
-          DPRINTF(BusBridge, "Queue was full, sending retry\n");
-          otherPort->sendRetry();
-        }
-
     } else {
         DPRINTF(BusBridge, "  unsuccessful\n");
         buf->undoPartialWriteFix();
+        inRetry = true;
     }
+    DPRINTF(BusBridge, "trySend: queue size: %d outreq: %d outstanding resp: %d\n",
+                    sendQueue.size(), queuedRequests, outstandingResponses);
 }
 
 
 void
 Bridge::BridgePort::recvRetry()
 {
-    trySend();
+    inRetry = false;
+    Tick nextReady = sendQueue.front()->ready;
+    if (nextReady <= curTick)
+        trySend();
+    else
+        sendEvent.schedule(nextReady);
 }
 
 /** Function called by the port when the bus is receiving a Atomic
@@ -263,9 +343,12 @@ Bridge::BridgePort::getDeviceAddressRanges(AddrRangeList &resp,
 
 BEGIN_DECLARE_SIM_OBJECT_PARAMS(Bridge)
 
-   Param<int> queue_size_a;
-   Param<int> queue_size_b;
+   Param<int> req_size_a;
+   Param<int> req_size_b;
+   Param<int> resp_size_a;
+   Param<int> resp_size_b;
    Param<Tick> delay;
+   Param<Tick> nack_delay;
    Param<bool> write_ack;
    Param<bool> fix_partial_write_a;
    Param<bool> fix_partial_write_b;
@@ -274,9 +357,12 @@ END_DECLARE_SIM_OBJECT_PARAMS(Bridge)
 
 BEGIN_INIT_SIM_OBJECT_PARAMS(Bridge)
 
-    INIT_PARAM(queue_size_a, "The size of the queue for data coming into side a"),
-    INIT_PARAM(queue_size_b, "The size of the queue for data coming into side b"),
+    INIT_PARAM(req_size_a, "The size of the queue for requests coming into side a"),
+    INIT_PARAM(req_size_b, "The size of the queue for requests coming into side b"),
+    INIT_PARAM(resp_size_a, "The size of the queue for responses coming into side a"),
+    INIT_PARAM(resp_size_b, "The size of the queue for responses coming into side b"),
     INIT_PARAM(delay, "The miminum delay to cross this bridge"),
+    INIT_PARAM(nack_delay, "The minimum delay to nack a packet"),
     INIT_PARAM(write_ack, "Acknowledge any writes that are received."),
     INIT_PARAM(fix_partial_write_a, "Fixup any partial block writes that are received"),
     INIT_PARAM(fix_partial_write_b, "Fixup any partial block writes that are received")
@@ -285,8 +371,19 @@ END_INIT_SIM_OBJECT_PARAMS(Bridge)
 
 CREATE_SIM_OBJECT(Bridge)
 {
-    return new Bridge(getInstanceName(), queue_size_a, queue_size_b, delay,
-            write_ack, fix_partial_write_a, fix_partial_write_b);
+    Bridge::Params *p = new Bridge::Params;
+    p->name = getInstanceName();
+    p->req_size_a = req_size_a;
+    p->req_size_b = req_size_b;
+    p->resp_size_a = resp_size_a;
+    p->resp_size_b = resp_size_b;
+    p->delay = delay;
+    p->nack_delay = nack_delay;
+    p->write_ack = write_ack;
+    p->fix_partial_write_a = fix_partial_write_a;
+    p->fix_partial_write_b = fix_partial_write_b;
+    return new Bridge(p);
 }
 
 REGISTER_SIM_OBJECT("Bridge", Bridge)
+
