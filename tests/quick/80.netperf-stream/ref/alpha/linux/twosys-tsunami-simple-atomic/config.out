@@ -1,9 +1,6 @@
 [root]
 type=Root
-clock=1000000000000
-max_tick=0
-progress_interval=0
-output_file=cout
+dummy=0
 
 [testsys.physmem]
 type=PhysicalMemory
@@ -709,7 +706,7 @@ tx_delay=1000000
 rx_fifo_size=524288
 tx_fifo_size=524288
 rx_filter=true
-hardware_address=00:90:00:00:00:02
+hardware_address=00:90:00:00:00:01
 rx_thread=false
 tx_thread=false
 rss=false

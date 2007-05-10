@@ -21,5 +21,25 @@ echo "100000" > /proc/sys/net/core/netdev_max_backlog
 echo -n "waiting for server..."
 netcat -c -l -p 8000
 
-ping -c 5 $SERVER
+BINARY=/benchmarks/netperf-bin/netperf
+TEST="UDP_STREAM"
+SHORT_ARGS="-l 2 -- -m 4096"
+#LONG_ARGS="-k16384,0 -K16384,0 -- -m 65536 -M 65536 -s 262144 -S 262144"
+
+
+SHORT="$BINARY -H $SERVER -t $TEST $SHORT_ARGS"
+LONG="$BINARY -H $SERVER -t $TEST $LONG_ARGS"
+
+echo "starting test..."
+echo "netperf warmup"
+echo $SHORT
+eval $SHORT
+
+#echo "netperf benchmark"
+#echo $LONG
+#/sbin/m5 ivlb 1
+#/sbin/m5 resetstats
+#/sbin/m5 dumpresetstats 200000000 2000000000
+#/sbin/m5 checkpoint 200000000 2000000000
+#eval $LONG
 /sbin/m5 exit
