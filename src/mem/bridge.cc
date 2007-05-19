@@ -243,19 +243,21 @@ Bridge::BridgePort::trySend()
 {
     assert(!sendQueue.empty());
 
-    int pbs = peerBlockSize();
-
     PacketBuffer *buf = sendQueue.front();
 
     assert(buf->ready <= curTick);
 
     PacketPtr pkt = buf->pkt;
 
+    // Ugly! @todo When multilevel coherence works this will be removed
     if (pkt->cmd == MemCmd::WriteInvalidateReq && fixPartialWrite &&
-            pkt->result != Packet::Nacked && pkt->getOffset(pbs) &&
-            pkt->getSize() != pbs) {
-        buf->partialWriteFix(this);
-        pkt = buf->pkt;
+            pkt->result != Packet::Nacked) {
+        PacketPtr funcPkt = new Packet(pkt->req, MemCmd::WriteReq,
+                            Packet::Broadcast);
+        funcPkt->dataStatic(pkt->getPtr<uint8_t>());
+        sendFunctional(funcPkt);
+        pkt->cmd = MemCmd::WriteReq;
+        delete funcPkt;
     }
 
     DPRINTF(BusBridge, "trySend: origSrc %d dest %d addr 0x%x\n",
@@ -294,7 +296,6 @@ Bridge::BridgePort::trySend()
         }
     } else {
         DPRINTF(BusBridge, "  unsuccessful\n");
-        buf->undoPartialWriteFix();
         inRetry = true;
     }
     DPRINTF(BusBridge, "trySend: queue size: %d outreq: %d outstanding resp: %d\n",
@@ -318,32 +319,18 @@ Bridge::BridgePort::recvRetry()
 Tick
 Bridge::BridgePort::recvAtomic(PacketPtr pkt)
 {
-    int pbs = otherPort->peerBlockSize();
-    Tick atomic_delay;
     // fix partial atomic writes... similar to the timing code that does the
-    // same
-    if (pkt->cmd == MemCmd::WriteInvalidateReq && fixPartialWrite &&
-             pkt->getOffset(pbs) && pkt->getSize() != pbs) {
-        PacketDataPtr data;
-        data = new uint8_t[pbs];
-        PacketPtr funcPkt = new Packet(pkt->req, MemCmd::ReadReq,
-                         Packet::Broadcast, pbs);
+    // same... will be removed once our code gets this right
+    if (pkt->cmd == MemCmd::WriteInvalidateReq && fixPartialWrite) {
 
-        funcPkt->dataStatic(data);
+        PacketPtr funcPkt = new Packet(pkt->req, MemCmd::WriteReq,
+                         Packet::Broadcast);
+        funcPkt->dataStatic(pkt->getPtr<uint8_t>());
         otherPort->sendFunctional(funcPkt);
-        assert(funcPkt->result == Packet::Success);
         delete funcPkt;
-        memcpy(data + pkt->getOffset(pbs), pkt->getPtr<uint8_t>(),
-                         pkt->getSize());
-        PacketPtr newPkt = new Packet(pkt->req, MemCmd::WriteInvalidateReq,
-                Packet::Broadcast, pbs);
-        pkt->dataDynamicArray(data);
-        atomic_delay = otherPort->sendAtomic(newPkt);
-        delete newPkt;
-    } else {
-        atomic_delay = otherPort->sendAtomic(pkt);
+        pkt->cmd = MemCmd::WriteReq;
     }
-    return atomic_delay + delay;
+    return delay + otherPort->sendAtomic(pkt);
 }
 
 /** Function called by the port when the bus is receiving a Functional
@@ -424,4 +411,5 @@ CREATE_SIM_OBJECT(Bridge)
 }
 
 REGISTER_SIM_OBJECT("Bridge", Bridge)
+
 
