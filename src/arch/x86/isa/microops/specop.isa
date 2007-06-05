@@ -1,31 +1,3 @@
-// Copyright (c) 2007 The Regents of The University of Michigan
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are
-// met: redistributions of source code must retain the above copyright
-// notice, this list of conditions and the following disclaimer;
-// redistributions in binary form must reproduce the above copyright
-// notice, this list of conditions and the following disclaimer in the
-// documentation and/or other materials provided with the distribution;
-// neither the name of the copyright holders nor the names of its
-// contributors may be used to endorse or promote products derived from
-// this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// Authors: Gabe Black
-
 // Copyright (c) 2007 The Hewlett-Packard Development Company
 // All rights reserved.
 //
@@ -81,25 +53,73 @@
 //
 // Authors: Gabe Black
 
-def operand_types {{
-    'sb' : ('signed int', 8),
-    'ub' : ('unsigned int', 8),
-    'sw' : ('signed int', 16),
-    'uw' : ('unsigned int', 16),
-    'sdw' : ('signed int', 32),
-    'udw' : ('unsigned int', 32),
-    'sqw' : ('signed int', 64),
-    'uqw' : ('unsigned int', 64),
-    'sf' : ('float', 32),
-    'df' : ('float', 64),
-    'qf' : ('float', 128)
+//////////////////////////////////////////////////////////////////////////
+//
+// Fault Microop
+//
+//////////////////////////////////////////////////////////////////////////
+
+def template MicroFaultExecute {{
+        Fault %(class_name)s ::execute(%(CPU_exec_context)s *xc,
+                Trace::InstRecord *traceData) const
+        {
+            //Return the fault we were constructed with
+            return fault;
+        }
 }};
 
-def operands {{
-        'DestReg':       ('IntReg', 'uqw', 'dest', 'IsInteger', 1),
-        'SrcReg1':       ('IntReg', 'uqw', 'src1', 'IsInteger', 2),
-        'SrcReg2':       ('IntReg', 'uqw', 'src2', 'IsInteger', 3),
-        'IntRegOp0':     ('IntReg', 'udw', 'param0', 'IsInteger', 1),
-        'IntRegOp1':     ('IntReg', 'udw', 'param1', 'IsInteger', 2),
-        'IntRegOp2':     ('IntReg', 'udw', 'param2', 'IsInteger', 2),
+def template MicroFaultDeclare {{
+    class %(class_name)s : public X86MicroOpBase
+    {
+      protected:
+        Fault fault;
+        void buildMe();
+
+      public:
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+                Fault _fault);
+
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                Fault _fault);
+
+        %(BasicExecDeclare)s
+    };
+}};
+
+def template MicroFaultConstructor {{
+
+    inline void %(class_name)s::buildMe()
+    {
+        %(constructor)s;
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem, Fault _fault) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                false, false, false, false, %(op_class)s), fault(_fault)
+    {
+        buildMe();
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+            Fault _fault) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                isMicro, isDelayed, isFirst, isLast, %(op_class)s),
+                fault(_fault)
+    {
+        buildMe();
+    }
+}};
+
+let {{
+    # This microop takes in a single parameter, a fault to return.
+    iop = InstObjParams("fault", "GenFault", 'X86MicroOpBase', {"code" : ""})
+    header_output += MicroFaultDeclare.subst(iop)
+    decoder_output += MicroFaultConstructor.subst(iop)
+    exec_output += MicroFaultExecute.subst(iop)
 }};
