@@ -29,6 +29,9 @@
  *          Korey Sewell
  */
 
+#include <algorithm>
+#include <cstring>
+
 #include "config/use_checker.hh"
 
 #include "arch/isa_traits.hh"
@@ -47,8 +50,6 @@
 #include "arch/vtophys.hh"
 #include "sim/system.hh"
 #endif // FULL_SYSTEM
-
-#include <algorithm>
 
 template<class Impl>
 void
@@ -374,7 +375,7 @@ DefaultFetch<Impl>::processCacheCompletion(PacketPtr pkt)
         return;
     }
 
-    memcpy(cacheData[tid], pkt->getPtr<uint8_t *>(), cacheBlkSize);
+    memcpy(cacheData[tid], pkt->getPtr<uint8_t>(), cacheBlkSize);
     cacheDataValid[tid] = true;
 
     if (!drainPending) {
@@ -1127,7 +1128,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                         (&cacheData[tid][offset]));
 
             predecoder.setTC(cpu->thread[tid]->getTC());
-            predecoder.moreBytes(fetch_PC, 0, inst);
+            predecoder.moreBytes(fetch_PC, fetch_PC, 0, inst);
 
             ext_inst = predecoder.getExtMachInst();
 
@@ -1151,10 +1152,14 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             DPRINTF(Fetch, "[tid:%i]: Instruction is: %s\n",
                     tid, instruction->staticInst->disassemble(fetch_PC));
 
+#if TRACING_ON
             instruction->traceData =
                 Trace::getInstRecord(curTick, cpu->tcBase(tid),
                                      instruction->staticInst,
                                      instruction->readPC());
+#else
+            instruction->traceData = NULL;
+#endif
 
             ///FIXME This needs to be more robust in dealing with delay slots
 #if !ISA_HAS_DELAY_SLOT
