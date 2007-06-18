@@ -37,6 +37,8 @@ StaticInstPtr StaticInst::nullStaticInstPtr;
 
 // Define the decode cache hash map.
 StaticInst::DecodeCache StaticInst::decodeCache;
+StaticInst::AddrDecodeCache StaticInst::addrDecodeCache;
+StaticInst::cacheElement StaticInst::recentDecodes[2];
 
 void
 StaticInst::dumpDecodeCacheStats()
@@ -76,9 +78,9 @@ StaticInst::hasBranchTarget(Addr pc, ThreadContext *tc, Addr &tgt) const
 }
 
 StaticInstPtr
-StaticInst::fetchMicroOp(MicroPC micropc)
+StaticInst::fetchMicroop(MicroPC micropc)
 {
-    panic("StaticInst::fetchMicroOp() called on instruction "
+    panic("StaticInst::fetchMicroop() called on instruction "
             "that is not microcoded.");
 }
 

@@ -56,8 +56,14 @@
 //Common microop stuff
 ##include "base.isa"
 
-//A microop that generates a specified fault
-##include "fault.isa"
+//Register microop definitions
+##include "regop.isa"
 
-//Integer microop definitions
-##include "int.isa"
+//Load immediate microop definition
+##include "limmop.isa"
+
+//Load/store microop definitions
+##include "ldstop.isa"
+
+//Miscellaneous microop definitions
+##include "specop.isa"
