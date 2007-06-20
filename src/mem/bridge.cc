@@ -119,7 +119,14 @@ Bridge::BridgePort::recvTiming(PacketPtr pkt)
     DPRINTF(BusBridge, "recvTiming: src %d dest %d addr 0x%x\n",
                 pkt->getSrc(), pkt->getDest(), pkt->getAddr());
 
-    if (pkt->isRequest() && otherPort->reqQueueFull()) {
+    DPRINTF(BusBridge, "Local queue size: %d outreq: %d outresp: %d\n",
+                    sendQueue.size(), queuedRequests, outstandingResponses);
+    DPRINTF(BusBridge, "Remove queue size: %d outreq: %d outresp: %d\n",
+                    otherPort->sendQueue.size(), otherPort->queuedRequests,
+                    otherPort->outstandingResponses);
+
+    if (pkt->isRequest() && otherPort->reqQueueFull() && pkt->result !=
+            Packet::Nacked) {
         DPRINTF(BusBridge, "Remote queue full, nacking\n");
         nackRequest(pkt);
         return true;
@@ -191,7 +198,7 @@ Bridge::BridgePort::nackRequest(PacketPtr pkt)
 void
 Bridge::BridgePort::queueForSendTiming(PacketPtr pkt)
 {
-   if (pkt->isResponse() || pkt->result == Packet::Nacked) {
+    if (pkt->isResponse() || pkt->result == Packet::Nacked) {
         // This is a response for a request we forwarded earlier.  The
         // corresponding PacketBuffer should be stored in the packet's
         // senderState field.
@@ -201,9 +208,9 @@ Bridge::BridgePort::queueForSendTiming(PacketPtr pkt)
         // from original request
         buf->fixResponse(pkt);
 
-        // Check if this packet was expecting a response (this is either it or
-        // its a nacked packet and we won't be seeing that response)
-        if (buf->expectResponse)
+        // Check if this packet was expecting a response and it's a nacked
+        // packet, in which case we will never being seeing it
+        if (buf->expectResponse && pkt->result == Packet::Nacked)
             --outstandingResponses;
 
 
@@ -212,6 +219,13 @@ Bridge::BridgePort::queueForSendTiming(PacketPtr pkt)
         DPRINTF(BusBridge, "  is response, new dest %d\n", pkt->getDest());
         delete buf;
     }
+
+
+    if (pkt->isRequest() && pkt->result != Packet::Nacked) {
+        ++queuedRequests;
+    }
+
+
 
     Tick readyTime = curTick + delay;
     PacketBuffer *buf = new PacketBuffer(pkt, readyTime);
@@ -225,7 +239,6 @@ Bridge::BridgePort::queueForSendTiming(PacketPtr pkt)
     if (sendQueue.empty()) {
         sendEvent.schedule(readyTime);
     }
-    ++queuedRequests;
     sendQueue.push_back(buf);
 }
 
@@ -233,8 +246,6 @@ void
 Bridge::BridgePort::trySend()
 {
     assert(!sendQueue.empty());
-
-    int pbs = peerBlockSize();
 
     PacketBuffer *buf = sendQueue.front();
 
@@ -244,16 +255,22 @@ Bridge::BridgePort::trySend()
 
     pkt->flags &= ~SNOOP_COMMIT; //CLear it if it was set
 
+    // Ugly! @todo When multilevel coherence works this will be removed
     if (pkt->cmd == MemCmd::WriteInvalidateReq && fixPartialWrite &&
-            pkt->result != Packet::Nacked && pkt->getOffset(pbs) &&
-            pkt->getSize() != pbs) {
-        buf->partialWriteFix(this);
-        pkt = buf->pkt;
+            pkt->result != Packet::Nacked) {
+        PacketPtr funcPkt = new Packet(pkt->req, MemCmd::WriteReq,
+                            Packet::Broadcast);
+        funcPkt->dataStatic(pkt->getPtr<uint8_t>());
+        sendFunctional(funcPkt);
+        pkt->cmd = MemCmd::WriteReq;
+        delete funcPkt;
     }
 
     DPRINTF(BusBridge, "trySend: origSrc %d dest %d addr 0x%x\n",
             buf->origSrc, pkt->getDest(), pkt->getAddr());
 
+    bool wasReq = pkt->isRequest();
+    bool wasNacked = pkt->result == Packet::Nacked;
 
     if (sendTiming(pkt)) {
         // send successful
@@ -270,8 +287,12 @@ Bridge::BridgePort::trySend()
             delete buf;
         }
 
-        if (!buf->nacked)
+        if (!wasNacked) {
+            if (wasReq)
                 --queuedRequests;
+            else
+                --outstandingResponses;
+        }
 
         // If there are more packets to send, schedule event to try again.
         if (!sendQueue.empty()) {
@@ -281,7 +302,6 @@ Bridge::BridgePort::trySend()
         }
     } else {
         DPRINTF(BusBridge, "  unsuccessful\n");
-        buf->undoPartialWriteFix();
         inRetry = true;
     }
     DPRINTF(BusBridge, "trySend: queue size: %d outreq: %d outstanding resp: %d\n",
@@ -305,7 +325,18 @@ Bridge::BridgePort::recvRetry()
 Tick
 Bridge::BridgePort::recvAtomic(PacketPtr pkt)
 {
-    return otherPort->sendAtomic(pkt) + delay;
+    // fix partial atomic writes... similar to the timing code that does the
+    // same... will be removed once our code gets this right
+    if (pkt->cmd == MemCmd::WriteInvalidateReq && fixPartialWrite) {
+
+        PacketPtr funcPkt = new Packet(pkt->req, MemCmd::WriteReq,
+                         Packet::Broadcast);
+        funcPkt->dataStatic(pkt->getPtr<uint8_t>());
+        otherPort->sendFunctional(funcPkt);
+        delete funcPkt;
+        pkt->cmd = MemCmd::WriteReq;
+    }
+    return delay + otherPort->sendAtomic(pkt);
 }
 
 /** Function called by the port when the bus is receiving a Functional
@@ -336,7 +367,7 @@ Bridge::BridgePort::recvStatusChange(Port::Status status)
 
 void
 Bridge::BridgePort::getDeviceAddressRanges(AddrRangeList &resp,
-                                           AddrRangeList &snoop)
+                                           bool &snoop)
 {
     otherPort->getPeerAddressRanges(resp, snoop);
 }
@@ -386,4 +417,5 @@ CREATE_SIM_OBJECT(Bridge)
 }
 
 REGISTER_SIM_OBJECT("Bridge", Bridge)
+
 

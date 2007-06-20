@@ -137,6 +137,12 @@ class BaseSimpleCPU : public BaseCPU
     StaticInstPtr curStaticInst;
     StaticInstPtr curMacroStaticInst;
 
+    //This is the offset from the current pc that fetch should be performed at
+    Addr fetchOffset;
+    //This flag says to stay at the current pc. This is useful for
+    //instructions which go beyond MachInst boundaries.
+    bool stayAtPC;
+
     void checkForInterrupts();
     Fault setupFetchRequest(Request *req);
     void preExecute();
@@ -159,6 +165,9 @@ class BaseSimpleCPU : public BaseCPU
     {
         return numInst - startNumInst;
     }
+
+    // Mask to align PCs to MachInst sized boundaries
+    static const Addr PCMask = ~((Addr)sizeof(TheISA::MachInst) - 1);
 
     // number of simulated memory references
     Stats::Scalar<> numMemRefs;

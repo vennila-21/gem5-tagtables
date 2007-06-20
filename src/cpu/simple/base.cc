@@ -70,7 +70,7 @@ using namespace std;
 using namespace TheISA;
 
 BaseSimpleCPU::BaseSimpleCPU(Params *p)
-    : BaseCPU(p), thread(NULL), predecoder(NULL)
+    : BaseCPU(p), traceData(NULL), thread(NULL), predecoder(NULL)
 {
 #if FULL_SYSTEM
     thread = new SimpleThread(this, 0, p->system, p->itb, p->dtb);
@@ -91,6 +91,9 @@ BaseSimpleCPU::BaseSimpleCPU(Params *p)
     lastDcacheStall = 0;
 
     threadContexts.push_back(tc);
+
+    fetchOffset = 0;
+    stayAtPC = false;
 }
 
 BaseSimpleCPU::~BaseSimpleCPU()
@@ -326,18 +329,19 @@ BaseSimpleCPU::checkForInterrupts()
 Fault
 BaseSimpleCPU::setupFetchRequest(Request *req)
 {
+    Addr threadPC = thread->readPC();
+
     // set up memory request for instruction fetch
 #if ISA_HAS_DELAY_SLOT
-    DPRINTF(Fetch,"Fetch: PC:%08p NPC:%08p NNPC:%08p\n",thread->readPC(),
+    DPRINTF(Fetch,"Fetch: PC:%08p NPC:%08p NNPC:%08p\n",threadPC,
             thread->readNextPC(),thread->readNextNPC());
 #else
-    DPRINTF(Fetch,"Fetch: PC:%08p NPC:%08p",thread->readPC(),
+    DPRINTF(Fetch,"Fetch: PC:%08p NPC:%08p\n",threadPC,
             thread->readNextPC());
 #endif
 
-    req->setVirt(0, thread->readPC() & ~3, sizeof(MachInst),
-                 (FULL_SYSTEM && (thread->readPC() & 1)) ? PHYSICAL : 0,
-                 thread->readPC());
+    Addr fetchPC = (threadPC & PCMask) + fetchOffset;
+    req->setVirt(0, fetchPC, sizeof(MachInst), 0, threadPC);
 
     Fault fault = thread->translateInstReq(req);
 
@@ -365,8 +369,10 @@ BaseSimpleCPU::preExecute()
 
     // decode the instruction
     inst = gtoh(inst);
+
     //If we're not in the middle of a macro instruction
     if (!curMacroStaticInst) {
+
         StaticInstPtr instPtr = NULL;
 
         //Predecode, ie bundle up an ExtMachInst
@@ -374,36 +380,50 @@ BaseSimpleCPU::preExecute()
         predecoder.setTC(thread->getTC());
         //If more fetch data is needed, pass it in.
         if(predecoder.needMoreBytes())
-            predecoder.moreBytes(thread->readPC(), 0, inst);
+            predecoder.moreBytes(thread->readPC(),
+                    (thread->readPC() & PCMask) + fetchOffset, 0, inst);
         else
             predecoder.process();
-        //If an instruction is ready, decode it
-        if (predecoder.extMachInstReady())
-            instPtr = StaticInst::decode(predecoder.getExtMachInst());
+
+        //If an instruction is ready, decode it. Otherwise, we'll have to
+        //fetch beyond the MachInst at the current pc.
+        if (predecoder.extMachInstReady()) {
+#if THE_ISA == X86_ISA
+            thread->setNextPC(thread->readPC() + predecoder.getInstSize());
+#endif // X86_ISA
+            stayAtPC = false;
+            instPtr = StaticInst::decode(predecoder.getExtMachInst(),
+                                         thread->readPC());
+        } else {
+            stayAtPC = true;
+            fetchOffset += sizeof(MachInst);
+        }
 
         //If we decoded an instruction and it's microcoded, start pulling
         //out micro ops
-        if (instPtr && instPtr->isMacroOp()) {
+        if (instPtr && instPtr->isMacroop()) {
             curMacroStaticInst = instPtr;
             curStaticInst = curMacroStaticInst->
-                fetchMicroOp(thread->readMicroPC());
+                fetchMicroop(thread->readMicroPC());
         } else {
             curStaticInst = instPtr;
         }
     } else {
         //Read the next micro op from the macro op
         curStaticInst = curMacroStaticInst->
-            fetchMicroOp(thread->readMicroPC());
+            fetchMicroop(thread->readMicroPC());
     }
 
     //If we decoded an instruction this "tick", record information about it.
     if(curStaticInst)
     {
+#if TRACING_ON
         traceData = Trace::getInstRecord(curTick, tc, curStaticInst,
                                          thread->readPC());
 
         DPRINTF(Decode,"Decode: Decoded %s instruction: 0x%x\n",
                 curStaticInst->getName(), curStaticInst->machInst);
+#endif // TRACING_ON
 
 #if FULL_SYSTEM
         thread->setInst(inst);
@@ -418,7 +438,7 @@ BaseSimpleCPU::postExecute()
     if (thread->profile) {
         bool usermode = TheISA::inUserMode(tc);
         thread->profilePC = usermode ? 1 : thread->readPC();
-        StaticInstPtr si(inst);
+        StaticInstPtr si(inst, thread->readPC());
         ProfileNode *node = thread->profile->consume(tc, si);
         if (node)
             thread->profileNode = node;
@@ -447,14 +467,16 @@ BaseSimpleCPU::postExecute()
 void
 BaseSimpleCPU::advancePC(Fault fault)
 {
+    //Since we're moving to a new pc, zero out the offset
+    fetchOffset = 0;
     if (fault != NoFault) {
         curMacroStaticInst = StaticInst::nullStaticInstPtr;
         fault->invoke(tc);
         thread->setMicroPC(0);
         thread->setNextMicroPC(1);
-    } else if (predecoder.needMoreBytes()) {
+    } else {
         //If we're at the last micro op for this instruction
-        if (curStaticInst && curStaticInst->isLastMicroOp()) {
+        if (curStaticInst && curStaticInst->isLastMicroop()) {
             //We should be working with a macro op
             assert(curMacroStaticInst);
             //Close out this macro op, and clean up the

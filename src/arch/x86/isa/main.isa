@@ -67,60 +67,32 @@
 ////////////////////////////////////////////////////////////////////
 //
 // Namespace statement.  Everything below this line will be in the
-// SparcISAInst namespace.
+// X86ISAInst namespace.
 //
 
 namespace X86ISA;
-
-////////////////////////////////////////////////////////////////////
-//
-// General infrastructure code. These files provide infrastructure
-// which was developed to support x86 but isn't specific to it.
-//
-
-//Include code to build macroops.
-##include "macroop.isa"
-
-//Include the simple microcode assembler. This will hopefully stay
-//unspecialized for x86 and can later be made available to other ISAs.
-##include "microasm.isa"
-
-////////////////////////////////////////////////////////////////////
-//
-// X86 only infrastructure code.
-//
-
-//Include the base class for x86 instructions, and some support code.
-##include "base.isa"
-
-//Include code to specialize an instruction template to operate on
-//a particular set of operands. This is specific to x86 and the x86
-//microcode ISA.
-##include "specialize.isa"
-
-////////////////////////////////////////////////////////////////////
-//
-// Code which directly specifies isa components like instructions
-// microops, and the decoder.
-//
-
-//Include the definitions for the instruction formats
-##include "formats/formats.isa"
 
 //Include the operand_types and operand definitions. These are needed by
 //the microop definitions.
 ##include "operands.isa"
 
-//Include the definitions of the micro ops.
-//These are StaticInst classes which stand on their own and make up an
-//internal instruction set.
-##include "microops/microops.isa"
-
-//Include the instruction definitions which are microop assembler programs.
-##include "insts/insts.isa"
-
 //Include the bitfield definitions
 ##include "bitfields.isa"
+
+//Include the base class for x86 instructions, and some support code.
+##include "base.isa"
+
+//Include the definitions for the instruction formats
+##include "formats/formats.isa"
+
+//This file brings in the microcode, microop classes, macroop classes,
+//and supporting components and assembles everything into macroops.
+##include "microasm.isa"
+
+//Include code to specialize an instruction template to operate on
+//a particular set of operands. This is specific to x86 and the x86
+//microcode ISA.
+##include "specialize.isa"
 
 //Include the decoder definition
 ##include "decoder/decoder.isa"

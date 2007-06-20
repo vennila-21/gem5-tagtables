@@ -80,18 +80,13 @@ class Bridge : public MemObject
             short origSrc;
             bool expectResponse;
 
-            bool partialWriteFixed;
-            PacketPtr oldPkt;
-            bool nacked;
-
             PacketBuffer(PacketPtr _pkt, Tick t, bool nack = false)
                 : ready(t), pkt(_pkt),
                   origSenderState(_pkt->senderState), origSrc(_pkt->getSrc()),
-                  expectResponse(_pkt->needsResponse() && !nack),
-                  partialWriteFixed(false), nacked(nack)
+                  expectResponse(_pkt->needsResponse() && !nack)
 
             {
-                if (!pkt->isResponse() && !nack)
+                if (!pkt->isResponse() && !nack && pkt->result != Packet::Nacked)
                     pkt->senderState = this;
             }
 
@@ -100,46 +95,7 @@ class Bridge : public MemObject
                 assert(pkt->senderState == this);
                 pkt->setDest(origSrc);
                 pkt->senderState = origSenderState;
-                if (partialWriteFixed)
-                    delete oldPkt;
             }
-
-            void partialWriteFix(Port *port)
-            {
-                assert(!partialWriteFixed);
-                assert(expectResponse);
-
-                int pbs = port->peerBlockSize();
-                partialWriteFixed = true;
-                PacketDataPtr data;
-
-                data = new uint8_t[pbs];
-                PacketPtr funcPkt = new Packet(pkt->req, MemCmd::ReadReq,
-                        Packet::Broadcast, pbs);
-
-                funcPkt->dataStatic(data);
-                port->sendFunctional(funcPkt);
-                assert(funcPkt->result == Packet::Success);
-                delete funcPkt;
-
-                oldPkt = pkt;
-                memcpy(data + oldPkt->getOffset(pbs), pkt->getPtr<uint8_t>(),
-                        pkt->getSize());
-                pkt = new Packet(oldPkt->req, MemCmd::WriteInvalidateReq,
-                        Packet::Broadcast, pbs);
-                pkt->dataDynamicArray(data);
-                pkt->senderState = oldPkt->senderState;
-            }
-
-            void undoPartialWriteFix()
-            {
-                if (!partialWriteFixed)
-                    return;
-                delete pkt;
-                pkt = oldPkt;
-                partialWriteFixed = false;
-            }
-
         };
 
         /**
@@ -226,7 +182,7 @@ class Bridge : public MemObject
         /** When receiving a address range request the peer port,
             pass it to the bridge. */
         virtual void getDeviceAddressRanges(AddrRangeList &resp,
-                                            AddrRangeList &snoop);
+                                            bool &snoop);
     };
 
     BridgePort portA, portB;
