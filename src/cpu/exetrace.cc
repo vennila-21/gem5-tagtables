@@ -162,7 +162,7 @@ Trace::InstRecord::dump()
         static int fd = 0;
         //Don't print what happens for each micro-op, just print out
         //once at the last op, and for regular instructions.
-        if(!staticInst->isMicroOp() || staticInst->isLastMicroOp())
+        if(!staticInst->isMicroop() || staticInst->isLastMicroop())
         {
             if(!cosim_listener)
             {
@@ -245,7 +245,7 @@ Trace::InstRecord::dump()
 #if 0 //THE_ISA == SPARC_ISA
         //Don't print what happens for each micro-op, just print out
         //once at the last op, and for regular instructions.
-        if(!staticInst->isMicroOp() || staticInst->isLastMicroOp())
+        if(!staticInst->isMicroop() || staticInst->isLastMicroop())
         {
             static uint64_t regs[32] = {
                 0, 0, 0, 0, 0, 0, 0, 0,
@@ -432,7 +432,7 @@ Trace::InstRecord::dump()
             setupSharedData();
 
         // We took a trap on a micro-op...
-        if (wasMicro && !staticInst->isMicroOp())
+        if (wasMicro && !staticInst->isMicroop())
         {
             // let's skip comparing this tick
             while (!compared)
@@ -444,13 +444,13 @@ Trace::InstRecord::dump()
             wasMicro = false;
         }
 
-        if (staticInst->isLastMicroOp())
+        if (staticInst->isLastMicroop())
             wasMicro = false;
-        else if (staticInst->isMicroOp())
+        else if (staticInst->isMicroop())
             wasMicro = true;
 
 
-        if(!staticInst->isMicroOp() || staticInst->isLastMicroOp()) {
+        if(!staticInst->isMicroop() || staticInst->isLastMicroop()) {
             while (!compared) {
                 if (shared_data->flags == OWN_M5) {
                     m5Pc = PC & TheISA::PAddrImplMask;
@@ -650,12 +650,13 @@ Trace::InstRecord::dump()
                              << endl;
 
                         predecoder.setTC(thread);
-                        predecoder.moreBytes(m5Pc, 0, shared_data->instruction);
+                        predecoder.moreBytes(m5Pc, m5Pc, 0,
+                                shared_data->instruction);
 
                         assert(predecoder.extMachInstReady());
 
                         StaticInstPtr legionInst =
-                            StaticInst::decode(predecoder.getExtMachInst());
+                            StaticInst::decode(predecoder.getExtMachInst(), lgnPc);
                         outs << setfill(' ') << setw(15)
                              << " Legion Inst: "
                              << "0x" << setw(8) << setfill('0') << hex

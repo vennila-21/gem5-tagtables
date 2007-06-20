@@ -38,22 +38,14 @@ class CowIdeDisk(IdeDisk):
     def childImage(self, ci):
         self.image.child.image_file = ci
 
-class CowMmDisk(MmDisk):
-    image = CowDiskImage(child=RawDiskImage(read_only=True),
-                         read_only=False)
-
-    def childImage(self, ci):
-        self.image.child.image_file = ci
-
-
-class BaseTsunami(Tsunami):
-    ethernet = NSGigE(configdata=NSGigEPciData(),
-                      pci_bus=0, pci_dev=1, pci_func=0)
-    etherint = NSGigEInt(device=Parent.ethernet)
-    ide = IdeController(disks=[Parent.disk0, Parent.disk2],
-                        pci_func=0, pci_dev=0, pci_bus=0)
-
 def makeLinuxAlphaSystem(mem_mode, mdesc = None):
+    class BaseTsunami(Tsunami):
+        ethernet = NSGigE(configdata=NSGigEPciData(),
+                          pci_bus=0, pci_dev=1, pci_func=0)
+        etherint = NSGigEInt(device=Parent.ethernet)
+        ide = IdeController(disks=[Parent.disk0, Parent.disk2],
+                            pci_func=0, pci_dev=0, pci_bus=0)
+
     self = LinuxAlphaSystem()
     if not mdesc:
         # generic system
@@ -61,7 +53,7 @@ def makeLinuxAlphaSystem(mem_mode, mdesc = None):
     self.readfile = mdesc.script()
     self.iobus = Bus(bus_id=0)
     self.membus = Bus(bus_id=1)
-    self.bridge = Bridge(fix_partial_write_b=True)
+    self.bridge = Bridge(fix_partial_write_b=True, delay='50ns', nack_delay='4ns')
     self.physmem = PhysicalMemory(range = AddrRange(mdesc.mem()))
     self.bridge.side_a = self.iobus.port
     self.bridge.side_b = self.membus.port
@@ -87,6 +79,13 @@ def makeLinuxAlphaSystem(mem_mode, mdesc = None):
     return self
 
 def makeSparcSystem(mem_mode, mdesc = None):
+    class CowMmDisk(MmDisk):
+        image = CowDiskImage(child=RawDiskImage(read_only=True),
+                             read_only=False)
+
+        def childImage(self, ci):
+            self.image.child.image_file = ci
+
     self = SparcSystem()
     if not mdesc:
         # generic system
@@ -94,7 +93,7 @@ def makeSparcSystem(mem_mode, mdesc = None):
     self.readfile = mdesc.script()
     self.iobus = Bus(bus_id=0)
     self.membus = Bus(bus_id=1)
-    self.bridge = Bridge()
+    self.bridge = Bridge(fix_partial_write_b=True, delay='50ns', nack_delay='4ns')
     self.t1000 = T1000()
     self.t1000.attachOnChipIO(self.membus)
     self.t1000.attachIO(self.iobus)
