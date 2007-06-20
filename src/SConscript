@@ -1,0 +1,333 @@
+# -*- mode:python -*-
+
+# Copyright (c) 2004-2005 The Regents of The University of Michigan
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met: redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer;
+# redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution;
+# neither the name of the copyright holders nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Authors: Steve Reinhardt
+
+import os
+import sys
+import zipfile
+
+from os.path import basename
+from os.path import join as joinpath
+
+import SCons
+
+# This file defines how to build a particular configuration of M5
+# based on variable settings in the 'env' build environment.
+
+Import('*')
+
+# Children need to see the environment
+Export('env')
+
+########################################################################
+# Code for adding source files
+#
+sources = []
+def Source(source):
+    if isinstance(source, SCons.Node.FS.File):
+        sources.append(source)
+    else:
+        sources.append(File(source))
+
+# Children should have access
+Export('Source')
+
+########################################################################
+# Code for adding python objects
+#
+py_sources = []
+py_source_packages = {}
+def PySource(package, source):
+    if not isinstance(source, SCons.Node.FS.File):
+        source = File(source)
+    py_source_packages[source] = package
+    py_sources.append(source)
+
+sim_objects = []
+def SimObject(source):
+    if not isinstance(source, SCons.Node.FS.File):
+        source = File(source)
+    PySource('m5.objects', source)
+    modname = basename(str(source))
+    sim_objects.append(modname)
+
+swig_sources = []
+swig_source_packages = {}
+def SwigSource(package, source):
+    if not isinstance(source, SCons.Node.FS.File):
+        source = File(source)
+    swig_source_packages[source] = package
+    swig_sources.append(source)
+
+# Children should have access
+Export('PySource')
+Export('SimObject')
+Export('SwigSource')
+
+########################################################################
+#
+# Set some compiler variables
+#
+
+# Include file paths are rooted in this directory.  SCons will
+# automatically expand '.' to refer to both the source directory and
+# the corresponding build directory to pick up generated include
+# files.
+env.Append(CPPPATH=Dir('.'))
+
+# Add a flag defining what THE_ISA should be for all compilation
+env.Append(CPPDEFINES=[('THE_ISA','%s_ISA' % env['TARGET_ISA'].upper())])
+
+########################################################################
+# Walk the tree and execute all SConscripts
+#
+scripts = []
+srcdir = env['SRCDIR']
+for root, dirs, files in os.walk(srcdir, topdown=True):
+    if root == srcdir:
+        # we don't want to recurse back into this SConscript
+        continue
+    
+    if 'SConscript' in files:
+        # strip off the srcdir part since scons will try to find the
+        # script in the build directory
+        base = root[len(srcdir) + 1:]
+        SConscript(joinpath(base, 'SConscript'))
+
+for opt in env.ExportOptions:
+    env.ConfigFile(opt)
+
+########################################################################
+#
+# Deal with python/swig, object code.  Collect .py files and
+# generating a zip archive that is appended to the m5 binary.
+#
+
+# Generate Python file that contains a dict specifying the current
+# build_env flags.
+def MakeDefinesPyFile(target, source, env):
+    f = file(str(target[0]), 'w')
+    print >>f, "m5_build_env = ", source[0]
+    f.close()
+
+optionDict = dict([(opt, env[opt]) for opt in env.ExportOptions])
+env.Command('python/m5/defines.py', Value(optionDict), MakeDefinesPyFile)
+PySource('m5', 'python/m5/defines.py')
+
+def MakeInfoPyFile(target, source, env):
+    f = file(str(target[0]), 'w')
+    for src in source:
+        data = ''.join(file(src.srcnode().abspath, 'r').xreadlines())
+        print >>f, "%s = %s" % (src, repr(data))
+    f.close()
+
+env.Command('python/m5/info.py',
+            [ '#/AUTHORS', '#/LICENSE', '#/README', '#/RELEASE_NOTES' ],
+            MakeInfoPyFile)
+PySource('m5', 'python/m5/info.py')
+
+def MakeObjectsInitFile(target, source, env):
+    f = file(str(target[0]), 'w')
+    print >>f, 'from m5.SimObject import *'
+    for src_path in source:
+        src_file = basename(src_path.get_contents())
+        assert(src_file.endswith('.py'))
+        src_module = src_file[:-3]
+        print >>f, 'from %s import *' % src_module
+    f.close()
+
+env.Command('python/m5/objects/__init__.py',
+            [ Value(o) for o in sim_objects],
+            MakeObjectsInitFile)
+PySource('m5.objects', 'python/m5/objects/__init__.py')
+
+swig_modules = []
+for source in swig_sources:
+    source.rfile() # Hack to cause the symlink to the .i file to be created
+    package = swig_source_packages[source]
+    filename = str(source)
+    module = basename(filename)
+
+    assert(module.endswith('.i'))
+    module = module[:-2]
+    cc_file = 'swig/%s_wrap.cc' % module
+    py_file = 'm5/internal/%s.py' % module
+
+    env.Command([cc_file, py_file], source,
+                '$SWIG $SWIGFLAGS -outdir ${TARGETS[1].dir} '
+                '-o ${TARGETS[0]} $SOURCES')
+    env.Depends(py_file, source)
+    env.Depends(cc_file, source)
+                
+    swig_modules.append(Value(module))
+    Source(cc_file)
+    PySource(package, py_file)
+
+def MakeSwigInit(target, source, env):
+    f = file(str(target[0]), 'w')
+    print >>f, 'extern "C" {'
+    for module in source:
+        print >>f, '    void init_%s();' % module.get_contents()
+    print >>f, '}'
+    print >>f, 'void init_swig() {'
+    for module in source:
+        print >>f, '    init_%s();' % module.get_contents()
+    print >>f, '}'
+    f.close()
+env.Command('python/swig/init.cc', swig_modules, MakeSwigInit)
+
+def CompilePyFile(target, source, env):
+    import py_compile
+    py_compile.compile(str(source[0]), str(target[0]))
+
+py_compiled = []
+py_arcname = {}
+py_zip_depends = []
+for source in py_sources:
+    filename = str(source)
+    package = py_source_packages[source]
+    arc_path = package.split('.') + [ basename(filename) + 'c' ]
+    zip_path = [ 'zip' ] + arc_path
+    arcname = joinpath(*arc_path)
+    zipname = joinpath(*zip_path)
+    f = File(zipname)
+
+    env.Command(f, source, CompilePyFile)
+    py_compiled.append(f)
+    py_arcname[f] = arcname
+
+    # make the zipfile depend on the archive name so that the archive
+    # is rebuilt if the name changes
+    py_zip_depends.append(Value(arcname))
+
+# Action function to build the zip archive.  Uses the PyZipFile module
+# included in the standard Python library.
+def buildPyZip(target, source, env):
+    zf = zipfile.ZipFile(str(target[0]), 'w')
+    for s in source:
+        arcname = py_arcname[s]
+        zipname = str(s)
+        zf.write(zipname, arcname)
+    zf.close()
+
+# Add the zip file target to the environment.
+env.Command('m5py.zip', py_compiled, buildPyZip)
+env.Depends('m5py.zip', py_zip_depends)
+
+########################################################################
+#
+# Define binaries.  Each different build type (debug, opt, etc.) gets
+# a slightly different build environment.
+#
+
+# List of constructed environments to pass back to SConstruct
+envList = []
+
+# This function adds the specified sources to the given build
+# environment, and returns a list of all the corresponding SCons
+# Object nodes (including an extra one for date.cc).  We explicitly
+# add the Object nodes so we can set up special dependencies for
+# date.cc.
+def make_objs(sources, env):
+    objs = [env.Object(s) for s in sources]
+    # make date.cc depend on all other objects so it always gets
+    # recompiled whenever anything else does
+    date_obj = env.Object('base/date.cc')
+    env.Depends(date_obj, objs)
+    objs.append(date_obj)
+    return objs
+
+# Function to create a new build environment as clone of current
+# environment 'env' with modified object suffix and optional stripped
+# binary.  Additional keyword arguments are appended to corresponding
+# build environment vars.
+def makeEnv(label, objsfx, strip = False, **kwargs):
+    newEnv = env.Copy(OBJSUFFIX=objsfx)
+    newEnv.Label = label
+    newEnv.Append(**kwargs)
+    exe = 'm5.' + label  # final executable
+    bin = exe + '.bin'   # executable w/o appended Python zip archive
+    newEnv.Program(bin, make_objs(sources, newEnv))
+    if strip:
+        stripped_bin = bin + '.stripped'
+        if sys.platform == 'sunos5':
+            cmd = 'cp $SOURCE $TARGET; strip $TARGET'
+        else:
+            cmd = 'strip $SOURCE -o $TARGET'
+        newEnv.Command(stripped_bin, bin, cmd)
+        bin = stripped_bin
+    targets = newEnv.Concat(exe, [bin, 'm5py.zip'])
+    newEnv.M5Binary = targets[0]
+    envList.append(newEnv)
+
+# Debug binary
+ccflags = {}
+if env['GCC']:
+    if sys.platform == 'sunos5':
+        ccflags['debug'] = '-gstabs+'
+    else:
+        ccflags['debug'] = '-ggdb3'
+    ccflags['opt'] = '-g -O3'
+    ccflags['fast'] = '-O3'
+    ccflags['prof'] = '-O3 -g -pg'
+elif env['SUNCC']:
+    ccflags['debug'] = '-g0'
+    ccflags['opt'] = '-g -O'
+    ccflags['fast'] = '-fast'
+    ccflags['prof'] = '-fast -g -pg'
+elif env['ICC']:
+    ccflags['debug'] = '-g -O0'
+    ccflags['opt'] = '-g -O'
+    ccflags['fast'] = '-fast'
+    ccflags['prof'] = '-fast -g -pg'
+else:
+    print 'Unknown compiler, please fix compiler options'
+    Exit(1)    
+
+makeEnv('debug', '.do',
+        CCFLAGS = Split(ccflags['debug']),
+        CPPDEFINES = ['DEBUG', 'TRACING_ON=1'])
+
+# Optimized binary
+makeEnv('opt', '.o',
+        CCFLAGS = Split(ccflags['opt']),
+        CPPDEFINES = ['TRACING_ON=1'])
+
+# "Fast" binary
+makeEnv('fast', '.fo', strip = True,
+        CCFLAGS = Split(ccflags['fast']),
+        CPPDEFINES = ['NDEBUG', 'TRACING_ON=0'])
+
+# Profiled binary
+makeEnv('prof', '.po',
+        CCFLAGS = Split(ccflags['prof']),
+        CPPDEFINES = ['NDEBUG', 'TRACING_ON=0'],
+        LINKFLAGS = '-pg')
+
+Return('envList')
