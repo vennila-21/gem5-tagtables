@@ -53,7 +53,27 @@
 #
 # Authors: Gabe Black
 
-microcode = ""
+microcode = '''
+def macroop SUB_R_I
+{
+    subi reg, reg, imm
+};
+
+def macroop SUB_M_I
+{
+    ld t1, ds, [scale, index, base], disp
+    subi t1, t1, imm
+    st t1, ds, [scale, index, base], disp
+};
+
+def macroop SUB_P_I
+{
+    rdip t7
+    ld t1, ds, [scale, index, base], disp
+    subi t1, t1, imm
+    st t1, ds, [scale, index, base], disp
+};
+'''
 #let {{
 #    class ADC(Inst):
 #	"Adc ^0 ^0 ^1"

@@ -127,11 +127,16 @@ def print_error(message):
 
 def handle_statement(parser, container, statement):
     if statement.is_microop:
+        if statement.mnemonic not in parser.microops.keys():
+            raise Exception, "Unrecognized mnemonic: %s" % statement.mnemonic
+        parser.symbols["__microopClassFromInsideTheAssembler"] = \
+            parser.microops[statement.mnemonic]
         try:
-            microop = eval('parser.microops[statement.mnemonic](%s)' %
-                    statement.params)
+            microop = eval('__microopClassFromInsideTheAssembler(%s)' %
+                    statement.params, {}, parser.symbols)
         except:
-            print_error("Error creating microop object.")
+            print_error("Error creating microop object with mnemonic %s." % \
+                    statement.mnemonic)
             raise
         try:
             for label in statement.labels:
@@ -143,8 +148,13 @@ def handle_statement(parser, container, statement):
             print_error("Error adding microop.")
             raise
     elif statement.is_directive:
+        if statement.name not in container.directives.keys():
+            raise Exception, "Unrecognized directive: %s" % statement.name
+        parser.symbols["__directiveFunctionFromInsideTheAssembler"] = \
+            container.directives[statement.name]
         try:
-            eval('container.directives[statement.name](%s)' % statement.params)
+            eval('__directiveFunctionFromInsideTheAssembler(%s)' %
+                    statement.params, {}, parser.symbols)
         except:
             print_error("Error executing directive.")
             print container.directives
@@ -212,6 +222,19 @@ def t_params_COLON(t):
     t.lexer.begin('asm')
     return t
 
+# Parameters are a string of text which don't contain an unescaped statement
+# statement terminator, ie a newline or semi colon.
+def t_params_PARAMS(t):
+    r'([^\n;\\]|(\\[\n;\\]))+'
+    t.lineno += t.value.count('\n')
+    unescapeParamsRE = re.compile(r'(\\[\n;\\])')
+    def unescapeParams(mo):
+        val = mo.group(0)
+        return val[1]
+    t.value = unescapeParamsRE.sub(unescapeParams, t.value)
+    t.lexer.begin('asm')
+    return t
+
 # An "ID" in the micro assembler is either a label, directive, or mnemonic
 # If it's either a directive or a mnemonic, it will be optionally followed by
 # parameters. If it's a label, the following colon will make the lexer stop
@@ -222,26 +245,11 @@ def t_asm_ID(t):
     t.lexer.begin('params')
     return t
 
-# If there is a label and you're -not- in the assember (which would be caught
+# If there is a label and you're -not- in the assembler (which would be caught
 # above), don't start looking for parameters.
 def t_ANY_ID(t):
     r'[A-Za-z_]\w*'
     t.type = reserved_map.get(t.value, 'ID')
-    return t
-
-# Parameters are a string of text which don't contain an unescaped statement
-# statement terminator, ie a newline or semi colon.
-def t_params_PARAMS(t):
-    r'([^\n;\\]|(\\[\n;\\]))+'
-    t.lineno += t.value.count('\n')
-    unescapeParamsRE = re.compile(r'(\\[\n;\\])')
-    def unescapeParams(mo):
-        val = mo.group(0)
-        print "About to sub %s for %s" % (val[1], val)
-        return val[1]
-    print "Looking for matches in %s" % t.value
-    t.value = unescapeParamsRE.sub(unescapeParams, t.value)
-    t.lexer.begin('asm')
     return t
 
 # Braces enter and exit micro assembly
@@ -478,14 +486,11 @@ class MicroAssembler(object):
         self.parser.microops = microops
         self.parser.rom = rom
         self.parser.rom_macroop_type = rom_macroop_type
+        self.parser.symbols = {}
+        self.symbols = self.parser.symbols
 
     def assemble(self, asm):
         self.parser.parse(asm, lexer=self.lexer)
-        # Begin debug printing
-        for macroop in self.parser.macroops.values():
-            print macroop
-        print self.parser.rom
-        # End debug printing
         macroops = self.parser.macroops
         self.parser.macroops = {}
         return macroops

@@ -53,7 +53,19 @@
 #
 # Authors: Gabe Black
 
-microcode = ""
+microcode = '''
+def macroop CALL_I
+{
+    # Make the default data size of pops 64 bits in 64 bit mode
+    .adjust_env oszIn64Override
+
+    limm t2, imm
+    rdip t1
+    subi "INTREG_RSP", "INTREG_RSP", dsz
+    st t1, ss, [0, t0, "INTREG_RSP"]
+    wrip t1, t2
+};
+'''
 #let {{
 #    class CALL(Inst):
 #	"GenFault ${new UnimpInstFault}"
