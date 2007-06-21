@@ -55,24 +55,55 @@
 
 microcode = '''
 def macroop MOV_R_R {
-    mov "env.reg", "env.reg", "env.regm"
+    mov reg, reg, regm
 };
 
 def macroop MOV_M_R {
-    #Do a store to put the register operand into memory
+    st reg, ds, [scale, index, base], disp
+};
+
+def macroop MOV_P_R {
+    rdip t7
+    st reg, ds, [scale, index, base], disp
 };
 
 def macroop MOV_R_M {
-    #Do a load to fill the register operand from memory
+    ld reg, ds, [scale, index, base], disp
+};
+
+def macroop MOV_R_P {
+    rdip t7
+    ld reg, ds, [scale, index, base], disp
 };
 
 def macroop MOV_R_I {
-    limm "env.reg", "IMMEDIATE"
+    limm reg, imm
 };
 
 def macroop MOV_M_I {
-    limm "env.reg", "IMMEDIATE"
-    #Do a store to put the register operand into memory
+    limm t1, imm
+    st t1, ds, [scale, index, base], disp
+};
+
+def macroop MOV_P_I {
+    rdip t7
+    limm t1, imm
+    st t1, ds, [scale, index, base], disp
+};
+
+def macroop MOVSXD_R_R {
+    sext reg, regm, dsz
+};
+
+def macroop MOVSXD_R_M {
+    ld t1, ds, [scale, index, base], disp
+    sext reg, t1, dsz
+};
+
+def macroop MOVSXD_R_P {
+    rdip t7
+    ld t1, ds, [scale, index, base], disp
+    sext reg, t1, dsz
 };
 '''
 #let {{

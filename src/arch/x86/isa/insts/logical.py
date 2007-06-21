@@ -56,55 +56,71 @@
 microcode = '''
 def macroop XOR_R_R
 {
-    xor "env.reg", "env.reg", "env.regm"
+    xor reg, reg, regm
 };
 
 def macroop XOR_R_I
 {
-    limm "NUM_INTREGS+1", "IMMEDIATE"
-    xor "env.reg", "env.reg", "NUM_INTREGS+1"
+    limm t1, imm
+    xor reg, reg, t1
 };
 
 def macroop XOR_M_R
 {
-    #Do a load to get one of the sources
-    xor "NUM_INTREGS+1", "NUM_INTREGS+1", "env.reg"
-    #Do a store to write the destination
+    ld t1, ds, [scale, index, base], disp
+    xor t1, t1, reg
+    st t1, ds, [scale, index, base], disp
+};
+
+def macroop XOR_P_R
+{
+    rdip t7
+    ld t1, ds, [scale, index, base], disp
+    xor t1, t1, reg
+    st t1, ds, [scale, index, base], disp
 };
 
 def macroop XOR_R_M
 {
-    #Do a load to get one of the sources
-    xor "env.reg", "env.reg", "NUM_INTREGS+1"
+    ld t1, ds, [scale, index, base], disp
+    xor reg, reg, t1
+};
+
+def macroop XOR_R_P
+{
+    rdip t7
+    ld t1, ds, [scale, index, base], disp
+    xor reg, reg, t1
 };
 
 def macroop AND_R_I
 {
-    limm "NUM_INTREGS+1", "IMMEDIATE"
-    and "env.reg", "env.reg", "NUM_INTREGS+1"
+    limm t1, imm
+    and reg, reg, t1
 };
 
 def macroop AND_M_I
 {
-    #Do a load to get one of the sources
-    limm "NUM_INTREGS+1", "IMMEDIATE"
-    and "NUM_INTREGS+1", "NUM_INTREGS+1", "NUM_INTREGS+2"
-    #Do a store to write the destination
+    ld t2, ds, [scale, index, base], disp
+    limm t1, imm
+    and t2, t2, t1
+    st t2, ds, [scale, index, base], disp
+};
+
+def macroop AND_P_I
+{
+    rdip t7
+    ld t2, ds, [scale, index, base], disp
+    limm t1, imm
+    and t2, t2, t1
+    st t2, ds, [scale, index, base], disp
 };
 '''
 #let {{
 #microcodeString = '''
-#    def macroop AND
-#    {
-#	And reg reg regm
-#    };
 #    def macroop OR
 #    {
 #	Or reg reg regm
-#    };
-#    def macroop XOR
-#    {
-#	Xor reg reg regm
 #    };
 #    def macroop NOT
 #    {

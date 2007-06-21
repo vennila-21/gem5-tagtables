@@ -53,8 +53,43 @@
 #
 # Authors: Gabe Black
 
-microcode = ""
-#let {{
-#    class TEST(Inst):
-#	"GenFault ${new UnimpInstFault}"
-#}};
+microcode = '''
+def macroop TEST_M_R
+{
+    ld t1, ds, [scale, index, base], disp
+    and t0, t1, reg
+};
+
+def macroop TEST_P_R
+{
+    rdip t7
+    ld t1, ds, [scale, index, base], disp
+    and t0, t1, reg
+};
+
+def macroop TEST_R_R
+{
+    and t0, reg, regm
+};
+
+def macroop TEST_M_I
+{
+    ld t1, ds, [scale, index, base], disp
+    limm t2, imm
+    and t0, t1, t2
+};
+
+def macroop TEST_P_I
+{
+    rdip t7
+    ld t1, ds, [scale, index, base], disp
+    limm t2, imm
+    and t0, t1, t2
+};
+
+def macroop TEST_R_I
+{
+    limm t1, imm
+    and t0, reg, t1
+};
+'''

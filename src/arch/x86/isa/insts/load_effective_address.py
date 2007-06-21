@@ -53,8 +53,13 @@
 #
 # Authors: Gabe Black
 
-microcode = ""
-#let {{
-#    class LEA(Inst):
-#	"GenFault ${new UnimpInstFault}"
-#}};
+microcode = '''
+def macroop LEA_R_M {
+    lea reg, ds, [scale, index, base], disp
+};
+
+def macroop LEA_R_P {
+    rdip t7
+    lea reg, ds, [scale, index, base], disp
+};
+'''
