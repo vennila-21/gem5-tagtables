@@ -67,17 +67,31 @@ SimpleTimingPort::recvTiming(PacketPtr pkt)
     // code to hanldle nacks here, but I'm pretty sure it didn't work
     // correctly with the drain code, so that would need to be fixed
     // if we ever added it back.
-    assert(pkt->result != Packet::Nacked);
+    assert(pkt->isRequest());
+    assert(pkt->result == Packet::Unknown);
+
+    if (pkt->memInhibitAsserted()) {
+        // snooper will supply based on copy of packet
+        // still target's responsibility to delete packet
+        delete pkt->req;
+        delete pkt;
+        return true;
+    }
+
+    bool needsResponse = pkt->needsResponse();
     Tick latency = recvAtomic(pkt);
     // turn packet around to go back to requester if response expected
-    if (pkt->needsResponse()) {
-        pkt->makeTimingResponse();
+    if (needsResponse) {
+        // recvAtomic() should already have turned packet into
+        // atomic response
+        assert(pkt->isResponse());
+        pkt->convertAtomicToTimingResponse();
         schedSendTiming(pkt, curTick + latency);
-    }
-    else if (pkt->cmd != MemCmd::UpgradeReq) {
+    } else {
         delete pkt->req;
         delete pkt;
     }
+
     return true;
 }
 
@@ -88,28 +102,30 @@ SimpleTimingPort::schedSendTiming(PacketPtr pkt, Tick when)
     assert(when > curTick);
 
     // Nothing is on the list: add it and schedule an event
-    if (transmitList.empty()) {
-        assert(!sendEvent->scheduled());
-        sendEvent->schedule(when);
-        transmitList.push_back(DeferredPacket(when, pkt));
+    if (transmitList.empty() || when < transmitList.front().tick) {
+        transmitList.push_front(DeferredPacket(when, pkt));
+        schedSendEvent(when);
         return;
     }
 
-    // something is on the list and this belongs at the end
+    // list is non-empty and this is not the head, so event should
+    // already be scheduled
+    assert(waitingOnRetry ||
+           (sendEvent->scheduled() && sendEvent->when() <= when));
+
+    // list is non-empty & this belongs at the end
     if (when >= transmitList.back().tick) {
         transmitList.push_back(DeferredPacket(when, pkt));
         return;
     }
-    // Something is on the list and this belongs somewhere else
+
+    // this belongs in the middle somewhere
     DeferredPacketIterator i = transmitList.begin();
+    i++; // already checked for insertion at front
     DeferredPacketIterator end = transmitList.end();
 
     for (; i != end; ++i) {
         if (when < i->tick) {
-            if (i == transmitList.begin()) {
-                //Inserting at begining, reschedule
-                sendEvent->reschedule(when);
-            }
             transmitList.insert(i, DeferredPacket(when, pkt));
             return;
         }
