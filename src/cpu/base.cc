@@ -90,7 +90,7 @@ CPUProgressEvent::process()
 const char *
 CPUProgressEvent::description()
 {
-    return "CPU Progress event";
+    return "CPU Progress";
 }
 
 #if FULL_SYSTEM
