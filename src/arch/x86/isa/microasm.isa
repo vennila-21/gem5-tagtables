@@ -1,0 +1,127 @@
+// -*- mode:c++ -*-
+
+// Copyright (c) 2007 The Hewlett-Packard Development Company
+// All rights reserved.
+//
+// Redistribution and use of this software in source and binary forms,
+// with or without modification, are permitted provided that the
+// following conditions are met:
+//
+// The software must be used only for Non-Commercial Use which means any
+// use which is NOT directed to receiving any direct monetary
+// compensation for, or commercial advantage from such use.  Illustrative
+// examples of non-commercial use are academic research, personal study,
+// teaching, education and corporate research & development.
+// Illustrative examples of commercial use are distributing products for
+// commercial advantage and providing services using the software for
+// commercial advantage.
+//
+// If you wish to use this software or functionality therein that may be
+// covered by patents for commercial use, please contact:
+//     Director of Intellectual Property Licensing
+//     Office of Strategy and Technology
+//     Hewlett-Packard Company
+//     1501 Page Mill Road
+//     Palo Alto, California  94304
+//
+// Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.  Redistributions
+// in binary form must reproduce the above copyright notice, this list of
+// conditions and the following disclaimer in the documentation and/or
+// other materials provided with the distribution.  Neither the name of
+// the COPYRIGHT HOLDER(s), HEWLETT-PACKARD COMPANY, nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.  No right of
+// sublicense is granted herewith.  Derivatives of the software and
+// output created using the software may be prepared, but only for
+// Non-Commercial Uses.  Derivatives of the software may be shared with
+// others provided: (i) the others agree to abide by the list of
+// conditions herein which includes the Non-Commercial Use restrictions;
+// and (ii) such Derivatives of the software include the above copyright
+// notice to acknowledge the contribution from this software where
+// applicable, this list of conditions and the disclaimer below.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Gabe Black
+
+//Include the definitions of the micro ops.
+//These are python representations of static insts which stand on their own
+//and make up an internal instruction set. They are used by the micro
+//assembler.
+##include "microops/microops.isa"
+
+//Include code to build macroops in both C++ and python.
+##include "macroop.isa"
+
+let {{
+    import sys
+    sys.path[0:0] = ["src/arch/x86/isa/"]
+    from insts import microcode
+    # print microcode
+    from micro_asm import MicroAssembler, Rom_Macroop, Rom
+    mainRom = Rom('main ROM')
+    assembler = MicroAssembler(X86Macroop, microopClasses, mainRom, Rom_Macroop)
+    # Add in symbols for the microcode registers
+    for num in range(15):
+        assembler.symbols["t%d" % num] = "NUM_INTREGS+%d" % num
+    # Add in symbols for the segment descriptor registers
+    for letter in ("C", "D", "E", "F", "G", "S"):
+        assembler.symbols["%ss" % letter.lower()] = "SEGMENT_REG_%sS" % letter
+    # Miscellaneous symbols
+    symbols = {
+        "reg" : "env.reg",
+        "regm" : "env.regm",
+        "imm" : "IMMEDIATE",
+        "disp" : "DISPLACEMENT",
+        "seg" : "env.seg",
+        "scale" : "env.scale",
+        "index" : "env.index",
+        "base" : "env.base",
+        "dsz" : "env.dataSize",
+        "osz" : "env.operandSize",
+        "ssz" : "env.stackSize"
+    }
+    assembler.symbols.update(symbols)
+
+    # Short hand for common scale-index-base combinations.
+    assembler.symbols["sib"] = \
+        [symbols["scale"], symbols["index"], symbols["base"]]
+    assembler.symbols["riprel"] = \
+        ["1", assembler.symbols["t0"], assembler.symbols["t7"]]
+
+    for reg in ('ax', 'bx', 'cx', 'dx', 'sp', 'bp', 'si', 'di'):
+        assembler.symbols["r%s" % reg] = "INTREG_R%s" % reg.upper()
+
+    for flag in ('CF', 'PF', 'ECF', 'AF', 'EZF', 'ZF', 'SF', 'OF'):
+        assembler.symbols[flag] = flag + "Bit"
+
+    for cond in ('True', 'False', 'ECF', 'EZF', 'SZnZF',
+                 'MSTRZ', 'STRZ', 'MSTRC', 'STRZnZF',
+                 'OF', 'CF', 'ZF', 'CvZF',
+                 'SF', 'PF', 'SxOF', 'SxOvZF'):
+        assembler.symbols["C%s" % cond] = "ConditionTests::%s" % cond
+        assembler.symbols["nC%s" % cond] = "ConditionTests::Not%s" % cond
+
+    assembler.symbols["CTrue"] = "ConditionTests::True"
+    assembler.symbols["CFalse"] = "ConditionTests::False"
+
+    # Code literal which forces a default 64 bit operand size in 64 bit mode.
+    assembler.symbols["oszIn64Override"] = '''
+    if (machInst.mode.submode == SixtyFourBitMode &&
+            env.dataSize == 4)
+        env.dataSize = 8;
+    '''
+
+    macroopDict = assembler.assemble(microcode)
+}};
