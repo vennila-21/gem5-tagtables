@@ -1,0 +1,108 @@
+#! /usr/bin/env python
+# Copyright (c) 2005-2007 The Regents of The University of Michigan
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met: redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer;
+# redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution;
+# neither the name of the copyright holders nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Authors: Steve Reinhardt
+
+import sys
+import os
+import optparse
+import datetime
+
+progname = os.path.basename(sys.argv[0])
+
+optparser = optparse.OptionParser()
+optparser.add_option('-v', '--verbose', dest='verbose', action='store_true',
+                     default=False,
+                     help='echo commands before executing')
+optparser.add_option('--builds', dest='builds',
+                     default='ALPHA_SE,ALPHA_FS,MIPS_SE,SPARC_SE,SPARC_FS',
+                     help='comma-separated list of build targets to test  '
+                     " (default: '%default')" )
+optparser.add_option('--variants', dest='variants',
+                     default='fast',
+                     help='comma-separated list of build variants to test '
+                     " (default: '%default')" )
+optparser.add_option('--scons-opts', dest='scons_opts', default='',
+                     help='scons options', metavar='OPTS')
+optparser.add_option('-j', '--jobs', type='int', default=1,
+                     help='number of parallel jobs to use')
+
+(options, tests) = optparser.parse_args()
+
+
+# split list options on ',' to get Python lists
+builds = options.builds.split(',')
+variants = options.variants.split(',')
+
+# Call os.system() and raise exception if return status is non-zero
+def system(cmd):
+    if options.verbose:
+        print cmd
+    status = os.system(cmd)
+    if status != 0:
+        upper = (status & 0xff00) >> 8
+        lower = (status & 0xff)
+        raise OSError, "shell command '%s' failed, status %d:%d" \
+              % (cmd, upper, lower)
+
+# Quote string s so it can be passed as a shell arg
+def shellquote(s):
+    if ' ' in s:
+        s = "'%s'" % s
+    return s
+
+try:
+    if not tests:
+        print "No tests specified, just building binaries."
+        targets = ['build/%s/m5.%s' % (build, variant)
+		   for build in builds
+		   for variant in variants]
+    elif 'all' in tests:
+	targets = ['build/%s/tests/%s' % (build, variant)
+		   for build in builds
+		   for variant in variants]
+    else:
+        # Ugly! Since we don't have any quick SPARC_FS tests remove the SPARC_FS target
+        # If we ever get a quick SPARC_FS test, this code should be removed
+        if 'quick' in tests and 'SPARC_FS' in builds:
+            builds.remove('SPARC_FS')
+	targets = ['build/%s/tests/%s/%s' % (build, variant, test)
+		   for build in builds
+		   for variant in variants
+		   for test in tests]
+
+    scons_opts = options.scons_opts
+    if options.jobs != 1:
+        scons_opts += ' -j %d' % options.jobs
+
+    system('scons IGNORE_STYLE=True %s %s' % (scons_opts, ' '.join(targets)))
+
+    sys.exit(0)
+
+except OSError, exc:
+    print "%s: " % progname, exc
+    sys.exit(1)
