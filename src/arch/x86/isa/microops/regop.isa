@@ -1,0 +1,639 @@
+// Copyright (c) 2007 The Hewlett-Packard Development Company
+// All rights reserved.
+//
+// Redistribution and use of this software in source and binary forms,
+// with or without modification, are permitted provided that the
+// following conditions are met:
+//
+// The software must be used only for Non-Commercial Use which means any
+// use which is NOT directed to receiving any direct monetary
+// compensation for, or commercial advantage from such use.  Illustrative
+// examples of non-commercial use are academic research, personal study,
+// teaching, education and corporate research & development.
+// Illustrative examples of commercial use are distributing products for
+// commercial advantage and providing services using the software for
+// commercial advantage.
+//
+// If you wish to use this software or functionality therein that may be
+// covered by patents for commercial use, please contact:
+//     Director of Intellectual Property Licensing
+//     Office of Strategy and Technology
+//     Hewlett-Packard Company
+//     1501 Page Mill Road
+//     Palo Alto, California  94304
+//
+// Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.  Redistributions
+// in binary form must reproduce the above copyright notice, this list of
+// conditions and the following disclaimer in the documentation and/or
+// other materials provided with the distribution.  Neither the name of
+// the COPYRIGHT HOLDER(s), HEWLETT-PACKARD COMPANY, nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.  No right of
+// sublicense is granted herewith.  Derivatives of the software and
+// output created using the software may be prepared, but only for
+// Non-Commercial Uses.  Derivatives of the software may be shared with
+// others provided: (i) the others agree to abide by the list of
+// conditions herein which includes the Non-Commercial Use restrictions;
+// and (ii) such Derivatives of the software include the above copyright
+// notice to acknowledge the contribution from this software where
+// applicable, this list of conditions and the disclaimer below.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Gabe Black
+
+//////////////////////////////////////////////////////////////////////////
+//
+// RegOp Microop templates
+//
+//////////////////////////////////////////////////////////////////////////
+
+def template MicroRegOpExecute {{
+        Fault %(class_name)s::execute(%(CPU_exec_context)s *xc,
+                Trace::InstRecord *traceData) const
+        {
+            Fault fault = NoFault;
+
+            DPRINTF(X86, "The data size is %d\n", dataSize);
+            %(op_decl)s;
+            %(op_rd)s;
+
+            if(%(cond_check)s)
+            {
+                %(code)s;
+                %(flag_code)s;
+            }
+            else
+            {
+                %(else_code)s;
+            }
+
+            //Write the resulting state to the execution context
+            if(fault == NoFault)
+            {
+                %(op_wb)s;
+            }
+            return fault;
+        }
+}};
+
+def template MicroRegOpImmExecute {{
+        Fault %(class_name)s::execute(%(CPU_exec_context)s *xc,
+                Trace::InstRecord *traceData) const
+        {
+            Fault fault = NoFault;
+
+            %(op_decl)s;
+            %(op_rd)s;
+
+            if(%(cond_check)s)
+            {
+                %(code)s;
+                %(flag_code)s;
+            }
+            else
+            {
+                %(else_code)s;
+            }
+
+            //Write the resulting state to the execution context
+            if(fault == NoFault)
+            {
+                %(op_wb)s;
+            }
+            return fault;
+        }
+}};
+
+def template MicroRegOpDeclare {{
+    class %(class_name)s : public %(base_class)s
+    {
+      protected:
+        void buildMe();
+
+      public:
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+                RegIndex _src1, RegIndex _src2, RegIndex _dest,
+                uint8_t _dataSize, uint16_t _ext);
+
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                RegIndex _src1, RegIndex _src2, RegIndex _dest,
+                uint8_t _dataSize, uint16_t _ext);
+
+        %(BasicExecDeclare)s
+    };
+}};
+
+def template MicroRegOpImmDeclare {{
+
+    class %(class_name)s : public %(base_class)s
+    {
+      protected:
+        void buildMe();
+
+      public:
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+                RegIndex _src1, uint16_t _imm8, RegIndex _dest,
+                uint8_t _dataSize, uint16_t _ext);
+
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                RegIndex _src1, uint16_t _imm8, RegIndex _dest,
+                uint8_t _dataSize, uint16_t _ext);
+
+        %(BasicExecDeclare)s
+    };
+}};
+
+def template MicroRegOpConstructor {{
+
+    inline void %(class_name)s::buildMe()
+    {
+        %(constructor)s;
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            RegIndex _src1, RegIndex _src2, RegIndex _dest,
+            uint8_t _dataSize, uint16_t _ext) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                false, false, false, false,
+                _src1, _src2, _dest, _dataSize, _ext,
+                %(op_class)s)
+    {
+        buildMe();
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+            RegIndex _src1, RegIndex _src2, RegIndex _dest,
+            uint8_t _dataSize, uint16_t _ext) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                isMicro, isDelayed, isFirst, isLast,
+                _src1, _src2, _dest, _dataSize, _ext,
+                %(op_class)s)
+    {
+        buildMe();
+    }
+}};
+
+def template MicroRegOpImmConstructor {{
+
+    inline void %(class_name)s::buildMe()
+    {
+        %(constructor)s;
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            RegIndex _src1, uint16_t _imm8, RegIndex _dest,
+            uint8_t _dataSize, uint16_t _ext) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                false, false, false, false,
+                _src1, _imm8, _dest, _dataSize, _ext,
+                %(op_class)s)
+    {
+        buildMe();
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+            RegIndex _src1, uint16_t _imm8, RegIndex _dest,
+            uint8_t _dataSize, uint16_t _ext) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                isMicro, isDelayed, isFirst, isLast,
+                _src1, _imm8, _dest, _dataSize, _ext,
+                %(op_class)s)
+    {
+        buildMe();
+    }
+}};
+
+let {{
+    # Make these empty strings so that concatenating onto
+    # them will always work.
+    header_output = ""
+    decoder_output = ""
+    exec_output = ""
+
+    immTemplates = (
+            MicroRegOpImmDeclare,
+            MicroRegOpImmConstructor,
+            MicroRegOpImmExecute)
+
+    regTemplates = (
+            MicroRegOpDeclare,
+            MicroRegOpConstructor,
+            MicroRegOpExecute)
+
+    class RegOpMeta(type):
+        def buildCppClasses(self, name, Name, suffix, \
+                code, flag_code, cond_check, else_code):
+
+            # Globals to stick the output in
+            global header_output
+            global decoder_output
+            global exec_output
+
+            # Stick all the code together so it can be searched at once
+            allCode = "|".join((code, flag_code, cond_check, else_code))
+
+            # If op2 is used anywhere, make register and immediate versions
+            # of this code.
+            matcher = re.compile("op2(?P<typeQual>\\.\\w+)?")
+            if matcher.search(allCode):
+                self.buildCppClasses(name, Name, suffix,
+                        matcher.sub("psrc2", code),
+                        matcher.sub("psrc2", flag_code),
+                        matcher.sub("psrc2", cond_check),
+                        matcher.sub("psrc2", else_code))
+                self.buildCppClasses(name + "i", Name, suffix + "Imm",
+                        matcher.sub("imm8", code),
+                        matcher.sub("imm8", flag_code),
+                        matcher.sub("imm8", cond_check),
+                        matcher.sub("imm8", else_code))
+                return
+
+            # If there's something optional to do with flags, generate
+            # a version without it and fix up this version to use it.
+            if flag_code is not "" or cond_check is not "true":
+                self.buildCppClasses(name, Name, suffix,
+                        code, "", "true", else_code)
+                suffix = "Flags" + suffix
+
+            # If psrc1 or psrc2 is used, we need to actually insert code to
+            # compute it.
+            matcher = re.compile("(?<!\w)psrc1(?!\w)")
+            if matcher.search(allCode):
+                code = "IntReg psrc1 = pick(SrcReg1, 0, dataSize);" + code
+            matcher = re.compile("(?<!\w)psrc2(?!\w)")
+            if matcher.search(allCode):
+                code = "IntReg psrc2 = pick(SrcReg2, 1, dataSize);" + code
+
+            base = "X86ISA::RegOp"
+
+            # If imm8 shows up in the code, use the immediate templates, if
+            # not, hopefully the register ones will be correct.
+            templates = regTemplates
+            matcher = re.compile("(?<!\w)imm8(?!\w)")
+            if matcher.search(allCode):
+                base += "Imm"
+                templates = immTemplates
+
+            # Get everything ready for the substitution
+            iop = InstObjParams(name, Name + suffix, base,
+                    {"code" : code,
+                     "flag_code" : flag_code,
+                     "cond_check" : cond_check,
+                     "else_code" : else_code})
+
+            # Generate the actual code (finally!)
+            header_output += templates[0].subst(iop)
+            decoder_output += templates[1].subst(iop)
+            exec_output += templates[2].subst(iop)
+
+
+        def __new__(mcls, Name, bases, dict):
+            abstract = False
+            name = Name.lower()
+            if "abstract" in dict:
+                abstract = dict['abstract']
+                del dict['abstract']
+
+            cls = super(RegOpMeta, mcls).__new__(mcls, Name, bases, dict)
+            if not abstract:
+                cls.className = Name
+                cls.base_mnemonic = name
+                code = cls.code
+                flag_code = cls.flag_code
+                cond_check = cls.cond_check
+                else_code = cls.else_code
+
+                # Set up the C++ classes
+                mcls.buildCppClasses(cls, name, Name, "",
+                        code, flag_code, cond_check, else_code)
+
+                # Hook into the microassembler dict
+                global microopClasses
+                microopClasses[name] = cls
+
+                allCode = "|".join((code, flag_code, cond_check, else_code))
+
+                # If op2 is used anywhere, make register and immediate versions
+                # of this code.
+                matcher = re.compile("op2(?P<typeQual>\\.\\w+)?")
+                if matcher.search(allCode):
+                    microopClasses[name + 'i'] = cls
+            return cls
+
+
+    class RegOp(X86Microop):
+        __metaclass__ = RegOpMeta
+        # This class itself doesn't act as a microop
+        abstract = True
+
+        # Default template parameter values
+        flag_code = ""
+        cond_check = "true"
+        else_code = ";"
+
+        def __init__(self, dest, src1, op2, flags = None, dataSize = "env.dataSize"):
+            self.dest = dest
+            self.src1 = src1
+            self.op2 = op2
+            self.flags = flags
+            self.dataSize = dataSize
+            if flags is None:
+                self.ext = 0
+            else:
+                if not isinstance(flags, (list, tuple)):
+                    raise Exception, "flags must be a list or tuple of flags"
+                self.ext = " | ".join(flags)
+                self.className += "Flags"
+
+        def getAllocator(self, *microFlags):
+            className = self.className
+            if self.mnemonic == self.base_mnemonic + 'i':
+                className += "Imm"
+            allocator = '''new %(class_name)s(machInst, mnemonic
+                    %(flags)s, %(src1)s, %(op2)s, %(dest)s,
+                    %(dataSize)s, %(ext)s)''' % {
+                "class_name" : className,
+                "flags" : self.microFlagsText(microFlags),
+                "src1" : self.src1, "op2" : self.op2,
+                "dest" : self.dest,
+                "dataSize" : self.dataSize,
+                "ext" : self.ext}
+            return allocator
+
+    class LogicRegOp(RegOp):
+        abstract = True
+        flag_code = '''
+            //Don't have genFlags handle the OF or CF bits
+            uint64_t mask = CFBit | OFBit;
+            ccFlagBits = genFlags(ccFlagBits, ext & ~mask, DestReg, psrc1, op2);
+            //If a logic microop wants to set these, it wants to set them to 0.
+            ccFlagBits &= ~(CFBit & ext);
+            ccFlagBits &= ~(OFBit & ext);
+        '''
+
+    class FlagRegOp(RegOp):
+        abstract = True
+        flag_code = \
+            "ccFlagBits = genFlags(ccFlagBits, ext, DestReg, psrc1, op2);"
+
+    class SubRegOp(RegOp):
+        abstract = True
+        flag_code = \
+            "ccFlagBits = genFlags(ccFlagBits, ext, DestReg, psrc1, ~op2, true);"
+
+    class CondRegOp(RegOp):
+        abstract = True
+        cond_check = "checkCondition(ccFlagBits)"
+
+    class Add(FlagRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 + op2, dataSize);'
+
+    class Or(LogicRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 | op2, dataSize);'
+
+    class Adc(FlagRegOp):
+        code = '''
+            CCFlagBits flags = ccFlagBits;
+            DestReg = merge(DestReg, psrc1 + op2 + flags.CF, dataSize);
+            '''
+
+    class Sbb(SubRegOp):
+        code = '''
+            CCFlagBits flags = ccFlagBits;
+            DestReg = merge(DestReg, psrc1 - op2 - flags.CF, dataSize);
+            '''
+
+    class And(LogicRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 & op2, dataSize)'
+
+    class Sub(SubRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 - op2, dataSize)'
+
+    class Xor(LogicRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 ^ op2, dataSize)'
+
+    class Mul1s(FlagRegOp):
+        code = '''
+            int signPos = (dataSize * 8) / 2 - 1;
+            IntReg srcVal1 = psrc1 | (-bits(psrc1, signPos) << signPos);
+            IntReg srcVal2 = op2 | (-bits(psrc1, signPos) << signPos);
+            DestReg = merge(DestReg, srcVal1 * srcVal2, dataSize)
+            '''
+
+    class Mul1u(FlagRegOp):
+        code = '''
+            int halfSize = (dataSize * 8) / 2;
+            IntReg srcVal1 = psrc1 & mask(halfSize);
+            IntReg srcVal2 = op2 & mask(halfSize);
+            DestReg = merge(DestReg, srcVal1 * srcVal2, dataSize)
+            '''
+
+    class Mulel(FlagRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 * op2, dataSize)'
+
+    class Muleh(FlagRegOp):
+        code = '''
+            int halfSize = (dataSize * 8) / 2;
+            uint64_t psrc1_h = psrc1 >> halfSize;
+            uint64_t psrc1_l = psrc1 & mask(halfSize);
+            uint64_t psrc2_h = op2 >> halfSize;
+            uint64_t psrc2_l = op2 & mask(halfSize);
+            uint64_t result =
+                ((psrc1_l * psrc2_h) >> halfSize) +
+                ((psrc1_h * psrc2_l) >> halfSize) +
+                psrc1_h * psrc2_h;
+            DestReg = merge(DestReg, result, dataSize);
+            '''
+
+    class Div1(FlagRegOp):
+        code = '''
+            int halfSize = (dataSize * 8) / 2;
+            IntReg quotient = (psrc1 / op2) & mask(halfSize);
+            IntReg remainder = (psrc1 % op2) & mask(halfSize);
+            IntReg result = quotient | (remainder << halfSize);
+            DestReg = merge(DestReg, result, dataSize);
+            '''
+
+    class Divq(FlagRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 / op2, dataSize);'
+
+    class Divr(FlagRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 % op2, dataSize);'
+
+    class Mov(CondRegOp):
+        code = 'DestReg = merge(SrcReg1, op2, dataSize)'
+        else_code = 'DestReg=DestReg;'
+
+    class Movfp(CondRegOp):
+        code = 'FpDestReg = FpSrcReg2'
+        else_code = 'FpDestReg = FpDestReg;'
+
+    # Shift instructions
+
+    class Sll(FlagRegOp):
+        code = '''
+            uint8_t shiftAmt = (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            DestReg = merge(DestReg, psrc1 << shiftAmt, dataSize);
+            '''
+
+    class Srl(FlagRegOp):
+        code = '''
+            uint8_t shiftAmt = (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            // Because what happens to the bits shift -in- on a right shift
+            // is not defined in the C/C++ standard, we have to mask them out
+            // to be sure they're zero.
+            uint64_t logicalMask = mask(dataSize * 8 - shiftAmt);
+            DestReg = merge(DestReg, (psrc1 >> shiftAmt) & logicalMask, dataSize);
+            '''
+
+    class Sra(FlagRegOp):
+        code = '''
+            uint8_t shiftAmt = (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            // Because what happens to the bits shift -in- on a right shift
+            // is not defined in the C/C++ standard, we have to sign extend
+            // them manually to be sure.
+            uint64_t arithMask =
+                -bits(psrc1, dataSize * 8 - 1) << (dataSize * 8 - shiftAmt);
+            DestReg = merge(DestReg, (psrc1 >> shiftAmt) | arithMask, dataSize);
+            '''
+
+    class Ror(FlagRegOp):
+        code = '''
+            uint8_t shiftAmt =
+                (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            if(shiftAmt)
+            {
+                uint64_t top = psrc1 << (dataSize * 8 - shiftAmt);
+                uint64_t bottom = bits(psrc1, dataSize * 8, shiftAmt);
+                DestReg = merge(DestReg, top | bottom, dataSize);
+            }
+            else
+                DestReg = DestReg;
+            '''
+
+    class Rcr(FlagRegOp):
+        code = '''
+            uint8_t shiftAmt =
+                (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            if(shiftAmt)
+            {
+                CCFlagBits flags = ccFlagBits;
+                uint64_t top = flags.CF << (dataSize * 8 - shiftAmt);
+                if(shiftAmt > 1)
+                    top |= psrc1 << (dataSize * 8 - shiftAmt - 1);
+                uint64_t bottom = bits(psrc1, dataSize * 8, shiftAmt);
+                DestReg = merge(DestReg, top | bottom, dataSize);
+            }
+            else
+                DestReg = DestReg;
+            '''
+
+    class Rol(FlagRegOp):
+        code = '''
+            uint8_t shiftAmt =
+                (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            if(shiftAmt)
+            {
+                uint64_t top = psrc1 << shiftAmt;
+                uint64_t bottom =
+                    bits(psrc1, dataSize * 8 - 1, dataSize * 8 - shiftAmt);
+                DestReg = merge(DestReg, top | bottom, dataSize);
+            }
+            else
+                DestReg = DestReg;
+            '''
+
+    class Rcl(FlagRegOp):
+        code = '''
+            uint8_t shiftAmt =
+                (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            if(shiftAmt)
+            {
+                CCFlagBits flags = ccFlagBits;
+                uint64_t top = psrc1 << shiftAmt;
+                uint64_t bottom = flags.CF << (shiftAmt - 1);
+                if(shiftAmt > 1)
+                    bottom |=
+                        bits(psrc1, dataSize * 8 - 1,
+                                   dataSize * 8 - shiftAmt + 1);
+                DestReg = merge(DestReg, top | bottom, dataSize);
+            }
+            else
+                DestReg = DestReg;
+            '''
+
+    class WrRegOp(RegOp):
+        abstract = True
+        def __init__(self, src1, src2, flags=None, dataSize="env.dataSize"):
+            super(WrRegOp, self).__init__("NUM_INTREGS", src1, src2, flags, dataSize)
+
+    class Wrip(WrRegOp, CondRegOp):
+        code = 'RIP = psrc1 + op2'
+        else_code="RIP = RIP;"
+
+    class Br(WrRegOp, CondRegOp):
+        code = 'nuIP = psrc1 + op2;'
+        else_code='nuIP = nuIP;'
+
+    class Wruflags(WrRegOp):
+        code = 'ccFlagBits = psrc1 ^ op2'
+
+    class RdRegOp(RegOp):
+        abstract = True
+        def __init__(self, dest, src1 = "NUM_INTREGS", dataSize="env.dataSize"):
+            super(RdRegOp, self).__init__(dest, src1, "NUM_INTREGS", None, dataSize)
+
+    class Rdip(RdRegOp):
+        code = 'DestReg = RIP'
+
+    class Ruflags(RdRegOp):
+        code = 'DestReg = ccFlagBits'
+
+    class Ruflag(RegOp):
+        code = '''
+            int flag = bits(ccFlagBits, imm8 + 0*psrc1);
+            DestReg = merge(DestReg, flag, dataSize);
+            ccFlagBits = (flag == 0) ? (ccFlagBits | EZFBit) :
+                                       (ccFlagBits & ~EZFBit);
+            '''
+        def __init__(self, dest, imm, flags=None, \
+                dataSize="env.dataSize"):
+            super(Ruflag, self).__init__(dest, \
+                    "NUM_INTREGS", imm, flags, dataSize)
+
+    class Sext(RegOp):
+        code = '''
+            IntReg val = psrc1;
+            int sign_bit = bits(val, imm8-1, imm8-1);
+            uint64_t maskVal = mask(imm8);
+            val = sign_bit ? (val | ~maskVal) : (val & maskVal);
+            DestReg = merge(DestReg, val, dataSize);
+            '''
+
+    class Zext(RegOp):
+        code = 'DestReg = bits(psrc1, imm8-1, 0);'
+}};
