@@ -53,15 +53,15 @@
 #
 # Authors: Gabe Black
 
-microcode = '''
-def macroop CDQE_R {
-    sext reg, reg, "env.dataSize << 2"
-};
+categories = ["move",
+              "convert",
+              "add_and_subtract",
+              "multiply_and_divide",
+              "logical"]
 
-def macroop CQO_R_R {
-    # A shift might be slower than, for example, an explicit sign extension,
-    # so it might be worthwhile to try to find an alternative.
-    mov regm, regm, reg
-    srai regm, regm, "env.dataSize * 8 - 1"
-};
+microcode = '''
+# SSE instructions
 '''
+for category in categories:
+    exec "import %s as cat" % category
+    microcode += cat.microcode

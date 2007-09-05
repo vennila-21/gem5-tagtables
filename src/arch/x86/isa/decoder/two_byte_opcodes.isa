@@ -201,8 +201,10 @@
                 }
                 // repne (0xF2)
                 0x8: decode OPCODE_OP_BOTTOM3 {
-                    0x2: cvtsi2sd_Vq_Ed();
-                    0x4: cvttsd2si_Gd_Wq();
+                    // The size of the V operand should be q, not dp
+                    0x2: Inst::CVTSI2SD(Vdp,Edp);
+                    // The size of the W operand should be q, not dp
+                    0x4: Inst::CVTTSD2SI(Gdp,Wdp);
                     0x5: cvtsd2si_Gd_Wq();
                     default: Inst::UD2();
                 }
@@ -276,7 +278,9 @@
                     0x4: andpd_Vo_Wo();
                     0x5: andnpd_Vo_Wo();
                     0x6: orpd_Vo_Wo();
-                    0x7: xorpd_Vo_Wo();
+                    //This really should be type o, but it works on q sized
+                    //chunks at a time.
+                    0x7: Inst::XORPD(Vq,Wq);
                     default: Inst::UD2();
                 }
                 // repne (0xF2)
@@ -322,12 +326,12 @@
                 }
                 // repne (0xF2)
                 0x8: decode OPCODE_OP_BOTTOM3 {
-                    0x0: addsd_Vq_Wq();
-                    0x1: mulsd_Vq_Wq();
+                    0x0: Inst::ADDSD(Vq,Wq);
+                    0x1: Inst::MULSD(Vq,Wq);
                     0x2: cvtsd2ss_Vd_Wq();
-                    0x4: subsd_Vq_Wq();
+                    0x4: Inst::SUBSD(Vq,Wq);
                     0x5: minsd_Vq_Wq();
-                    0x6: divsd_Vq_Wq();
+                    0x6: Inst::DIVSD(Vq,Wq);
                     0x7: maxsd_Vq_Wq();
                     default: Inst::UD2();
                 }

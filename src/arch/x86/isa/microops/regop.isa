@@ -453,7 +453,7 @@ let {{
             '''
 
     class Mulel(FlagRegOp):
-        code = 'DestReg = merge(DestReg, psrc1 * op2, dataSize)'
+        code = 'DestReg = merge(DestReg, psrc1 * op2, dataSize);'
 
     class Muleh(FlagRegOp):
         code = '''
@@ -488,9 +488,12 @@ let {{
         code = 'DestReg = merge(SrcReg1, op2, dataSize)'
         else_code = 'DestReg=DestReg;'
 
+    class Xorfp(RegOp):
+        code = 'FpDestReg.uqw = FpSrcReg1.uqw ^ FpSrcReg2.uqw;'
+
     class Movfp(CondRegOp):
-        code = 'FpDestReg = FpSrcReg2'
-        else_code = 'FpDestReg = FpDestReg;'
+        code = 'FpDestReg.uqw = FpSrcReg2.uqw;'
+        else_code = 'FpDestReg.uqw = FpDestReg.uqw;'
 
     # Shift instructions
 
@@ -636,4 +639,37 @@ let {{
 
     class Zext(RegOp):
         code = 'DestReg = bits(psrc1, imm8-1, 0);'
+
+    # Conversion microops
+    class ConvOp(RegOp):
+        abstract = True
+        def __init__(self, dest, src1):
+            super(ConvOp, self).__init__(dest, src1, "NUM_INTREGS")
+
+    #FIXME This needs to always use 32 bits unless REX.W is present
+    class cvtf_i2d(ConvOp):
+        code = 'FpDestReg = psrc1;'
+
+    class cvtf_i2d_hi(ConvOp):
+        code = 'FpDestReg = bits(SrcReg1, 63, 32);'
+
+    class cvtf_d2i(ConvOp):
+        code = '''
+        int64_t intSrcReg1 = static_cast<int64_t>(FpSrcReg1);
+        DestReg = merge(DestReg, intSrcReg1, dataSize);
+        '''
+
+    # These need to consider size at some point. They'll always use doubles
+    # for the moment.
+    class addfp(RegOp):
+        code = 'FpDestReg = FpSrcReg1 + FpSrcReg2;'
+
+    class mulfp(RegOp):
+        code = 'FpDestReg = FpSrcReg1 * FpSrcReg2;'
+
+    class divfp(RegOp):
+        code = 'FpDestReg = FpSrcReg1 / FpSrcReg2;'
+
+    class subfp(RegOp):
+        code = 'FpDestReg = FpSrcReg1 - FpSrcReg2;'
 }};
