@@ -54,14 +54,33 @@
 # Authors: Gabe Black
 
 microcode = '''
-def macroop CDQE_R {
-    sext reg, reg, "env.dataSize << 2"
+def macroop MULSD_R_R {
+    mulfp xmml, xmml, xmmlm
 };
 
-def macroop CQO_R_R {
-    # A shift might be slower than, for example, an explicit sign extension,
-    # so it might be worthwhile to try to find an alternative.
-    mov regm, regm, reg
-    srai regm, regm, "env.dataSize * 8 - 1"
+def macroop MULSD_R_M {
+    ldfp ufp1, seg, sib, disp
+    mulfp xmml, xmml, ufp1
+};
+
+def macroop MULSD_R_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp
+    mulfp xmml, xmml, ufp1
+};
+
+def macroop DIVSD_R_R {
+    divfp xmml, xmml, xmmlm
+};
+
+def macroop DIVSD_R_M {
+    ldfp ufp1, seg, sib, disp
+    divfp xmml, xmml, ufp1
+};
+
+def macroop DIVSD_R_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp
+    divfp xmml, xmml, ufp1
 };
 '''
