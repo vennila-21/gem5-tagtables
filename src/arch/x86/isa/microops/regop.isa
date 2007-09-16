@@ -1,0 +1,939 @@
+// Copyright (c) 2007 The Hewlett-Packard Development Company
+// All rights reserved.
+//
+// Redistribution and use of this software in source and binary forms,
+// with or without modification, are permitted provided that the
+// following conditions are met:
+//
+// The software must be used only for Non-Commercial Use which means any
+// use which is NOT directed to receiving any direct monetary
+// compensation for, or commercial advantage from such use.  Illustrative
+// examples of non-commercial use are academic research, personal study,
+// teaching, education and corporate research & development.
+// Illustrative examples of commercial use are distributing products for
+// commercial advantage and providing services using the software for
+// commercial advantage.
+//
+// If you wish to use this software or functionality therein that may be
+// covered by patents for commercial use, please contact:
+//     Director of Intellectual Property Licensing
+//     Office of Strategy and Technology
+//     Hewlett-Packard Company
+//     1501 Page Mill Road
+//     Palo Alto, California  94304
+//
+// Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.  Redistributions
+// in binary form must reproduce the above copyright notice, this list of
+// conditions and the following disclaimer in the documentation and/or
+// other materials provided with the distribution.  Neither the name of
+// the COPYRIGHT HOLDER(s), HEWLETT-PACKARD COMPANY, nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.  No right of
+// sublicense is granted herewith.  Derivatives of the software and
+// output created using the software may be prepared, but only for
+// Non-Commercial Uses.  Derivatives of the software may be shared with
+// others provided: (i) the others agree to abide by the list of
+// conditions herein which includes the Non-Commercial Use restrictions;
+// and (ii) such Derivatives of the software include the above copyright
+// notice to acknowledge the contribution from this software where
+// applicable, this list of conditions and the disclaimer below.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Gabe Black
+
+//////////////////////////////////////////////////////////////////////////
+//
+// RegOp Microop templates
+//
+//////////////////////////////////////////////////////////////////////////
+
+def template MicroRegOpExecute {{
+        Fault %(class_name)s::execute(%(CPU_exec_context)s *xc,
+                Trace::InstRecord *traceData) const
+        {
+            Fault fault = NoFault;
+
+            DPRINTF(X86, "The data size is %d\n", dataSize);
+            %(op_decl)s;
+            %(op_rd)s;
+
+            if(%(cond_check)s)
+            {
+                %(code)s;
+                %(flag_code)s;
+            }
+            else
+            {
+                %(else_code)s;
+            }
+
+            //Write the resulting state to the execution context
+            if(fault == NoFault)
+            {
+                %(op_wb)s;
+            }
+            return fault;
+        }
+}};
+
+def template MicroRegOpImmExecute {{
+        Fault %(class_name)s::execute(%(CPU_exec_context)s *xc,
+                Trace::InstRecord *traceData) const
+        {
+            Fault fault = NoFault;
+
+            %(op_decl)s;
+            %(op_rd)s;
+
+            if(%(cond_check)s)
+            {
+                %(code)s;
+                %(flag_code)s;
+            }
+            else
+            {
+                %(else_code)s;
+            }
+
+            //Write the resulting state to the execution context
+            if(fault == NoFault)
+            {
+                %(op_wb)s;
+            }
+            return fault;
+        }
+}};
+
+def template MicroRegOpDeclare {{
+    class %(class_name)s : public %(base_class)s
+    {
+      protected:
+        void buildMe();
+
+      public:
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+                RegIndex _src1, RegIndex _src2, RegIndex _dest,
+                uint8_t _dataSize, uint16_t _ext);
+
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                RegIndex _src1, RegIndex _src2, RegIndex _dest,
+                uint8_t _dataSize, uint16_t _ext);
+
+        %(BasicExecDeclare)s
+    };
+}};
+
+def template MicroRegOpImmDeclare {{
+
+    class %(class_name)s : public %(base_class)s
+    {
+      protected:
+        void buildMe();
+
+      public:
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+                RegIndex _src1, uint16_t _imm8, RegIndex _dest,
+                uint8_t _dataSize, uint16_t _ext);
+
+        %(class_name)s(ExtMachInst _machInst,
+                const char * instMnem,
+                RegIndex _src1, uint16_t _imm8, RegIndex _dest,
+                uint8_t _dataSize, uint16_t _ext);
+
+        %(BasicExecDeclare)s
+    };
+}};
+
+def template MicroRegOpConstructor {{
+
+    inline void %(class_name)s::buildMe()
+    {
+        %(constructor)s;
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            RegIndex _src1, RegIndex _src2, RegIndex _dest,
+            uint8_t _dataSize, uint16_t _ext) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                false, false, false, false,
+                _src1, _src2, _dest, _dataSize, _ext,
+                %(op_class)s)
+    {
+        buildMe();
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+            RegIndex _src1, RegIndex _src2, RegIndex _dest,
+            uint8_t _dataSize, uint16_t _ext) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                isMicro, isDelayed, isFirst, isLast,
+                _src1, _src2, _dest, _dataSize, _ext,
+                %(op_class)s)
+    {
+        buildMe();
+    }
+}};
+
+def template MicroRegOpImmConstructor {{
+
+    inline void %(class_name)s::buildMe()
+    {
+        %(constructor)s;
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            RegIndex _src1, uint16_t _imm8, RegIndex _dest,
+            uint8_t _dataSize, uint16_t _ext) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                false, false, false, false,
+                _src1, _imm8, _dest, _dataSize, _ext,
+                %(op_class)s)
+    {
+        buildMe();
+    }
+
+    inline %(class_name)s::%(class_name)s(
+            ExtMachInst machInst, const char * instMnem,
+            bool isMicro, bool isDelayed, bool isFirst, bool isLast,
+            RegIndex _src1, uint16_t _imm8, RegIndex _dest,
+            uint8_t _dataSize, uint16_t _ext) :
+        %(base_class)s(machInst, "%(mnemonic)s", instMnem,
+                isMicro, isDelayed, isFirst, isLast,
+                _src1, _imm8, _dest, _dataSize, _ext,
+                %(op_class)s)
+    {
+        buildMe();
+    }
+}};
+
+output header {{
+    void
+    divide(uint64_t dividend, uint64_t divisor,
+            uint64_t &quotient, uint64_t &remainder);
+}};
+
+output decoder {{
+    void
+    divide(uint64_t dividend, uint64_t divisor,
+            uint64_t &quotient, uint64_t &remainder)
+    {
+        //Check for divide by zero.
+        if (divisor == 0)
+            panic("Divide by zero!\\n");
+        //If the divisor is bigger than the dividend, don't do anything.
+        if (divisor <= dividend) {
+            //Shift the divisor so it's msb lines up with the dividend.
+            int dividendMsb = findMsbSet(dividend);
+            int divisorMsb = findMsbSet(divisor);
+            int shift = dividendMsb - divisorMsb;
+            divisor <<= shift;
+            //Compute what we'll add to the quotient if the divisor isn't
+            //now larger than the dividend.
+            uint64_t quotientBit = 1;
+            quotientBit <<= shift;
+            //If we need to step back a bit (no pun intended) because the
+            //divisor got too to large, do that here. This is the "or two"
+            //part of one or two bit division.
+            if (divisor > dividend) {
+                quotientBit >>= 1;
+                divisor >>= 1;
+            }
+            //Decrement the remainder and increment the quotient.
+            quotient += quotientBit;
+            remainder -= divisor;
+        }
+    }
+}};
+
+let {{
+    # Make these empty strings so that concatenating onto
+    # them will always work.
+    header_output = ""
+    decoder_output = ""
+    exec_output = ""
+
+    immTemplates = (
+            MicroRegOpImmDeclare,
+            MicroRegOpImmConstructor,
+            MicroRegOpImmExecute)
+
+    regTemplates = (
+            MicroRegOpDeclare,
+            MicroRegOpConstructor,
+            MicroRegOpExecute)
+
+    class RegOpMeta(type):
+        def buildCppClasses(self, name, Name, suffix, \
+                code, flag_code, cond_check, else_code):
+
+            # Globals to stick the output in
+            global header_output
+            global decoder_output
+            global exec_output
+
+            # Stick all the code together so it can be searched at once
+            allCode = "|".join((code, flag_code, cond_check, else_code))
+
+            # If op2 is used anywhere, make register and immediate versions
+            # of this code.
+            matcher = re.compile("(?<!\\w)(?P<prefix>s?)op2(?P<typeQual>\\.\\w+)?")
+            match = matcher.search(allCode)
+            if match:
+                typeQual = ""
+                if match.group("typeQual"):
+                    typeQual = match.group("typeQual")
+                src2_name = "%spsrc2%s" % (match.group("prefix"), typeQual)
+                self.buildCppClasses(name, Name, suffix,
+                        matcher.sub(src2_name, code),
+                        matcher.sub(src2_name, flag_code),
+                        matcher.sub(src2_name, cond_check),
+                        matcher.sub(src2_name, else_code))
+                self.buildCppClasses(name + "i", Name, suffix + "Imm",
+                        matcher.sub("imm8", code),
+                        matcher.sub("imm8", flag_code),
+                        matcher.sub("imm8", cond_check),
+                        matcher.sub("imm8", else_code))
+                return
+
+            # If there's something optional to do with flags, generate
+            # a version without it and fix up this version to use it.
+            if flag_code is not "" or cond_check is not "true":
+                self.buildCppClasses(name, Name, suffix,
+                        code, "", "true", else_code)
+                suffix = "Flags" + suffix
+
+            # If psrc1 or psrc2 is used, we need to actually insert code to
+            # compute it.
+            matcher = re.compile("(?<!\w)psrc1(?!\w)")
+            if matcher.search(allCode):
+                code = "uint64_t psrc1 = pick(SrcReg1, 0, dataSize);" + code
+            matcher = re.compile("(?<!\w)psrc2(?!\w)")
+            if matcher.search(allCode):
+                code = "uint64_t psrc2 = pick(SrcReg2, 1, dataSize);" + code
+            # Also make available versions which do sign extension
+            matcher = re.compile("(?<!\w)spsrc1(?!\w)")
+            if matcher.search(allCode):
+                code = "int64_t spsrc1 = signedPick(SrcReg1, 0, dataSize);" + code
+            matcher = re.compile("(?<!\w)spsrc2(?!\w)")
+            if matcher.search(allCode):
+                code = "int64_t spsrc2 = signedPick(SrcReg2, 1, dataSize);" + code
+
+            base = "X86ISA::RegOp"
+
+            # If imm8 shows up in the code, use the immediate templates, if
+            # not, hopefully the register ones will be correct.
+            templates = regTemplates
+            matcher = re.compile("(?<!\w)imm8(?!\w)")
+            if matcher.search(allCode):
+                base += "Imm"
+                templates = immTemplates
+
+            # Get everything ready for the substitution
+            iop = InstObjParams(name, Name + suffix, base,
+                    {"code" : code,
+                     "flag_code" : flag_code,
+                     "cond_check" : cond_check,
+                     "else_code" : else_code})
+
+            # Generate the actual code (finally!)
+            header_output += templates[0].subst(iop)
+            decoder_output += templates[1].subst(iop)
+            exec_output += templates[2].subst(iop)
+
+
+        def __new__(mcls, Name, bases, dict):
+            abstract = False
+            name = Name.lower()
+            if "abstract" in dict:
+                abstract = dict['abstract']
+                del dict['abstract']
+
+            cls = super(RegOpMeta, mcls).__new__(mcls, Name, bases, dict)
+            if not abstract:
+                cls.className = Name
+                cls.base_mnemonic = name
+                code = cls.code
+                flag_code = cls.flag_code
+                cond_check = cls.cond_check
+                else_code = cls.else_code
+
+                # Set up the C++ classes
+                mcls.buildCppClasses(cls, name, Name, "",
+                        code, flag_code, cond_check, else_code)
+
+                # Hook into the microassembler dict
+                global microopClasses
+                microopClasses[name] = cls
+
+                allCode = "|".join((code, flag_code, cond_check, else_code))
+
+                # If op2 is used anywhere, make register and immediate versions
+                # of this code.
+                matcher = re.compile("op2(?P<typeQual>\\.\\w+)?")
+                if matcher.search(allCode):
+                    microopClasses[name + 'i'] = cls
+            return cls
+
+
+    class RegOp(X86Microop):
+        __metaclass__ = RegOpMeta
+        # This class itself doesn't act as a microop
+        abstract = True
+
+        # Default template parameter values
+        flag_code = ""
+        cond_check = "true"
+        else_code = ";"
+
+        def __init__(self, dest, src1, op2, flags = None, dataSize = "env.dataSize"):
+            self.dest = dest
+            self.src1 = src1
+            self.op2 = op2
+            self.flags = flags
+            self.dataSize = dataSize
+            if flags is None:
+                self.ext = 0
+            else:
+                if not isinstance(flags, (list, tuple)):
+                    raise Exception, "flags must be a list or tuple of flags"
+                self.ext = " | ".join(flags)
+                self.className += "Flags"
+
+        def getAllocator(self, *microFlags):
+            className = self.className
+            if self.mnemonic == self.base_mnemonic + 'i':
+                className += "Imm"
+            allocator = '''new %(class_name)s(machInst, mnemonic
+                    %(flags)s, %(src1)s, %(op2)s, %(dest)s,
+                    %(dataSize)s, %(ext)s)''' % {
+                "class_name" : className,
+                "flags" : self.microFlagsText(microFlags),
+                "src1" : self.src1, "op2" : self.op2,
+                "dest" : self.dest,
+                "dataSize" : self.dataSize,
+                "ext" : self.ext}
+            return allocator
+
+    class LogicRegOp(RegOp):
+        abstract = True
+        flag_code = '''
+            //Don't have genFlags handle the OF or CF bits
+            uint64_t mask = CFBit | OFBit;
+            ccFlagBits = genFlags(ccFlagBits, ext & ~mask, DestReg, psrc1, op2);
+            //If a logic microop wants to set these, it wants to set them to 0.
+            ccFlagBits &= ~(CFBit & ext);
+            ccFlagBits &= ~(OFBit & ext);
+        '''
+
+    class FlagRegOp(RegOp):
+        abstract = True
+        flag_code = \
+            "ccFlagBits = genFlags(ccFlagBits, ext, DestReg, psrc1, op2);"
+
+    class SubRegOp(RegOp):
+        abstract = True
+        flag_code = \
+            "ccFlagBits = genFlags(ccFlagBits, ext, DestReg, psrc1, ~op2, true);"
+
+    class CondRegOp(RegOp):
+        abstract = True
+        cond_check = "checkCondition(ccFlagBits)"
+
+    class RdRegOp(RegOp):
+        abstract = True
+        def __init__(self, dest, src1=None, dataSize="env.dataSize"):
+            if not src1:
+                src1 = dest
+            super(RdRegOp, self).__init__(dest, src1, "NUM_INTREGS", None, dataSize)
+
+    class WrRegOp(RegOp):
+        abstract = True
+        def __init__(self, src1, src2, flags=None, dataSize="env.dataSize"):
+            super(WrRegOp, self).__init__("NUM_INTREGS", src1, src2, flags, dataSize)
+
+    class Add(FlagRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 + op2, dataSize);'
+
+    class Or(LogicRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 | op2, dataSize);'
+
+    class Adc(FlagRegOp):
+        code = '''
+            CCFlagBits flags = ccFlagBits;
+            DestReg = merge(DestReg, psrc1 + op2 + flags.CF, dataSize);
+            '''
+
+    class Sbb(SubRegOp):
+        code = '''
+            CCFlagBits flags = ccFlagBits;
+            DestReg = merge(DestReg, psrc1 - op2 - flags.CF, dataSize);
+            '''
+
+    class And(LogicRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 & op2, dataSize)'
+
+    class Sub(SubRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 - op2, dataSize)'
+
+    class Xor(LogicRegOp):
+        code = 'DestReg = merge(DestReg, psrc1 ^ op2, dataSize)'
+
+    # Neither of these is quite correct because it assumes that right shifting
+    # a signed or unsigned value does sign or zero extension respectively.
+    # The C standard says that what happens on a right shift with a 1 in the
+    # MSB position is undefined. On x86 and under likely most compilers the
+    # "right thing" happens, but this isn't a guarantee.
+    class Mul1s(WrRegOp):
+        code = '''
+            ProdLow = psrc1 * op2;
+            int halfSize = (dataSize * 8) / 2;
+            int64_t spsrc1_h = spsrc1 >> halfSize;
+            int64_t spsrc1_l = spsrc1 & mask(halfSize);
+            int64_t spsrc2_h = sop2 >> halfSize;
+            int64_t spsrc2_l = sop2 & mask(halfSize);
+            ProdHi = ((spsrc1_l * spsrc2_h + spsrc1_h * spsrc2_l +
+                      ((spsrc1_l * spsrc2_l) >> halfSize)) >> halfSize) +
+                     spsrc1_h * spsrc2_h;
+            '''
+
+    class Mul1u(WrRegOp):
+        code = '''
+            ProdLow = psrc1 * op2;
+            int halfSize = (dataSize * 8) / 2;
+            uint64_t psrc1_h = psrc1 >> halfSize;
+            uint64_t psrc1_l = psrc1 & mask(halfSize);
+            uint64_t psrc2_h = op2 >> halfSize;
+            uint64_t psrc2_l = op2 & mask(halfSize);
+            ProdHi = ((psrc1_l * psrc2_h + psrc1_h * psrc2_l +
+                      ((psrc1_l * psrc2_l) >> halfSize)) >> halfSize) +
+                     psrc1_h * psrc2_h;
+            '''
+
+    class Mulel(RdRegOp):
+        code = 'DestReg = merge(SrcReg1, ProdLow, dataSize);'
+
+    class Muleh(RdRegOp):
+        def __init__(self, dest, src1=None, flags=None, dataSize="env.dataSize"):
+            if not src1:
+                src1 = dest
+            super(RdRegOp, self).__init__(dest, src1, "NUM_INTREGS", flags, dataSize)
+        code = 'DestReg = merge(SrcReg1, ProdHi, dataSize);'
+        flag_code = '''
+            if (ProdHi)
+                ccFlagBits = ccFlagBits | (ext & (CFBit | OFBit | ECFBit));
+            else
+                ccFlagBits = ccFlagBits & ~(ext & (CFBit | OFBit | ECFBit));
+        '''
+
+    # One or two bit divide
+    class Div1(WrRegOp):
+        code = '''
+            //These are temporaries so that modifying them later won't make
+            //the ISA parser think they're also sources.
+            uint64_t quotient = 0;
+            uint64_t remainder = psrc1;
+            //Similarly, this is a temporary so changing it doesn't make it
+            //a source.
+            uint64_t divisor = op2;
+            //This is a temporary just for consistency and clarity.
+            uint64_t dividend = remainder;
+            //Do the division.
+            divide(dividend, divisor, quotient, remainder);
+            //Record the final results.
+            Remainder = remainder;
+            Quotient = quotient;
+            Divisor = divisor;
+            '''
+
+    # Step divide
+    class Div2(RegOp):
+        code = '''
+            uint64_t dividend = Remainder;
+            uint64_t divisor = Divisor;
+            uint64_t quotient = Quotient;
+            uint64_t remainder = dividend;
+            int remaining = op2;
+            //If we overshot, do nothing. This lets us unrool division loops a
+            //little.
+            if (remaining) {
+                //Shift in bits from the low order portion of the dividend
+                while(dividend < divisor && remaining) {
+                    dividend = (dividend << 1) | bits(SrcReg1, remaining - 1);
+                    quotient <<= 1;
+                    remaining--;
+                }
+                remainder = dividend;
+                //Do the division.
+                divide(dividend, divisor, quotient, remainder);
+            }
+            //Keep track of how many bits there are still to pull in.
+            DestReg = merge(DestReg, remaining, dataSize);
+            //Record the final results
+            Remainder = remainder;
+            Quotient = quotient;
+        '''
+        flag_code = '''
+            if (DestReg == 0)
+                ccFlagBits = ccFlagBits | (ext & EZFBit);
+            else
+                ccFlagBits = ccFlagBits & ~(ext & EZFBit);
+        '''
+
+    class Divq(RdRegOp):
+        code = 'DestReg = merge(SrcReg1, Quotient, dataSize);'
+
+    class Divr(RdRegOp):
+        code = 'DestReg = merge(SrcReg1, Remainder, dataSize);'
+
+    class Mov(CondRegOp):
+        code = 'DestReg = merge(SrcReg1, op2, dataSize)'
+        else_code = 'DestReg=DestReg;'
+
+    # Shift instructions
+
+    class Sll(RegOp):
+        code = '''
+            uint8_t shiftAmt = (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            DestReg = merge(DestReg, psrc1 << shiftAmt, dataSize);
+            '''
+        flag_code = '''
+            // If the shift amount is zero, no flags should be modified.
+            if (shiftAmt) {
+                //Zero out any flags we might modify. This way we only have to
+                //worry about setting them.
+                ccFlagBits = ccFlagBits & ~(ext & (CFBit | ECFBit | OFBit));
+                int CFBits = 0;
+                //Figure out if we -would- set the CF bits if requested.
+                if (bits(SrcReg1, dataSize * 8 - shiftAmt))
+                    CFBits = 1;
+                //If some combination of the CF bits need to be set, set them.
+                if ((ext & (CFBit | ECFBit)) && CFBits)
+                    ccFlagBits = ccFlagBits | (ext & (CFBit | ECFBit));
+                //Figure out what the OF bit should be.
+                if ((ext & OFBit) && (CFBits ^ bits(DestReg, dataSize * 8 - 1)))
+                    ccFlagBits = ccFlagBits | OFBit;
+                //Use the regular mechanisms to calculate the other flags.
+                ccFlagBits = genFlags(ccFlagBits, ext & ~(CFBit | ECFBit | OFBit),
+                        DestReg, psrc1, op2);
+            }
+        '''
+
+    class Srl(RegOp):
+        code = '''
+            uint8_t shiftAmt = (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            // Because what happens to the bits shift -in- on a right shift
+            // is not defined in the C/C++ standard, we have to mask them out
+            // to be sure they're zero.
+            uint64_t logicalMask = mask(dataSize * 8 - shiftAmt);
+            DestReg = merge(DestReg, (psrc1 >> shiftAmt) & logicalMask, dataSize);
+            '''
+        flag_code = '''
+            // If the shift amount is zero, no flags should be modified.
+            if (shiftAmt) {
+                //Zero out any flags we might modify. This way we only have to
+                //worry about setting them.
+                ccFlagBits = ccFlagBits & ~(ext & (CFBit | ECFBit | OFBit));
+                //If some combination of the CF bits need to be set, set them.
+                if ((ext & (CFBit | ECFBit)) && bits(SrcReg1, shiftAmt - 1))
+                    ccFlagBits = ccFlagBits | (ext & (CFBit | ECFBit));
+                //Figure out what the OF bit should be.
+                if ((ext & OFBit) && bits(SrcReg1, dataSize * 8 - 1))
+                    ccFlagBits = ccFlagBits | OFBit;
+                //Use the regular mechanisms to calculate the other flags.
+                ccFlagBits = genFlags(ccFlagBits, ext & ~(CFBit | ECFBit | OFBit),
+                        DestReg, psrc1, op2);
+            }
+        '''
+
+    class Sra(RegOp):
+        code = '''
+            uint8_t shiftAmt = (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            // Because what happens to the bits shift -in- on a right shift
+            // is not defined in the C/C++ standard, we have to sign extend
+            // them manually to be sure.
+            uint64_t arithMask =
+                -bits(psrc1, dataSize * 8 - 1) << (dataSize * 8 - shiftAmt);
+            DestReg = merge(DestReg, (psrc1 >> shiftAmt) | arithMask, dataSize);
+            '''
+        flag_code = '''
+            // If the shift amount is zero, no flags should be modified.
+            if (shiftAmt) {
+                //Zero out any flags we might modify. This way we only have to
+                //worry about setting them.
+                ccFlagBits = ccFlagBits & ~(ext & (CFBit | ECFBit | OFBit));
+                //If some combination of the CF bits need to be set, set them.
+                if ((ext & (CFBit | ECFBit)) && bits(SrcReg1, shiftAmt - 1))
+                    ccFlagBits = ccFlagBits | (ext & (CFBit | ECFBit));
+                //Use the regular mechanisms to calculate the other flags.
+                ccFlagBits = genFlags(ccFlagBits, ext & ~(CFBit | ECFBit | OFBit),
+                        DestReg, psrc1, op2);
+            }
+        '''
+
+    class Ror(RegOp):
+        code = '''
+            uint8_t shiftAmt =
+                (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            if(shiftAmt)
+            {
+                uint64_t top = psrc1 << (dataSize * 8 - shiftAmt);
+                uint64_t bottom = bits(psrc1, dataSize * 8, shiftAmt);
+                DestReg = merge(DestReg, top | bottom, dataSize);
+            }
+            else
+                DestReg = DestReg;
+            '''
+        flag_code = '''
+            // If the shift amount is zero, no flags should be modified.
+            if (shiftAmt) {
+                //Zero out any flags we might modify. This way we only have to
+                //worry about setting them.
+                ccFlagBits = ccFlagBits & ~(ext & (CFBit | ECFBit | OFBit));
+                //Find the most and second most significant bits of the result.
+                int msb = bits(DestReg, dataSize * 8 - 1);
+                int smsb = bits(DestReg, dataSize * 8 - 2);
+                //If some combination of the CF bits need to be set, set them.
+                if ((ext & (CFBit | ECFBit)) && msb)
+                    ccFlagBits = ccFlagBits | (ext & (CFBit | ECFBit));
+                //Figure out what the OF bit should be.
+                if ((ext & OFBit) && (msb ^ smsb))
+                    ccFlagBits = ccFlagBits | OFBit;
+                //Use the regular mechanisms to calculate the other flags.
+                ccFlagBits = genFlags(ccFlagBits, ext & ~(CFBit | ECFBit | OFBit),
+                        DestReg, psrc1, op2);
+            }
+        '''
+
+    class Rcr(RegOp):
+        code = '''
+            uint8_t shiftAmt =
+                (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            if(shiftAmt)
+            {
+                CCFlagBits flags = ccFlagBits;
+                uint64_t top = flags.CF << (dataSize * 8 - shiftAmt);
+                if(shiftAmt > 1)
+                    top |= psrc1 << (dataSize * 8 - shiftAmt - 1);
+                uint64_t bottom = bits(psrc1, dataSize * 8, shiftAmt);
+                DestReg = merge(DestReg, top | bottom, dataSize);
+            }
+            else
+                DestReg = DestReg;
+            '''
+        flag_code = '''
+            // If the shift amount is zero, no flags should be modified.
+            if (shiftAmt) {
+                //Zero out any flags we might modify. This way we only have to
+                //worry about setting them.
+                ccFlagBits = ccFlagBits & ~(ext & (CFBit | ECFBit | OFBit));
+                //Figure out what the OF bit should be.
+                if ((ext & OFBit) && ((ccFlagBits & CFBit) ^
+                                      bits(SrcReg1, dataSize * 8 - 1)))
+                    ccFlagBits = ccFlagBits | OFBit;
+                //If some combination of the CF bits need to be set, set them.
+                if ((ext & (CFBit | ECFBit)) && bits(SrcReg1, shiftAmt - 1))
+                    ccFlagBits = ccFlagBits | (ext & (CFBit | ECFBit));
+                //Use the regular mechanisms to calculate the other flags.
+                ccFlagBits = genFlags(ccFlagBits, ext & ~(CFBit | ECFBit | OFBit),
+                        DestReg, psrc1, op2);
+            }
+        '''
+
+    class Rol(RegOp):
+        code = '''
+            uint8_t shiftAmt =
+                (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            if(shiftAmt)
+            {
+                uint64_t top = psrc1 << shiftAmt;
+                uint64_t bottom =
+                    bits(psrc1, dataSize * 8 - 1, dataSize * 8 - shiftAmt);
+                DestReg = merge(DestReg, top | bottom, dataSize);
+            }
+            else
+                DestReg = DestReg;
+            '''
+        flag_code = '''
+            // If the shift amount is zero, no flags should be modified.
+            if (shiftAmt) {
+                //Zero out any flags we might modify. This way we only have to
+                //worry about setting them.
+                ccFlagBits = ccFlagBits & ~(ext & (CFBit | ECFBit | OFBit));
+                //The CF bits, if set, would be set to the lsb of the result.
+                int lsb = DestReg & 0x1;
+                int msb = bits(DestReg, dataSize * 8 - 1);
+                //If some combination of the CF bits need to be set, set them.
+                if ((ext & (CFBit | ECFBit)) && lsb)
+                    ccFlagBits = ccFlagBits | (ext & (CFBit | ECFBit));
+                //Figure out what the OF bit should be.
+                if ((ext & OFBit) && (msb ^ lsb))
+                    ccFlagBits = ccFlagBits | OFBit;
+                //Use the regular mechanisms to calculate the other flags.
+                ccFlagBits = genFlags(ccFlagBits, ext & ~(CFBit | ECFBit | OFBit),
+                        DestReg, psrc1, op2);
+            }
+        '''
+
+    class Rcl(RegOp):
+        code = '''
+            uint8_t shiftAmt =
+                (op2 & ((dataSize == 8) ? mask(6) : mask(5)));
+            if(shiftAmt)
+            {
+                CCFlagBits flags = ccFlagBits;
+                uint64_t top = psrc1 << shiftAmt;
+                uint64_t bottom = flags.CF << (shiftAmt - 1);
+                if(shiftAmt > 1)
+                    bottom |=
+                        bits(psrc1, dataSize * 8 - 1,
+                                   dataSize * 8 - shiftAmt + 1);
+                DestReg = merge(DestReg, top | bottom, dataSize);
+            }
+            else
+                DestReg = DestReg;
+            '''
+        flag_code = '''
+            // If the shift amount is zero, no flags should be modified.
+            if (shiftAmt) {
+                //Zero out any flags we might modify. This way we only have to
+                //worry about setting them.
+                ccFlagBits = ccFlagBits & ~(ext & (CFBit | ECFBit | OFBit));
+                int msb = bits(DestReg, dataSize * 8 - 1);
+                int CFBits = bits(SrcReg1, dataSize * 8 - shiftAmt);
+                //If some combination of the CF bits need to be set, set them.
+                if ((ext & (CFBit | ECFBit)) && CFBits)
+                    ccFlagBits = ccFlagBits | (ext & (CFBit | ECFBit));
+                //Figure out what the OF bit should be.
+                if ((ext & OFBit) && (msb ^ CFBits))
+                    ccFlagBits = ccFlagBits | OFBit;
+                //Use the regular mechanisms to calculate the other flags.
+                ccFlagBits = genFlags(ccFlagBits, ext & ~(CFBit | ECFBit | OFBit),
+                        DestReg, psrc1, op2);
+            }
+        '''
+
+    class Wrip(WrRegOp, CondRegOp):
+        code = 'RIP = psrc1 + op2'
+        else_code="RIP = RIP;"
+
+    class Br(WrRegOp, CondRegOp):
+        code = 'nuIP = psrc1 + op2;'
+        else_code='nuIP = nuIP;'
+
+    class Wruflags(WrRegOp):
+        code = 'ccFlagBits = psrc1 ^ op2'
+
+    class Rdip(RdRegOp):
+        code = 'DestReg = RIP'
+
+    class Ruflags(RdRegOp):
+        code = 'DestReg = ccFlagBits'
+
+    class Ruflag(RegOp):
+        code = '''
+            int flag = bits(ccFlagBits, imm8 + 0*psrc1);
+            DestReg = merge(DestReg, flag, dataSize);
+            ccFlagBits = (flag == 0) ? (ccFlagBits | EZFBit) :
+                                       (ccFlagBits & ~EZFBit);
+            '''
+        def __init__(self, dest, imm, flags=None, \
+                dataSize="env.dataSize"):
+            super(Ruflag, self).__init__(dest, \
+                    "NUM_INTREGS", imm, flags, dataSize)
+
+    class Sext(RegOp):
+        code = '''
+            IntReg val = psrc1;
+            int sign_bit = bits(val, imm8-1, imm8-1);
+            uint64_t maskVal = mask(imm8);
+            val = sign_bit ? (val | ~maskVal) : (val & maskVal);
+            DestReg = merge(DestReg, val, dataSize);
+            '''
+
+    class Zext(RegOp):
+        code = 'DestReg = bits(psrc1, imm8-1, 0);'
+
+    class Compfp(WrRegOp):
+        # This class sets the condition codes in rflags according to the
+        # rules for comparing floating point.
+        code = '''
+            //               ZF PF CF
+            // Unordered      1  1  1
+            // Greater than   0  0  0
+            // Less than      0  0  1
+            // Equal          1  0  0
+            //           OF = SF = AF = 0
+            ccFlagBits = ccFlagBits & ~(OFBit | SFBit | AFBit |
+                                        ZFBit | PFBit | CFBit);
+            if (isnan(FpSrcReg1) || isnan(FpSrcReg2))
+                ccFlagBits = ccFlagBits | (ZFBit | PFBit | CFBit);
+            else if(FpSrcReg1 < FpSrcReg2)
+                ccFlagBits = ccFlagBits | CFBit;
+            else if(FpSrcReg1 == FpSrcReg2)
+                ccFlagBits = ccFlagBits | ZFBit;
+        '''
+
+    class Xorfp(RegOp):
+        code = 'FpDestReg.uqw = FpSrcReg1.uqw ^ FpSrcReg2.uqw;'
+
+    class Sqrtfp(RegOp):
+        code = 'FpDestReg = sqrt(FpSrcReg2);'
+
+    class Movfp(CondRegOp):
+        code = 'FpDestReg.uqw = FpSrcReg2.uqw;'
+        else_code = 'FpDestReg.uqw = FpDestReg.uqw;'
+
+    # Conversion microops
+    class ConvOp(RegOp):
+        abstract = True
+        def __init__(self, dest, src1):
+            super(ConvOp, self).__init__(dest, src1, "NUM_INTREGS")
+
+    #FIXME This needs to always use 32 bits unless REX.W is present
+    class cvtf_i2d(ConvOp):
+        code = 'FpDestReg = spsrc1;'
+
+    class cvtf_i2d_hi(ConvOp):
+        code = 'FpDestReg = bits(SrcReg1, 63, 32);'
+
+    class cvtf_d2i(ConvOp):
+        code = '''
+        int64_t intSrcReg1 = static_cast<int64_t>(FpSrcReg1);
+        DestReg = merge(DestReg, intSrcReg1, dataSize);
+        '''
+
+    # These need to consider size at some point. They'll always use doubles
+    # for the moment.
+    class addfp(RegOp):
+        code = 'FpDestReg = FpSrcReg1 + FpSrcReg2;'
+
+    class mulfp(RegOp):
+        code = 'FpDestReg = FpSrcReg1 * FpSrcReg2;'
+
+    class divfp(RegOp):
+        code = 'FpDestReg = FpSrcReg1 / FpSrcReg2;'
+
+    class subfp(RegOp):
+        code = 'FpDestReg = FpSrcReg1 - FpSrcReg2;'
+}};
