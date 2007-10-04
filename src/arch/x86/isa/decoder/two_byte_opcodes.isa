@@ -1,0 +1,768 @@
+// Copyright (c) 2007 The Hewlett-Packard Development Company
+// All rights reserved.
+//
+// Redistribution and use of this software in source and binary forms,
+// with or without modification, are permitted provided that the
+// following conditions are met:
+//
+// The software must be used only for Non-Commercial Use which means any
+// use which is NOT directed to receiving any direct monetary
+// compensation for, or commercial advantage from such use.  Illustrative
+// examples of non-commercial use are academic research, personal study,
+// teaching, education and corporate research & development.
+// Illustrative examples of commercial use are distributing products for
+// commercial advantage and providing services using the software for
+// commercial advantage.
+//
+// If you wish to use this software or functionality therein that may be
+// covered by patents for commercial use, please contact:
+//     Director of Intellectual Property Licensing
+//     Office of Strategy and Technology
+//     Hewlett-Packard Company
+//     1501 Page Mill Road
+//     Palo Alto, California  94304
+//
+// Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.  Redistributions
+// in binary form must reproduce the above copyright notice, this list of
+// conditions and the following disclaimer in the documentation and/or
+// other materials provided with the distribution.  Neither the name of
+// the COPYRIGHT HOLDER(s), HEWLETT-PACKARD COMPANY, nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.  No right of
+// sublicense is granted herewith.  Derivatives of the software and
+// output created using the software may be prepared, but only for
+// Non-Commercial Uses.  Derivatives of the software may be shared with
+// others provided: (i) the others agree to abide by the list of
+// conditions herein which includes the Non-Commercial Use restrictions;
+// and (ii) such Derivatives of the software include the above copyright
+// notice to acknowledge the contribution from this software where
+// applicable, this list of conditions and the disclaimer below.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Gabe Black
+
+////////////////////////////////////////////////////////////////////
+//
+// Decode the two byte opcodes
+//
+0x2: decode OPCODE_PREFIXA {
+    0x0F: decode OPCODE_OP_TOP5 {
+        format WarnUnimpl {
+            0x00: decode OPCODE_OP_BOTTOM3 {
+                0x00: group6();
+                0x01: group7();
+                0x02: lar_Gv_Ew();
+                0x03: lsl_Gv_Ew();
+                //sandpile.org doesn't seem to know what this is... ?
+                0x04: loadall_or_reset_or_hang();
+#if FULL_SYSTEM
+                0x05: syscall();
+#else
+                0x05: SyscallInst::syscall('xc->syscall(rax)', IsSyscall);
+#endif
+                0x06: clts();
+                //sandpile.org says (AMD) after sysret, so I might want to check
+                //if that means amd64 or AMD machines
+                0x07: loadall_or_sysret();
+            }
+            0x01: decode OPCODE_OP_BOTTOM3 {
+                0x0: invd();
+                0x1: wbinvd();
+                0x2: Inst::UD2();
+                0x3: Inst::UD2();
+                0x4: Inst::UD2();
+                0x5: threednow();
+                0x6: threednow();
+                0x7: threednow();
+            }
+            0x02: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: movups_Vo_Wo();
+                    0x1: movups_Wo_Vo();
+                    0x2: decode MODRM_MOD {
+                        0x3: movhlps_Vq_VRq();
+                        default: movlps_Vq_Mq();
+                    }
+                    0x3: movlps_Mq_Vq();
+                    0x4: unpcklps();
+                    0x5: unpckhps();
+                    0x6: decode MODRM_MOD {
+                        0x3: movlhps_Vq_VRq();
+                        default: movhps_Vq_Mq();
+                    }
+                    0x7: movhps_Mq_Vq();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x0: movss_Vd_Wd();
+                    0x1: movss_Wd_Vd();
+                    0x2: movsldup_Vo_Wo();
+                    0x6: movshdup_Vo_Wo();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: movupd_Vo_Wo();
+                    0x1: movupd_Wo_Vo();
+                    0x2: Inst::MOVLPD(Vq,Mq);
+                    0x3: Inst::MOVLPD(Mq,Vq);
+                    0x4: unpcklpd_Vo_Wq();
+                    0x5: unpckhpd_Vo_Wo();
+                    0x6: movhpd_Vq_Mq();
+                    0x7: movhpd_Mq_Vq();
+                }
+                // repne (0xF2)
+                0x8: decode OPCODE_OP_BOTTOM3 {
+                    0x0: Inst::MOVSD(Vq,Wq);
+                    0x1: Inst::MOVSD(Wq,Vq);
+                    0x2: movddup_Vo_Wq();
+                    default: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            0x03: decode OPCODE_OP_BOTTOM3 {
+                0x0: group17();
+                0x1: group17();
+                0x2: group17();
+                0x3: group17();
+                0x4: group17();
+                0x5: group17();
+                0x6: group17();
+                0x7: group17();
+            }
+            0x04: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: mov_Rd_Cd();
+                    0x1: mov_Rd_Dd();
+                    0x2: mov_Cd_Rd();
+                    0x3: mov_Dd_Rd();
+                    0x4: mov_Rd_Td();
+                    0x6: mov_Td_Rd();
+                    default: Inst::UD2();
+                }
+                // lock prefix (0xF0)
+                0x2: decode OPCODE_OP_BOTTOM3 {
+                    0x0: mov_Rd_CR8D();
+                    0x2: mov_CR8D_Rd();
+                }
+                default: Inst::UD2();
+            }
+            0x05: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    //These moves should really use size o (octword), but
+                    //because they are split in two, they use q (quadword).
+                    0x0: Inst::MOVAPS(Vq,Wq);
+                    0x1: Inst::MOVAPS(Wq,Vq);
+                    0x2: decode MODRM_MOD {
+                        0x3: cvtpi2pS_Vq_Pq();
+                        default: cvtpi2ps_Vq_Mq();
+                    }
+                    0x3: movntps_Mo_Vo();
+                    0x4: cvttps2pi_Pq_Wq();
+                    0x5: cvtpS2pi_Pq_Wq();
+                    0x6: ucomiss_Vd_Wd();
+                    0x7: comiss_Vd_Wd();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x2: cvtsi2ss_Vd_Ed();
+                    0x4: cvttss2si_Gd_Wd();
+                    0x5: cvtss2si_Gd_Wd();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: movapd_Vo_Wo();
+                    0x1: movapd_Wo_Vo();
+                    0x2: decode MODRM_MOD {
+                        0x3: cvtpi2pd_Vo_Pq();
+                        default: cvtpi2pd_Vo_Mq();
+                    }
+                    0x3: movntpd_Mo_Vo();
+                    0x4: cvttpd2pi_Pq_Wo();
+                    0x5: cvtpd2pi_Pq_Wo();
+                    0x6: Inst::UCOMISD(Vq,Wq);
+                    0x7: comisd_Vq_Wq();
+                }
+                // repne (0xF2)
+                0x8: decode OPCODE_OP_BOTTOM3 {
+                    // The size of the V operand should be q, not dp
+                    0x2: Inst::CVTSI2SD(Vdp,Edp);
+                    // The size of the W operand should be q, not dp
+                    0x4: Inst::CVTTSD2SI(Gdp,Wdp);
+                    0x5: cvtsd2si_Gd_Wq();
+                    default: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            0x06: decode OPCODE_OP_BOTTOM3 {
+                0x0: wrmsr();
+                0x1: rdtsc();
+                0x2: rdmsr();
+                0x3: rdpmc();
+                0x4: sysenter();
+                0x5: sysexit();
+                0x6: Inst::UD2();
+                0x7: getsec();
+            }
+            0x07: decode OPCODE_OP_BOTTOM3 {
+                0x0: three_byte_opcode();
+                0x1: three_byte_opcode();
+                0x2: three_byte_opcode();
+                0x3: three_byte_opcode();
+                0x4: three_byte_opcode();
+                0x5: three_byte_opcode();
+                0x6: three_byte_opcode();
+                0x7: three_byte_opcode();
+            }
+            format Inst {
+                0x08: decode OPCODE_OP_BOTTOM3 {
+                    0x0: CMOVO(Gv,Ev);
+                    0x1: CMOVNO(Gv,Ev);
+                    0x2: CMOVB(Gv,Ev);
+                    0x3: CMOVNB(Gv,Ev);
+                    0x4: CMOVZ(Gv,Ev);
+                    0x5: CMOVNZ(Gv,Ev);
+                    0x6: CMOVBE(Gv,Ev);
+                    0x7: CMOVNBE(Gv,Ev);
+                }
+                0x09: decode OPCODE_OP_BOTTOM3 {
+                    0x0: CMOVS(Gv,Ev);
+                    0x1: CMOVNS(Gv,Ev);
+                    0x2: CMOVP(Gv,Ev);
+                    0x3: CMOVNP(Gv,Ev);
+                    0x4: CMOVL(Gv,Ev);
+                    0x5: CMOVNL(Gv,Ev);
+                    0x6: CMOVLE(Gv,Ev);
+                    0x7: CMOVNLE(Gv,Ev);
+                }
+            }
+            0x0A: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: movmskps_Gd_VRo();
+                    0x1: sqrtps_Vo_Wo();
+                    0x2: rqsrtps_Vo_Wo();
+                    0x3: rcpps_Vo_Wo();
+                    0x4: andps_Vo_Wo();
+                    0x5: andnps_Vo_Wo();
+                    0x6: orps_Vo_Wo();
+                    0x7: xorps_Vo_Wo();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x1: sqrtss_Vd_Wd();
+                    0x2: rsqrtss_Vd_Wd();
+                    0x3: rcpss_Vd_Wd();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: movmskpd_Gd_VRo();
+                    0x1: sqrtpd_Vo_Wo();
+                    0x4: andpd_Vo_Wo();
+                    0x5: andnpd_Vo_Wo();
+                    0x6: orpd_Vo_Wo();
+                    //This really should be type o, but it works on q sized
+                    //chunks at a time.
+                    0x7: Inst::XORPD(Vq,Wq);
+                    default: Inst::UD2();
+                }
+                format Inst {
+                    // repne (0xF2)
+                    0x8: decode OPCODE_OP_BOTTOM3 {
+                        0x1: SQRTSD(Vq,Wq);
+                        default: UD2();
+                    }
+                    default: UD2();
+                }
+            }
+            0x0B: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: addps_Vo_Wo();
+                    0x1: mulps_Vo_Wo();
+                    0x2: cvtps2pd_Vo_Wq();
+                    0x3: cvtdq2ps_Vo_Wo();
+                    0x4: subps_Vo_Wo();
+                    0x5: minps_Vo_Wo();
+                    0x6: divps_Vo_Wo();
+                    0x7: maxps_Vo_Wo();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x0: addss_Vd_Wd();
+                    0x1: mulss_Vd_Wd();
+                    0x2: cvtss2sd_Vq_Wd();
+                    0x3: cvttps2dq_Vo_Wo();
+                    0x4: subss_Vd_Wd();
+                    0x5: minss_Vd_Wd();
+                    0x6: divss_Vd_Wd();
+                    0x7: maxss_Vd_Wd();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: addpd_Vo_Wo();
+                    0x1: mulpd_Vo_Wo();
+                    0x2: cvtpd2ps_Vo_Wo();
+                    0x3: cvtps2dq_Vo_Wo();
+                    0x4: subpd_Vo_Wo();
+                    0x5: minpd_Vo_Wo();
+                    0x6: divpd_Vo_Wo();
+                    0x7: maxpd_Vo_Wo();
+                }
+                // repne (0xF2)
+                0x8: decode OPCODE_OP_BOTTOM3 {
+                    0x0: Inst::ADDSD(Vq,Wq);
+                    0x1: Inst::MULSD(Vq,Wq);
+                    0x2: cvtsd2ss_Vd_Wq();
+                    0x4: Inst::SUBSD(Vq,Wq);
+                    0x5: minsd_Vq_Wq();
+                    0x6: Inst::DIVSD(Vq,Wq);
+                    0x7: maxsd_Vq_Wq();
+                    default: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            0x0C: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: punpcklbw_Pq_Qd();
+                    0x1: punpcklwd_Pq_Qd();
+                    0x2: punpckldq_Pq_Qd();
+                    0x3: packsswb_Pq_Qq();
+                    0x4: pcmpgtb_Pq_Qq();
+                    0x5: pcmpgtw_Pq_Qq();
+                    0x6: pcmpgtd_Pq_Qq();
+                    0x7: packuswb_Pq_Qq();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: punpcklbw_Vo_Wq();
+                    0x1: punpcklwd_Vo_Wq();
+                    0x2: punpckldq_Vo_Wq();
+                    0x3: packsswb_Vo_Wo();
+                    0x4: pcmpgtb_Vo_Wo();
+                    0x5: pcmpgtw_Vo_Wo();
+                    0x6: pcmpgtd_Vo_Wo();
+                    0x7: packuswb_Vo_Wo();
+                }
+                default: Inst::UD2();
+            }
+            0x0D: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: punpckhbw_Pq_Qq();
+                    0x1: punpckhwd_Pq_Qq();
+                    0x2: punpckhdq_Pq_Qq();
+                    0x3: packssdw_Pq_Qq();
+                    0x6: movd_Pq_Ed();
+                    0x7: movq_Pq_Qq();
+                    default: Inst::UD2();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x7: movdqu_Vo_Wo();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: punpckhbw_Vo_Wo();
+                    0x1: punpckhwd_Vo_Wo();
+                    0x2: punpckhdq_Vo_Wo();
+                    0x3: packssdw_Vo_Wo();
+                    0x4: punpcklqdq_Vo_Wq();
+                    0x5: punpcklqdq_Vo_Wq();
+                    0x6: movd_Vo_Ed();
+                    0x7: movdqa_Vo_Wo();
+                }
+                default: Inst::UD2();
+            }
+            0x0E: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: pshufw_Pq_Qq_Ib();
+                    0x1: group13_pshimw();
+                    0x2: group14_pshimd();
+                    0x3: group15_pshimq();
+                    0x4: pcmpeqb_Pq_Qq();
+                    0x5: pcmpeqw_Pq_Qq();
+                    0x6: pcmpeqd_Pq_Qq();
+                    0x7: emms();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x0: pshufhw_Vo_Wo_Ib();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: pshufd_Vo_Wo_Ib();
+                    0x1: group13_pshimw();
+                    0x2: group14_pshimd();
+                    0x3: group15_pshimq_dq();
+                    0x4: pcmpeqb_Vo_Wo();
+                    0x5: pcmpeqw_Vo_Wo();
+                    0x6: pcmpeqd_Vo_Wo();
+                    default: Inst::UD2();
+                }
+                // repne (0xF2)
+                0x8: decode OPCODE_OP_BOTTOM3 {
+                    0x0: pshuflw_Vo_Wo_Ib();
+                    default: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            0x0F: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: vmread_Ed_or_Eq_Gd_or_Gq();
+                    0x1: vmwrite_Gd_or_Gq_Ed_or_Eq();
+                    0x6: mov_Ed_Pd();
+                    0x7: mov_Qq_Pq();
+                    default: Inst::UD2();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x6: movq_Vo_Mq_or_Vq_Vq();
+                    0x7: movdqu_Wo_Vo();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x4: haddpd_Vo_Wo();
+                    0x5: hsubpd_Vo_Wo();
+                    0x6: movd_Ed_Vd();
+                    0x7: movdqa_Wo_Vo();
+                    default: Inst::UD2();
+                }
+                // repne (0xF2)
+                0x8: decode OPCODE_OP_BOTTOM3 {
+                    0x4: haddps_Vo_Wo();
+                    0x5: hsubps_Vo_Wo();
+                    default: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            format Inst {
+                0x10: decode OPCODE_OP_BOTTOM3 {
+                    0x0: JO(Jz);
+                    0x1: JNO(Jz);
+                    0x2: JB(Jz);
+                    0x3: JNB(Jz);
+                    0x4: JZ(Jz);
+                    0x5: JNZ(Jz);
+                    0x6: JBE(Jz);
+                    0x7: JNBE(Jz);
+                }
+                0x11: decode OPCODE_OP_BOTTOM3 {
+                    0x0: JS(Jz);
+                    0x1: JNS(Jz);
+                    0x2: JP(Jz);
+                    0x3: JNP(Jz);
+                    0x4: JL(Jz);
+                    0x5: JNL(Jz);
+                    0x6: JLE(Jz);
+                    0x7: JNLE(Jz);
+                }
+                0x12: decode OPCODE_OP_BOTTOM3 {
+                    0x0: SETO(Eb);
+                    0x1: SETNO(Eb);
+                    0x2: SETB(Eb);
+                    0x3: SETNB(Eb);
+                    0x4: SETZ(Eb);
+                    0x5: SETNZ(Eb);
+                    0x6: SETBE(Eb);
+                    0x7: SETNBE(Eb);
+                }
+                0x13: decode OPCODE_OP_BOTTOM3 {
+                    0x0: SETS(Eb);
+                    0x1: SETNS(Eb);
+                    0x2: SETP(Eb);
+                    0x3: SETNP(Eb);
+                    0x4: SETL(Eb);
+                    0x5: SETNL(Eb);
+                    0x6: SETLE(Eb);
+                    0x7: SETNLE(Eb);
+                }
+            }
+            0x14: decode OPCODE_OP_BOTTOM3 {
+                0x0: push_fs();
+                0x1: pop_fs();
+                0x2: Inst::CPUID(rAd);
+                0x3: bt_Ev_Gv();
+                0x4: shld_Ev_Gv_Ib();
+                0x5: shld_Ev_Gv_rCl();
+                0x6: xbts_and_cmpxchg();
+                0x7: ibts_and_cmpxchg();
+            }
+            0x15: decode OPCODE_OP_BOTTOM3 {
+                0x0: push_gs();
+                0x1: pop_gs();
+                0x2: rsm_smm();
+                0x3: bts_Ev_Gv();
+                0x4: shrd_Ev_Gv_Ib();
+                0x5: shrd_Ev_Gv_rCl();
+                0x6: group16();
+                0x7: Inst::IMUL(Gv,Ev);
+            }
+            0x16: decode OPCODE_OP_BOTTOM3 {
+                0x0: Inst::CMPXCHG(Eb,Gb);
+                0x1: Inst::CMPXCHG(Ev,Gv);
+                0x2: lss_Gz_Mp();
+                0x3: btr_Ev_Gv();
+                0x4: lfs_Gz_Mp();
+                0x5: lgs_Gz_Mp();
+                //The size of the second operand in these instructions should
+                //really be "b" or "w", but it's set to v in order to have a
+                //consistent register size. This shouldn't affect behavior.
+                0x6: Inst::MOVZX_B(Gv,Ev);
+                0x7: Inst::MOVZX_W(Gv,Ev);
+            }
+            0x17: decode OPCODE_OP_BOTTOM3 {
+                0x0: jmpe_Jz(); // IA-64?
+                0x1: group11_UD2();
+                0x2: group8_Ev_Ib();
+                0x3: btc_Ev_Gv();
+                0x4: bsf_Gv_Ev();
+                0x5: bsr_Gv_Ev();
+                //The size of the second operand in these instructions should
+                //really be "b" or "w", but it's set to v in order to have a
+                //consistent register size. This shouldn't affect behavior.
+                0x6: Inst::MOVSX_B(Gv,Ev);
+                0x7: Inst::MOVSX_W(Gv,Ev);
+            }
+            0x18: decode OPCODE_OP_BOTTOM3 {
+                0x0: xadd_Eb_Gb();
+                0x1: xadd_Ev_Gv();
+                0x7: group9();
+                default: decode LEGACY_DECODEVAL {
+                    // no prefix
+                    0x0: decode OPCODE_OP_BOTTOM3 {
+                        0x2: cmpccps_Vo_Wo_Ib();
+                        0x3: cvtdq2ps_Vo_Wo();
+                        0x4: subps_Vo_Wo();
+                        0x5: minps_Vo_Wo();
+                        0x6: divps_Vo_Wo();
+                    }
+                    // repe (0xF3)
+                    0x4: decode OPCODE_OP_BOTTOM3 {
+                        0x2: cmpccss_Vd_Wd_Ib();
+                        default: Inst::UD2();
+                    }
+                    // operand size (0x66)
+                    0x1: decode OPCODE_OP_BOTTOM3 {
+                        0x2: cmpccpd_Vo_Wo_Ib();
+                        0x4: subpd_Vo_Wo();
+                        0x5: minpd_Vo_Wo();
+                        0x6: divpd_Vo_Wo();
+                        default: Inst::UD2();
+                    }
+                    // repne (0xF2)
+                    0x8: decode OPCODE_OP_BOTTOM3 {
+                        0x2: cmpccsd_Vq_Wq_Ib();
+                        default: Inst::UD2();
+                    }
+                    default: Inst::UD2();
+                }
+            }
+            0x19: bswap_B();
+            0x1A: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x1: psrlw_Pq_Qq();
+                    0x2: psrld_Pq_Qq();
+                    0x3: psrlq_Pq_Qq();
+                    0x4: paddq_Pq_Qq();
+                    0x5: pmullw_Pq_Qq();
+                    0x7: pmovmskb_Gd_PRq();
+                    default: Inst::UD2();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x6: movq2dq_Vo_PRq();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: addsubpd_Vo_Wo();
+                    0x1: psrlw_Vo_Wo();
+                    0x2: psrld_Vo_Wo();
+                    0x3: psrlq_Vo_Wo();
+                    0x4: paddq_Vo_Wo();
+                    0x5: pmullw_Vo_Wo();
+                    0x6: decode MODRM_MOD {
+                        0x3: movq_Vq_Vq();
+                        default: movq_Mq_Vq();
+                    }
+                    0x7: pmovmskb_Gd_VRo();
+                }
+                // repne (0xF2)
+                0x8: decode OPCODE_OP_BOTTOM3 {
+                    0x0: addsubps_Vo_Wo();
+                    0x6: movdq2q_Pq_VRq();
+                    default: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            0x1B: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: psubusb_Pq_Qq();
+                    0x1: psubusw_Pq_Qq();
+                    0x2: pminub_Pq_Qq();
+                    0x3: pand_Pq_Qq();
+                    0x4: paddusb_Pq_Qq();
+                    0x5: paddusw_Pq_Qq();
+                    0x6: pmaxub_Pq_Qq();
+                    0x7: pandn_Pq_Qq();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: psubusb_Vo_Wo();
+                    0x1: psubusw_Vo_Wo();
+                    0x2: pminub_Vo_Wo();
+                    0x3: pand_Vo_Wo();
+                    0x4: paddusb_Vo_Wo();
+                    0x5: paddusw_Vo_Wo();
+                    0x6: pmaxub_Vo_Wo();
+                    0x7: pandn_Vo_Wo();
+                }
+                default: Inst::UD2();
+            }
+            0x1C: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: pavgb_Pq_Qq();
+                    0x1: psraw_Pq_Qq();
+                    0x2: psrad_Pq_Qq();
+                    0x3: pavgw_Pq_Qq();
+                    0x4: pmulhuw_Pq_Qq();
+                    0x5: pmulhw_Pq_Qq();
+                    0x7: movntq_Mq_Pq();
+                    default: Inst::UD2();
+                }
+                // repe (0xF3)
+                0x4: decode OPCODE_OP_BOTTOM3 {
+                    0x6: cvtdq2pd_Vo_Wq();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: pavgb_Vo_Wo();
+                    0x1: psraw_Vo_Wo();
+                    0x2: psrad_Vo_Wo();
+                    0x3: pavgw_Vo_Wo();
+                    0x4: pmulhuw_Vo_Wo();
+                    0x5: pmulhw_Vo_Wo();
+                    0x6: cvttpd2dq_Vo_Wo();
+                    0x7: movntdq_Mo_Vo();
+                }
+                // repne (0xF2)
+                0x8: decode OPCODE_OP_BOTTOM3 {
+                    0x6: cvtpd2dq_Vo_Wo();
+                    default: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            0x1D: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: psubsb_Pq_Qq();
+                    0x1: psubsw_Pq_Qq();
+                    0x2: pminsw_Pq_Qq();
+                    0x3: por_Pq_Qq();
+                    0x4: paddsb_Pq_Qq();
+                    0x5: paddsw_Pq_Qq();
+                    0x6: pmaxsw_Pq_Qq();
+                    0x7: pxor_Pq_Qq();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: psubsb_Vo_Wo();
+                    0x1: psubsw_Vo_Wo();
+                    0x2: pminsw_Vo_Wo();
+                    0x3: por_Vo_Wo();
+                    0x4: paddsb_Vo_Wo();
+                    0x5: paddsw_Vo_Wo();
+                    0x6: pmaxsw_Vo_Wo();
+                    0x7: pxor_Vo_Wo();
+                }
+                default: Inst::UD2();
+            }
+            0x1E: decode OPCODE_OP_BOTTOM3 {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x1: psllw_Pq_Qq();
+                    0x2: pslld_Pq_Qq();
+                    0x3: psllq_Pq_Qq();
+                    0x4: pmuludq_Pq_Qq();
+                    0x5: pmaddwd_Pq_Qq();
+                    0x6: psadbw_Pq_Qq();
+                    0x7: maskmovq_Pq_PRq();
+                    default: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x1: psllw_Vo_Wo();
+                    0x2: pslld_Vo_Wo();
+                    0x3: psllq_Vo_Wo();
+                    0x4: pmuludq_Vo_Wo();
+                    0x5: pmaddwd_Vo_Wo();
+                    0x6: psadbw_Vo_Wo();
+                    0x7: maskmovdqu_Vo_VRo();
+                    default: Inst::UD2();
+                }
+                // repne (0xF2)
+                0x8: decode OPCODE_OP_BOTTOM3 {
+                    0x0: lddqu_Vo_Mo();
+                    default: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            0x1F: decode LEGACY_DECODEVAL {
+                // no prefix
+                0x0: decode OPCODE_OP_BOTTOM3 {
+                    0x0: psubb_Pq_Qq();
+                    0x1: psubw_Pq_Qq();
+                    0x2: psubd_Pq_Qq();
+                    0x3: psubq_Pq_Qq();
+                    0x4: paddb_Pq_Qq();
+                    0x5: paddw_Pq_Qq();
+                    0x6: paddd_Pq_Qq();
+                    0x7: Inst::UD2();
+                }
+                // operand size (0x66)
+                0x1: decode OPCODE_OP_BOTTOM3 {
+                    0x0: psubb_Vo_Wo();
+                    0x1: psubw_Vo_Wo();
+                    0x2: psubd_Vo_Wo();
+                    0x3: psubq_Vo_Wo();
+                    0x4: paddb_Vo_Wo();
+                    0x5: paddw_Vo_Wo();
+                    0x6: paddd_Vo_Wo();
+                    0x7: Inst::UD2();
+                }
+                default: Inst::UD2();
+            }
+            default: FailUnimpl::twoByteOps();
+        }
+    }
+    default: M5InternalError::error(
+        {{"Unexpected first opcode byte in two byte opcode!"}});
+}
