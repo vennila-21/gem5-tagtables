@@ -66,7 +66,7 @@ namespace X86ISA
             uint64_t _dest, uint64_t _src1, uint64_t _src2,
             bool subtract) const
     {
-        DPRINTF(Sparc, "flagMask = %#x\n", flagMask);
+        DPRINTF(X86, "flagMask = %#x\n", flagMask);
         uint64_t flags = oldFlags & ~flagMask;
         if(flagMask & (ECFBit | CFBit))
         {
@@ -91,82 +91,6 @@ namespace X86ISA
         if(flagMask & OFBit && findOverflow(dataSize*8, _dest, _src1, _src2))
             flags |= OFBit;
         return flags;
-    }
-
-    bool RegOpBase::checkCondition(uint64_t flags) const
-    {
-        CCFlagBits ccflags = flags;
-        switch(ext)
-        {
-          case ConditionTests::True:
-            return true;
-          case ConditionTests::ECF:
-            return ccflags.ECF;
-          case ConditionTests::EZF:
-            return ccflags.EZF;
-          case ConditionTests::SZnZF:
-            return !(!ccflags.EZF & ccflags.ZF);
-          case ConditionTests::MSTRZ:
-            panic("This condition is not implemented!");
-          case ConditionTests::STRZ:
-            panic("This condition is not implemented!");
-          case ConditionTests::MSTRC:
-            panic("This condition is not implemented!");
-          case ConditionTests::STRZnEZF:
-            return !ccflags.EZF & ccflags.ZF;
-                //And no interrupts or debug traps are waiting
-          case ConditionTests::OF:
-            return ccflags.OF;
-          case ConditionTests::CF:
-            return ccflags.CF;
-          case ConditionTests::ZF:
-            return ccflags.ZF;
-          case ConditionTests::CvZF:
-            return ccflags.CF | ccflags.ZF;
-          case ConditionTests::SF:
-            return ccflags.SF;
-          case ConditionTests::PF:
-            return ccflags.PF;
-          case ConditionTests::SxOF:
-            return ccflags.SF ^ ccflags.OF;
-          case ConditionTests::SxOvZF:
-            return ccflags.SF ^ ccflags.OF | ccflags.ZF;
-          case ConditionTests::False:
-            return false;
-          case ConditionTests::NotECF:
-            return !ccflags.ECF;
-          case ConditionTests::NotEZF:
-            return !ccflags.EZF;
-          case ConditionTests::NotSZnZF:
-            return !ccflags.EZF & ccflags.ZF;
-          case ConditionTests::NotMSTRZ:
-            panic("This condition is not implemented!");
-          case ConditionTests::NotSTRZ:
-            panic("This condition is not implemented!");
-          case ConditionTests::NotMSTRC:
-            panic("This condition is not implemented!");
-          case ConditionTests::STRnZnEZF:
-            return !ccflags.EZF & !ccflags.ZF;
-                //And no interrupts or debug traps are waiting
-          case ConditionTests::NotOF:
-            return !ccflags.OF;
-          case ConditionTests::NotCF:
-            return !ccflags.CF;
-          case ConditionTests::NotZF:
-            return !ccflags.ZF;
-          case ConditionTests::NotCvZF:
-            return !(ccflags.CF | ccflags.ZF);
-          case ConditionTests::NotSF:
-            return !ccflags.SF;
-          case ConditionTests::NotPF:
-            return !ccflags.PF;
-          case ConditionTests::NotSxOF:
-            return !(ccflags.SF ^ ccflags.OF);
-          case ConditionTests::NotSxOvZF:
-            return !(ccflags.SF ^ ccflags.OF | ccflags.ZF);
-        }
-        panic("Unknown condition: %d\n", ext);
-        return true;
     }
 
     std::string RegOp::generateDisassembly(Addr pc,

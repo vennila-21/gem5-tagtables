@@ -58,10 +58,73 @@
 #ifndef __ARCH_X86_INTERRUPTS_HH__
 #define __ARCH_X86_INTERRUPTS_HH__
 
-#error X86 is not yet supported!
+#include "arch/x86/faults.hh"
+#include "cpu/thread_context.hh"
 
 namespace X86ISA
 {
+
+class Interrupts
+{
+  public:
+    Interrupts()
+    {
+        clear_all();
+    }
+
+    int InterruptLevel(uint64_t softint)
+    {
+        panic("Interrupts::InterruptLevel unimplemented!\n");
+        return 0;
+    }
+
+    void post(int int_num, int index)
+    {
+        panic("Interrupts::post unimplemented!\n");
+    }
+
+    void clear(int int_num, int index)
+    {
+        warn("Interrupts::clear unimplemented!\n");
+    }
+
+    void clear_all()
+    {
+        warn("Interrupts::clear_all unimplemented!\n");
+    }
+
+    bool check_interrupts(ThreadContext * tc) const
+    {
+        return false;
+    }
+
+    Fault getInterrupt(ThreadContext * tc)
+    {
+        return NoFault;
+    }
+
+    void updateIntrInfo(ThreadContext * tc)
+    {
+        panic("Interrupts::updateIntrInfo unimplemented!\n");
+    }
+
+    uint64_t get_vec(int int_num)
+    {
+        panic("Interrupts::get_vec unimplemented!\n");
+        return 0;
+    }
+
+    void serialize(std::ostream & os)
+    {
+        panic("Interrupts::serialize unimplemented!\n");
+    }
+
+    void unserialize(Checkpoint * cp, const std::string & section)
+    {
+        panic("Interrupts::unserialize unimplemented!\n");
+    }
+};
+
 };
 
 #endif // __ARCH_X86_INTERRUPTS_HH__

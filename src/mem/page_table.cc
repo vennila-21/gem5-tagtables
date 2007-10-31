@@ -43,15 +43,16 @@
 #include "base/intmath.hh"
 #include "base/trace.hh"
 #include "mem/page_table.hh"
+#include "sim/process.hh"
 #include "sim/sim_object.hh"
 #include "sim/system.hh"
 
 using namespace std;
 using namespace TheISA;
 
-PageTable::PageTable(System *_system, Addr _pageSize)
+PageTable::PageTable(Process *_process, Addr _pageSize)
     : pageSize(_pageSize), offsetMask(mask(floorLog2(_pageSize))),
-      system(_system)
+      process(_process)
 {
     assert(isPowerOf2(pageSize));
     pTableCache[0].vaddr = 0;
@@ -80,7 +81,8 @@ PageTable::allocate(Addr vaddr, int64_t size)
                     vaddr);
         }
 
-        pTable[vaddr] = TheISA::TlbEntry(system->new_page());
+        pTable[vaddr] = TheISA::TlbEntry(process->M5_pid, vaddr,
+                process->system->new_page());
         updateCache(vaddr, pTable[vaddr]);
     }
 }
@@ -118,9 +120,12 @@ bool
 PageTable::translate(Addr vaddr, Addr &paddr)
 {
     TheISA::TlbEntry entry;
-    if (!lookup(vaddr, entry))
+    if (!lookup(vaddr, entry)) {
+        DPRINTF(MMU, "Couldn't Translate: %#x\n", vaddr);
         return false;
-    paddr = pageOffset(vaddr) + entry.pageStart;
+    }
+    paddr = pageOffset(vaddr) + entry.pageStart();
+    DPRINTF(MMU, "Translating: %#x->%#x\n", vaddr, paddr);
     return true;
 }
 
@@ -151,7 +156,9 @@ PageTable::serialize(std::ostream &os)
     PTableItr iter = pTable.begin();
     PTableItr end = pTable.end();
     while (iter != end) {
-        paramOut(os, csprintf("ptable.entry%dvaddr", count), iter->first);
+        os << "\n[" << csprintf("%s.Entry%d", name(), count) << "]\n";
+
+        paramOut(os, "vaddr", iter->first);
         iter->second.serialize(os);
 
         ++iter;
@@ -166,14 +173,15 @@ PageTable::unserialize(Checkpoint *cp, const std::string &section)
     int i = 0, count;
     paramIn(cp, section, "ptable.size", count);
     Addr vaddr;
-    TheISA::TlbEntry entry;
+    TheISA::TlbEntry *entry;
 
     pTable.clear();
 
     while(i < count) {
-        paramIn(cp, section, csprintf("ptable.entry%dvaddr", i), vaddr);
-        entry.unserialize(cp, section);
-        pTable[vaddr] = entry;
+        paramIn(cp, csprintf("%s.Entry%d", name(), i), "vaddr", vaddr);
+        entry = new TheISA::TlbEntry();
+        entry->unserialize(cp, csprintf("%s.Entry%d", name(), i));
+        pTable[vaddr] = *entry;
         ++i;
    }
 }

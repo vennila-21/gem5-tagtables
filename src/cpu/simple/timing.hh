@@ -168,7 +168,6 @@ class TimingSimpleCPU : public BaseSimpleCPU
     PacketPtr ifetch_pkt;
     PacketPtr dcache_pkt;
 
-    int cpu_id;
     Tick previousTick;
 
   public:
@@ -190,8 +189,14 @@ class TimingSimpleCPU : public BaseSimpleCPU
     template <class T>
     Fault read(Addr addr, T &data, unsigned flags);
 
+    Fault translateDataReadAddr(Addr vaddr, Addr &paddr,
+            int size, unsigned flags);
+
     template <class T>
     Fault write(T data, Addr addr, unsigned flags, uint64_t *res);
+
+    Fault translateDataWriteAddr(Addr vaddr, Addr &paddr,
+            int size, unsigned flags);
 
     void fetch();
     void completeIfetch(PacketPtr );
@@ -202,6 +207,14 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     typedef EventWrapper<TimingSimpleCPU, &TimingSimpleCPU::fetch> FetchEvent;
     FetchEvent *fetchEvent;
+
+    struct IprEvent : Event {
+        Packet *pkt;
+        TimingSimpleCPU *cpu;
+        IprEvent(Packet *_pkt, TimingSimpleCPU *_cpu, Tick t);
+        virtual void process();
+        virtual const char *description();
+    };
 
     void completeDrain();
 };

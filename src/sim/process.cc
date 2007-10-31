@@ -45,6 +45,7 @@
 #include "mem/page_table.hh"
 #include "mem/physical.hh"
 #include "mem/translating_port.hh"
+#include "params/Process.hh"
 #include "params/LiveProcess.hh"
 #include "sim/process.hh"
 #include "sim/process_impl.hh"
@@ -83,13 +84,34 @@ using namespace TheISA;
 // current number of allocated processes
 int num_processes = 0;
 
-Process::Process(const string &nm,
-                 System *_system,
-                 int stdin_fd, 	// initial I/O descriptors
-                 int stdout_fd,
-                 int stderr_fd)
-    : SimObject(makeParams(nm)), system(_system)
+Process::Process(ProcessParams * params)
+    : SimObject(params), system(params->system), checkpointRestored(false),
+    max_stack_size(params->max_stack_size)
 {
+    string in = params->input;
+    string out = params->output;
+
+    // initialize file descriptors to default: same as simulator
+    int stdin_fd, stdout_fd, stderr_fd;
+
+    if (in == "stdin" || in == "cin")
+        stdin_fd = STDIN_FILENO;
+    else if (in == "None")
+        stdin_fd = -1;
+    else
+        stdin_fd = Process::openInputFile(in);
+
+    if (out == "stdout" || out == "cout")
+        stdout_fd = STDOUT_FILENO;
+    else if (out == "stderr" || out == "cerr")
+        stdout_fd = STDERR_FILENO;
+    else if (out == "None")
+        stdout_fd = -1;
+    else
+        stdout_fd = Process::openOutputFile(out);
+
+    stderr_fd = (stdout_fd != STDOUT_FILENO) ? stdout_fd : STDERR_FILENO;
+
     M5_pid = system->allocatePID();
     // initialize first 3 fds (stdin, stdout, stderr)
     fd_map[STDIN_FILENO] = stdin_fd;
@@ -103,7 +125,7 @@ Process::Process(const string &nm,
 
     mmap_start = mmap_end = 0;
     nxm_start = nxm_end = 0;
-    pTable = new PageTable(system);
+    pTable = new PageTable(this);
     // other parameters will be initialized when the program is loaded
 }
 
@@ -159,12 +181,12 @@ Process::registerThreadContext(ThreadContext *tc)
     int myIndex = threadContexts.size();
     threadContexts.push_back(tc);
 
-//    RemoteGDB *rgdb = new RemoteGDB(system, tc);
-//    GDBListener *gdbl = new GDBListener(rgdb, 7000 + myIndex);
-//    gdbl->listen();
+    RemoteGDB *rgdb = new RemoteGDB(system, tc);
+    GDBListener *gdbl = new GDBListener(rgdb, 7000 + myIndex);
+    gdbl->listen();
     //gdbl->accept();
 
-//    remoteGDB.push_back(rgdb);
+    remoteGDB.push_back(rgdb);
 
     // return CPU number to caller
     return myIndex;
@@ -264,13 +286,16 @@ Process::checkAndAllocNextPage(Addr vaddr)
 
     // We've accessed the next page of the stack, so extend the stack
     // to cover it.
-    if(vaddr < stack_min && vaddr >= stack_min - TheISA::PageBytes)
-    {
-        stack_min -= TheISA::PageBytes;
-        if(stack_base - stack_min > 8*1024*1024)
-            fatal("Over max stack size for one thread\n");
-        pTable->allocate(stack_min, TheISA::PageBytes);
-        warn("Increasing stack size by one page.");
+    if (vaddr < stack_min && vaddr >= stack_base - max_stack_size) {
+        while (vaddr < stack_min) {
+            stack_min -= TheISA::PageBytes;
+            if(stack_base - stack_min > max_stack_size)
+                fatal("Maximum stack size exceeded\n");
+            if(stack_base - stack_min > 8*1024*1024)
+                fatal("Over max stack size for one thread\n");
+            pTable->allocate(stack_min, TheISA::PageBytes);
+            warn("Increasing stack size by one page.");
+        };
         return true;
     }
     return false;
@@ -310,6 +335,10 @@ Process::unserialize(Checkpoint *cp, const std::string &section)
     UNSERIALIZE_ARRAY(fd_map, MAX_FD);
 
     pTable->unserialize(cp, section);
+
+
+    checkpointRestored = true;
+
 }
 
 
@@ -320,25 +349,18 @@ Process::unserialize(Checkpoint *cp, const std::string &section)
 ////////////////////////////////////////////////////////////////////////
 
 
-LiveProcess::LiveProcess(const string &nm, ObjectFile *_objFile,
-                         System *_system,
-                         int stdin_fd, int stdout_fd, int stderr_fd,
-                         vector<string> &_argv, vector<string> &_envp,
-                         const string &_cwd,
-                         uint64_t _uid, uint64_t _euid,
-                         uint64_t _gid, uint64_t _egid,
-                         uint64_t _pid, uint64_t _ppid)
-    : Process(nm, _system, stdin_fd, stdout_fd, stderr_fd),
-      objFile(_objFile), argv(_argv), envp(_envp), cwd(_cwd)
+LiveProcess::LiveProcess(LiveProcessParams * params, ObjectFile *_objFile)
+    : Process(params), objFile(_objFile),
+      argv(params->cmd), envp(params->env), cwd(params->cwd)
 {
-    __uid = _uid;
-    __euid = _euid;
-    __gid = _gid;
-    __egid = _egid;
-    __pid = _pid;
-    __ppid = _ppid;
+    __uid = params->uid;
+    __euid = params->euid;
+    __gid = params->gid;
+    __egid = params->egid;
+    __pid = params->pid;
+    __ppid = params->ppid;
 
-    prog_fname = argv[0];
+    prog_fname = params->cmd[0];
 
     // load up symbols, if any... these may be used for debugging or
     // profiling.
@@ -435,17 +457,12 @@ LiveProcess::syscall(int64_t callnum, ThreadContext *tc)
 }
 
 LiveProcess *
-LiveProcess::create(const std::string &nm, System *system, int stdin_fd,
-                    int stdout_fd, int stderr_fd, std::string executable,
-                    std::vector<std::string> &argv,
-                    std::vector<std::string> &envp,
-                    const std::string &cwd,
-                    uint64_t _uid, uint64_t _euid,
-                    uint64_t _gid, uint64_t _egid,
-                    uint64_t _pid, uint64_t _ppid)
+LiveProcess::create(LiveProcessParams * params)
 {
     LiveProcess *process = NULL;
 
+    string executable =
+        params->executable == "" ? params->cmd[0] : params->executable;
     ObjectFile *objFile = createObjectFile(executable);
     if (objFile == NULL) {
         fatal("Can't load object file %s", executable);
@@ -456,28 +473,21 @@ LiveProcess::create(const std::string &nm, System *system, int stdin_fd,
              "executables are supported!\n       Please recompile your "
              "executable as a static binary and try again.\n");
 
-    if (objFile->hasTLS())
-        fatal("Object file has a TLS section and loading of TLS sections "
-              "are not currently supported!\n       Please recompile your "
-              "executable with a non-TLS toolchain or add TLS support to "
-              "M5 and try again\n");
-
 #if THE_ISA == ALPHA_ISA
+    if (objFile->hasTLS())
+        fatal("Object file has a TLS section and single threaded TLS is not\n"
+              "       currently supported for Alpha! Please recompile your "
+              "executable with \n       a non-TLS toolchain.\n");
+
     if (objFile->getArch() != ObjectFile::Alpha)
         fatal("Object file architecture does not match compiled ISA (Alpha).");
     switch (objFile->getOpSys()) {
       case ObjectFile::Tru64:
-        process = new AlphaTru64Process(nm, objFile, system,
-                                        stdin_fd, stdout_fd, stderr_fd,
-                                        argv, envp, cwd,
-                                        _uid, _euid, _gid, _egid, _pid, _ppid);
+        process = new AlphaTru64Process(params, objFile);
         break;
 
       case ObjectFile::Linux:
-        process = new AlphaLinuxProcess(nm, objFile, system,
-                                        stdin_fd, stdout_fd, stderr_fd,
-                                        argv, envp, cwd,
-                                        _uid, _euid, _gid, _egid, _pid, _ppid);
+        process = new AlphaLinuxProcess(params, objFile);
         break;
 
       default:
@@ -489,26 +499,15 @@ LiveProcess::create(const std::string &nm, System *system, int stdin_fd,
     switch (objFile->getOpSys()) {
       case ObjectFile::Linux:
         if (objFile->getArch() == ObjectFile::SPARC64) {
-            process = new Sparc64LinuxProcess(nm, objFile, system,
-                                              stdin_fd, stdout_fd, stderr_fd,
-                                              argv, envp, cwd,
-                                              _uid, _euid, _gid,
-                                              _egid, _pid, _ppid);
+            process = new Sparc64LinuxProcess(params, objFile);
         } else {
-            process = new Sparc32LinuxProcess(nm, objFile, system,
-                                              stdin_fd, stdout_fd, stderr_fd,
-                                              argv, envp, cwd,
-                                              _uid, _euid, _gid,
-                                              _egid, _pid, _ppid);
+            process = new Sparc32LinuxProcess(params, objFile);
         }
         break;
 
 
       case ObjectFile::Solaris:
-        process = new SparcSolarisProcess(nm, objFile, system,
-                                        stdin_fd, stdout_fd, stderr_fd,
-                                        argv, envp, cwd,
-                                        _uid, _euid, _gid, _egid, _pid, _ppid);
+        process = new SparcSolarisProcess(params, objFile);
         break;
       default:
         fatal("Unknown/unsupported operating system.");
@@ -518,11 +517,7 @@ LiveProcess::create(const std::string &nm, System *system, int stdin_fd,
         fatal("Object file architecture does not match compiled ISA (x86).");
     switch (objFile->getOpSys()) {
       case ObjectFile::Linux:
-        process = new X86LinuxProcess(nm, objFile, system,
-                                          stdin_fd, stdout_fd, stderr_fd,
-                                          argv, envp, cwd,
-                                          _uid, _euid, _gid,
-                                          _egid, _pid, _ppid);
+        process = new X86LinuxProcess(params, objFile);
         break;
       default:
         fatal("Unknown/unsupported operating system.");
@@ -532,10 +527,7 @@ LiveProcess::create(const std::string &nm, System *system, int stdin_fd,
         fatal("Object file architecture does not match compiled ISA (MIPS).");
     switch (objFile->getOpSys()) {
       case ObjectFile::Linux:
-        process = new MipsLinuxProcess(nm, objFile, system,
-                                        stdin_fd, stdout_fd, stderr_fd,
-                                        argv, envp, cwd,
-                                        _uid, _euid, _gid, _egid, _pid, _ppid);
+        process = new MipsLinuxProcess(params, objFile);
         break;
 
       default:
@@ -554,29 +546,5 @@ LiveProcess::create(const std::string &nm, System *system, int stdin_fd,
 LiveProcess *
 LiveProcessParams::create()
 {
-    string in = input;
-    string out = output;
-
-    // initialize file descriptors to default: same as simulator
-    int stdin_fd, stdout_fd, stderr_fd;
-
-    if (in == "stdin" || in == "cin")
-        stdin_fd = STDIN_FILENO;
-    else
-        stdin_fd = Process::openInputFile(input);
-
-    if (out == "stdout" || out == "cout")
-        stdout_fd = STDOUT_FILENO;
-    else if (out == "stderr" || out == "cerr")
-        stdout_fd = STDERR_FILENO;
-    else
-        stdout_fd = Process::openOutputFile(out);
-
-    stderr_fd = (stdout_fd != STDOUT_FILENO) ? stdout_fd : STDERR_FILENO;
-
-    return LiveProcess::create(name, system,
-                               stdin_fd, stdout_fd, stderr_fd,
-                               (string)executable == "" ? cmd[0] : executable,
-                               cmd, env, cwd,
-                               uid, euid, gid, egid, pid, ppid);
+    return LiveProcess::create(this);
 }
