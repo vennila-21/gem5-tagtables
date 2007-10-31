@@ -61,6 +61,7 @@
 #include "arch/x86/intregs.hh"
 #include "arch/x86/types.hh"
 #include "arch/x86/x86_traits.hh"
+#include "sim/host.hh"
 
 class StaticInstPtr;
 
@@ -89,7 +90,11 @@ namespace X86ISA
             //mmx/x87 registers
             8 +
             //xmm registers
-            16
+            16 * 2 +
+            //The microcode fp registers
+            8 +
+            //The indices that are mapped over the fp stack
+            8
     };
 
     // semantically meaningful register indices
@@ -124,12 +129,14 @@ namespace X86ISA
     const int LogVMPageSize = 12;
     const int VMPageSize = (1 << LogVMPageSize);
 
-    const int PageShift = 13;
+    const int PageShift = 12;
     const int PageBytes = 1ULL << PageShift;
 
     const int BranchPredAddrShiftAmt = 0;
 
     StaticInstPtr decodeInst(ExtMachInst);
+
+    const Addr LoadAddrMask = ULL(-1);
 };
 
 #endif // __ARCH_X86_ISATRAITS_HH__

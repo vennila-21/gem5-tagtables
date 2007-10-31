@@ -159,9 +159,9 @@ AtomicSimpleCPU::AtomicSimpleCPU(Params *p)
     icachePort.snoopRangeSent = false;
     dcachePort.snoopRangeSent = false;
 
-    ifetch_req.setThreadContext(p->cpu_id, 0); // Add thread ID if we add MT
-    data_read_req.setThreadContext(p->cpu_id, 0); // Add thread ID here too
-    data_write_req.setThreadContext(p->cpu_id, 0); // Add thread ID here too
+    ifetch_req.setThreadContext(cpuId, 0); // Add thread ID if we add MT
+    data_read_req.setThreadContext(cpuId, 0); // Add thread ID here too
+    data_write_req.setThreadContext(cpuId, 0); // Add thread ID here too
 }
 
 
@@ -237,6 +237,8 @@ AtomicSimpleCPU::takeOverFrom(BaseCPU *oldCPU)
     if (_status != Running) {
         _status = Idle;
     }
+    assert(threadContexts.size() == 1);
+    cpuId = tc->readCpuId();
 }
 
 
@@ -252,9 +254,10 @@ AtomicSimpleCPU::activateContext(int thread_num, int delay)
     assert(!tickEvent.scheduled());
 
     notIdleFraction++;
+    numCycles += tickToCycles(thread->lastActivate - thread->lastSuspend);
 
     //Make sure ticks are still on multiples of cycles
-    tickEvent.schedule(nextCycle(curTick + cycles(delay)));
+    tickEvent.schedule(nextCycle(curTick + ticks(delay)));
     _status = Running;
 }
 
@@ -360,6 +363,61 @@ AtomicSimpleCPU::read(Addr addr, T &data, unsigned flags)
         dataSize = addr + sizeof(T) - secondAddr;
         //And access the right address.
         addr = secondAddr;
+    }
+}
+
+Fault
+AtomicSimpleCPU::translateDataReadAddr(Addr vaddr, Addr & paddr,
+        int size, unsigned flags)
+{
+    // use the CPU's statically allocated read request and packet objects
+    Request *req = &data_read_req;
+
+    if (traceData) {
+        traceData->setAddr(vaddr);
+    }
+
+    //The block size of our peer.
+    int blockSize = dcachePort.peerBlockSize();
+    //The size of the data we're trying to read.
+    int dataSize = size;
+
+    bool firstTimeThrough = true;
+
+    //The address of the second part of this access if it needs to be split
+    //across a cache line boundary.
+    Addr secondAddr = roundDown(vaddr + dataSize - 1, blockSize);
+
+    if(secondAddr > vaddr)
+        dataSize = secondAddr - vaddr;
+
+    while(1) {
+        req->setVirt(0, vaddr, dataSize, flags, thread->readPC());
+
+        // translate to physical address
+        Fault fault = thread->translateDataReadReq(req);
+
+        //If there's a fault, return it
+        if (fault != NoFault)
+            return fault;
+
+        if (firstTimeThrough) {
+            paddr = req->getPaddr();
+            firstTimeThrough = false;
+        }
+
+        //If we don't need to access a second cache line, stop now.
+        if (secondAddr <= vaddr)
+            return fault;
+
+        /*
+         * Set up for accessing the second cache line.
+         */
+
+        //Adjust the size to get the remaining bytes.
+        dataSize = vaddr + size - secondAddr;
+        //And access the right address.
+        vaddr = secondAddr;
     }
 }
 
@@ -521,6 +579,64 @@ AtomicSimpleCPU::write(T data, Addr addr, unsigned flags, uint64_t *res)
     }
 }
 
+Fault
+AtomicSimpleCPU::translateDataWriteAddr(Addr vaddr, Addr &paddr,
+        int size, unsigned flags)
+{
+    // use the CPU's statically allocated write request and packet objects
+    Request *req = &data_write_req;
+
+    if (traceData) {
+        traceData->setAddr(vaddr);
+    }
+
+    //The block size of our peer.
+    int blockSize = dcachePort.peerBlockSize();
+
+    //The address of the second part of this access if it needs to be split
+    //across a cache line boundary.
+    Addr secondAddr = roundDown(vaddr + size - 1, blockSize);
+
+    //The size of the data we're trying to read.
+    int dataSize = size;
+
+    bool firstTimeThrough = true;
+
+    if(secondAddr > vaddr)
+        dataSize = secondAddr - vaddr;
+
+    dcache_latency = 0;
+
+    while(1) {
+        req->setVirt(0, vaddr, flags, flags, thread->readPC());
+
+        // translate to physical address
+        Fault fault = thread->translateDataWriteReq(req);
+
+        //If there's a fault or we don't need to access a second cache line,
+        //stop now.
+        if (fault != NoFault)
+            return fault;
+
+        if (firstTimeThrough) {
+            paddr = req->getPaddr();
+            firstTimeThrough = false;
+        }
+
+        if (secondAddr <= vaddr)
+            return fault;
+
+        /*
+         * Set up for accessing the second cache line.
+         */
+
+        //Adjust the size to get the remaining bytes.
+        dataSize = vaddr + size - secondAddr;
+        //And access the right address.
+        vaddr = secondAddr;
+    }
+}
+
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 
@@ -584,7 +700,7 @@ AtomicSimpleCPU::tick()
 {
     DPRINTF(SimpleCPU, "Tick\n");
 
-    Tick latency = cycles(1); // instruction takes one cycle by default
+    Tick latency = ticks(1); // instruction takes one cycle by default
 
     for (int i = 0; i < width; ++i) {
         numCycles++;
@@ -642,14 +758,14 @@ AtomicSimpleCPU::tick()
 
             if (simulate_stalls) {
                 Tick icache_stall =
-                    icache_access ? icache_latency - cycles(1) : 0;
+                    icache_access ? icache_latency - ticks(1) : 0;
                 Tick dcache_stall =
-                    dcache_access ? dcache_latency - cycles(1) : 0;
-                Tick stall_cycles = (icache_stall + dcache_stall) / cycles(1);
-                if (cycles(stall_cycles) < (icache_stall + dcache_stall))
-                    latency += cycles(stall_cycles+1);
+                    dcache_access ? dcache_latency - ticks(1) : 0;
+                Tick stall_cycles = (icache_stall + dcache_stall) / ticks(1);
+                if (ticks(stall_cycles) < (icache_stall + dcache_stall))
+                    latency += ticks(stall_cycles+1);
                 else
-                    latency += cycles(stall_cycles);
+                    latency += ticks(stall_cycles);
             }
 
         }

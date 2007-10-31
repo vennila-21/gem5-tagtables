@@ -91,6 +91,8 @@ BaseSimpleCPU::BaseSimpleCPU(Params *p)
 
     threadContexts.push_back(tc);
 
+    cpuId = tc->readCpuId();
+
     fetchOffset = 0;
     stayAtPC = false;
 }
@@ -428,11 +430,10 @@ void
 BaseSimpleCPU::postExecute()
 {
 #if FULL_SYSTEM
-    if (thread->profile) {
+    if (thread->profile && curStaticInst) {
         bool usermode = TheISA::inUserMode(tc);
         thread->profilePC = usermode ? 1 : thread->readPC();
-        StaticInstPtr si(inst, thread->readPC());
-        ProfileNode *node = thread->profile->consume(tc, si);
+        ProfileNode *node = thread->profile->consume(tc, curStaticInst);
         if (node)
             thread->profileNode = node;
     }
@@ -464,6 +465,7 @@ BaseSimpleCPU::advancePC(Fault fault)
     fetchOffset = 0;
     if (fault != NoFault) {
         curMacroStaticInst = StaticInst::nullStaticInstPtr;
+        predecoder.reset();
         fault->invoke(tc);
         thread->setMicroPC(0);
         thread->setNextMicroPC(1);
@@ -494,12 +496,10 @@ BaseSimpleCPU::advancePC(Fault fault)
         }
     }
 
-#if FULL_SYSTEM
     Addr oldpc;
     do {
         oldpc = thread->readPC();
         system->pcEventQueue.service(tc);
     } while (oldpc != thread->readPC());
-#endif
 }
 

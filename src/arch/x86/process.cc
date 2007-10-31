@@ -109,14 +109,9 @@ M5_64_auxv_t::M5_64_auxv_t(int64_t type, int64_t val)
     a_val = TheISA::htog(val);
 }
 
-X86LiveProcess::X86LiveProcess(const std::string &nm, ObjectFile *objFile,
-        System *_system, int stdin_fd, int stdout_fd, int stderr_fd,
-        std::vector<std::string> &argv, std::vector<std::string> &envp,
-        const std::string &cwd,
-        uint64_t _uid, uint64_t _euid, uint64_t _gid, uint64_t _egid,
-        uint64_t _pid, uint64_t _ppid)
-    : LiveProcess(nm, objFile, _system, stdin_fd, stdout_fd, stderr_fd,
-        argv, envp, cwd, _uid, _euid, _gid, _egid, _pid, _ppid)
+X86LiveProcess::X86LiveProcess(LiveProcessParams * params,
+        ObjectFile *objFile)
+    : LiveProcess(params, objFile)
 {
     brk_point = objFile->dataBase() + objFile->dataSize() + objFile->bssSize();
     brk_point = roundUp(brk_point, VMPageSize);
@@ -131,7 +126,7 @@ X86LiveProcess::X86LiveProcess(const std::string &nm, ObjectFile *objFile,
 
     // Set up region for mmaps. This was determined empirically and may not
     // always be correct.
-    mmap_start = mmap_end = 0x2aaaaaaab000;
+    mmap_start = mmap_end = (Addr)0x2aaaaaaab000ULL;
 }
 
 void X86LiveProcess::handleTrap(int trapNum, ThreadContext *tc)
@@ -146,9 +141,64 @@ void X86LiveProcess::handleTrap(int trapNum, ThreadContext *tc)
 void
 X86LiveProcess::startup()
 {
+    if (checkpointRestored)
+        return;
+
     argsInit(sizeof(IntReg), VMPageSize);
-    for(int i = 0; i < NUM_SEGMENTREGS; i++)
-        threadContexts[0]->setMiscRegNoEffect(MISCREG_ES_BASE + i, 0);
+
+    for (int i = 0; i < threadContexts.size(); i++) {
+        ThreadContext * tc = threadContexts[i];
+
+        SegAttr dataAttr = 0;
+        dataAttr.writable = 1;
+        dataAttr.readable = 1;
+        dataAttr.expandDown = 0;
+        dataAttr.dpl = 3;
+        dataAttr.defaultSize = 0;
+        dataAttr.longMode = 1;
+
+        //Initialize the segment registers.
+        for(int seg = 0; seg < NUM_SEGMENTREGS; seg++) {
+            tc->setMiscRegNoEffect(MISCREG_SEG_BASE(seg), 0);
+            tc->setMiscRegNoEffect(MISCREG_SEG_ATTR(seg), dataAttr);
+        }
+
+        SegAttr csAttr = 0;
+        csAttr.writable = 0;
+        csAttr.readable = 1;
+        csAttr.expandDown = 0;
+        csAttr.dpl = 3;
+        csAttr.defaultSize = 0;
+        csAttr.longMode = 1;
+
+        tc->setMiscRegNoEffect(MISCREG_CS_ATTR, csAttr);
+
+        //Set up the registers that describe the operating mode.
+        CR0 cr0 = 0;
+        cr0.pg = 1; // Turn on paging.
+        cr0.cd = 0; // Don't disable caching.
+        cr0.nw = 0; // This is bit is defined to be ignored.
+        cr0.am = 0; // No alignment checking
+        cr0.wp = 0; // Supervisor mode can write read only pages
+        cr0.ne = 1;
+        cr0.et = 1; // This should always be 1
+        cr0.ts = 0; // We don't do task switching, so causing fp exceptions
+                    // would be pointless.
+        cr0.em = 0; // Allow x87 instructions to execute natively.
+        cr0.mp = 1; // This doesn't really matter, but the manual suggests
+                    // setting it to one.
+        cr0.pe = 1; // We're definitely in protected mode.
+        tc->setMiscReg(MISCREG_CR0, cr0);
+
+        Efer efer = 0;
+        efer.sce = 1; // Enable system call extensions.
+        efer.lme = 1; // Enable long mode.
+        efer.lma = 1; // Activate long mode.
+        efer.nxe = 1; // Enable nx support.
+        efer.svme = 0; // Disable svm support for now. It isn't implemented.
+        efer.ffxsr = 1; // Turn on fast fxsave and fxrstor.
+        tc->setMiscReg(MISCREG_EFER, efer);
+    }
 }
 
 void

@@ -58,38 +58,96 @@
 #ifndef __ARCH_X86_TLB_HH__
 #define __ARCH_X86_TLB_HH__
 
-#include <iostream>
+#include <list>
 
-#include "sim/host.hh"
-#include "sim/tlb.hh"
+#include "arch/x86/pagetable.hh"
+#include "arch/x86/segmentregs.hh"
+#include "config/full_system.hh"
+#include "mem/request.hh"
+#include "params/X86DTB.hh"
+#include "params/X86ITB.hh"
+#include "sim/faults.hh"
+#include "sim/sim_object.hh"
 
-class Checkpoint;
+class ThreadContext;
+class Packet;
 
 namespace X86ISA
 {
-    struct TlbEntry
-    {
-        Addr pageStart;
-        TlbEntry() {}
-        TlbEntry(Addr paddr) : pageStart(paddr) {}
+    static const unsigned StoreCheck = 1 << NUM_SEGMENTREGS;
 
-        void serialize(std::ostream &os);
-        void unserialize(Checkpoint *cp, const std::string &section);
+    class TLB : public SimObject
+    {
+#if !FULL_SYSTEM
+      protected:
+        friend class FakeITLBFault;
+        friend class FakeDTLBFault;
+#endif
+      public:
+        typedef X86TLBParams Params;
+        TLB(const Params *p);
+
+        void dumpAll();
+
+        TlbEntry *lookup(Addr va, bool update_lru = true);
+
+      protected:
+        int size;
+
+        TlbEntry * tlb;
+
+        typedef std::list<TlbEntry *> EntryList;
+        EntryList freeList;
+        EntryList entryList;
+
+        void insert(Addr vpn, TlbEntry &entry);
+
+        void invalidateAll();
+
+        void invalidateNonGlobal();
+
+        void demapPage(Addr va);
+
+        template<class TlbFault>
+        Fault translate(RequestPtr &req, ThreadContext *tc,
+                bool write, bool execute);
+
+      public:
+        // Checkpointing
+        virtual void serialize(std::ostream &os);
+        virtual void unserialize(Checkpoint *cp, const std::string &section);
     };
 
-    class ITB : public GenericTLB
+    class ITB : public TLB
     {
       public:
-        ITB(const Params *p) : GenericTLB(p)
-        {}
+        typedef X86ITBParams Params;
+        ITB(const Params *p) : TLB(p)
+        {
+        }
+
+        Fault translate(RequestPtr &req, ThreadContext *tc);
+
+        friend class DTB;
     };
 
-    class DTB : public GenericTLB
+    class DTB : public TLB
     {
       public:
-        DTB(const Params *p) : GenericTLB(p)
-        {}
+        typedef X86DTBParams Params;
+        DTB(const Params *p) : TLB(p)
+        {
+        }
+        Fault translate(RequestPtr &req, ThreadContext *tc, bool write);
+#if FULL_SYSTEM
+        Tick doMmuRegRead(ThreadContext *tc, Packet *pkt);
+        Tick doMmuRegWrite(ThreadContext *tc, Packet *pkt);
+#endif
+
+        // Checkpointing
+        virtual void serialize(std::ostream &os);
+        virtual void unserialize(Checkpoint *cp, const std::string &section);
     };
-};
+}
 
 #endif // __ARCH_X86_TLB_HH__

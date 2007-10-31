@@ -65,6 +65,7 @@
  */
 
 #include "config/full_system.hh"
+#include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "mem/packet.hh"
 
@@ -75,7 +76,10 @@ namespace X86ISA
     {
 #if !FULL_SYSTEM
         panic("Shouldn't have a memory mapped register in SE\n");
+#else
+        pkt->set(xc->readMiscReg(pkt->getAddr() / sizeof(MiscReg)));
 #endif
+        return xc->getCpuPtr()->ticks(1);
     }
 
     inline Tick
@@ -83,7 +87,11 @@ namespace X86ISA
     {
 #if !FULL_SYSTEM
         panic("Shouldn't have a memory mapped register in SE\n");
+#else
+        xc->setMiscReg(pkt->getAddr() / sizeof(MiscReg),
+                gtoh(pkt->get<uint64_t>()));
 #endif
+        return xc->getCpuPtr()->ticks(1);
     }
 };
 

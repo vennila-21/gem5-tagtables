@@ -62,13 +62,15 @@
 
 namespace X86ISA
 {
-    void Predecoder::reset()
+    void Predecoder::doReset()
     {
         origPC = basePC + offset;
         DPRINTF(Predecoder, "Setting origPC to %#x\n", origPC);
         emi.rex = 0;
         emi.legacy = 0;
         emi.opcode.num = 0;
+        emi.opcode.op = 0;
+        emi.opcode.prefixA = emi.opcode.prefixB = 0;
 
         immediateCollected = 0;
         emi.immediate = 0;
@@ -96,7 +98,7 @@ namespace X86ISA
             switch(state)
             {
               case ResetState:
-                reset();
+                doReset();
                 state = PrefixState;
               case PrefixState:
                 state = doPrefixState(nextByte);

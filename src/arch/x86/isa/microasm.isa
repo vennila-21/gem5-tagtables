@@ -88,8 +88,8 @@ let {{
         "regm" : "env.regm",
         "xmmlm" : "FLOATREG_XMM_LOW(env.regm)",
         "xmmhm" : "FLOATREG_XMM_HIGH(env.regm)",
-        "imm" : "IMMEDIATE",
-        "disp" : "DISPLACEMENT",
+        "imm" : "adjustedImm",
+        "disp" : "adjustedDisp",
         "seg" : "env.seg",
         "scale" : "env.scale",
         "index" : "env.index",
@@ -105,6 +105,10 @@ let {{
         [symbols["scale"], symbols["index"], symbols["base"]]
     assembler.symbols["riprel"] = \
         ["1", assembler.symbols["t0"], assembler.symbols["t7"]]
+
+    # This segment selects an internal address space mapped to MSRs,
+    # CPUID info, etc.
+    assembler.symbols["intseg"] = "NUM_SEGMENTREGS"
 
     for reg in ('ax', 'bx', 'cx', 'dx', 'sp', 'bp', 'si', 'di'):
         assembler.symbols["r%s" % reg] = "INTREG_R%s" % reg.upper()
@@ -131,10 +135,20 @@ let {{
         env.dataSize = 8;
     '''
 
+    def trimImm(width):
+        return "adjustedImm = adjustedImm & mask(%s);" % width
+
+    assembler.symbols["trimImm"] = trimImm
+
     def labeler(labelStr):
         return "label_%s" % labelStr
 
     assembler.symbols["label"] = labeler
+
+    def stack_index(index):
+        return "(NUM_FLOATREGS + (((%s) + 8) %% 8))" % index
+
+    assembler.symbols["st"] = stack_index
 
     macroopDict = assembler.assemble(microcode)
 }};

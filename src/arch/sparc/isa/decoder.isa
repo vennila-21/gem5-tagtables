@@ -45,116 +45,49 @@ decode OP default Unknown::unknown()
             0x1: decode COND2
             {
                 //Branch Always
-                0x8: decode A
-                {
-                    0x0: bpa(19, {{
-                        NNPC = xc->readPC() + disp;
-                    }});
-                    0x1: bpa(19, {{
-                        NPC = xc->readPC() + disp;
-                        NNPC = NPC + 4;
-                    }}, ',a');
-                }
+                0x8: bpa(19, annul_code={{
+                                 NPC = xc->readPC() + disp;
+                                 NNPC = NPC + 4;
+                             }});
                 //Branch Never
-                0x0: decode A
-                {
-                    0x0: bpn(19, {{
-                        NNPC = NNPC;//Don't do anything
-                    }});
-                    0x1: bpn(19, {{
-                        NNPC = NPC + 8;
-                        NPC = NPC + 4;
-                    }}, ',a');
-                }
+                0x0: bpn(19, {{;}},
+                             annul_code={{
+                                 NNPC = NPC + 8;
+                                 NPC = NPC + 4;
+                             }});
                 default: decode BPCC
                 {
-                    0x0: bpcci(19, {{
-                        if(passesCondition(Ccr<3:0>, COND2))
-                            NNPC = xc->readPC() + disp;
-                        else
-                            handle_annul
-                    }});
-                    0x2: bpccx(19, {{
-                        if(passesCondition(Ccr<7:4>, COND2))
-                            NNPC = xc->readPC() + disp;
-                        else
-                            handle_annul
-                    }});
+                    0x0: bpcci(19, test={{passesCondition(Ccr<3:0>, COND2)}});
+                    0x2: bpccx(19, test={{passesCondition(Ccr<7:4>, COND2)}});
                 }
             }
             //bicc
             0x2: decode COND2
             {
                 //Branch Always
-                0x8: decode A
-                {
-                    0x0: ba(22, {{
-                        NNPC = xc->readPC() + disp;
-                    }});
-                    0x1: ba(22, {{
-                        NPC = xc->readPC() + disp;
-                        NNPC = NPC + 4;
-                    }}, ',a');
-                }
+                0x8: ba(22, annul_code={{
+                                NPC = xc->readPC() + disp;
+                                NNPC = NPC + 4;
+                            }});
                 //Branch Never
-                0x0: decode A
-                {
-                    0x0: bn(22, {{
-                        NNPC = NNPC;//Don't do anything
-                    }});
-                    0x1: bn(22, {{
-                        NNPC = NPC + 8;
-                        NPC = NPC + 4;
-                    }}, ',a');
-                }
-                default: bicc(22, {{
-                    if(passesCondition(Ccr<3:0>, COND2))
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
+                0x0: bn(22, {{;}},
+                            annul_code={{
+                                NNPC = NPC + 8;
+                                NPC = NPC + 4;
+                            }});
+                default: bicc(22, test={{passesCondition(Ccr<3:0>, COND2)}});
             }
         }
         0x3: decode RCOND2
         {
             format BranchSplit
             {
-                0x1: bpreq({{
-                    if(Rs1.sdw == 0)
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
-                0x2: bprle({{
-                    if(Rs1.sdw <= 0)
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
-                0x3: bprl({{
-                    if(Rs1.sdw < 0)
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
-                0x5: bprne({{
-                    if(Rs1.sdw != 0)
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
-                0x6: bprg({{
-                    if(Rs1.sdw > 0)
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
-                0x7: bprge({{
-                    if(Rs1.sdw >= 0)
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
+                0x1: bpreq(test={{Rs1.sdw == 0}});
+                0x2: bprle(test={{Rs1.sdw <= 0}});
+                0x3: bprl(test={{Rs1.sdw < 0}});
+                0x5: bprne(test={{Rs1.sdw != 0}});
+                0x6: bprg(test={{Rs1.sdw > 0}});
+                0x7: bprge(test={{Rs1.sdw >= 0}});
             }
         }
         //SETHI (or NOP if rd == 0 and imm == 0)
@@ -163,52 +96,25 @@ decode OP default Unknown::unknown()
         0x5: decode COND2 {
             format BranchN {
                 //Branch Always
-                0x8: decode A
-                {
-                    0x0: fbpa(22, {{
-                        NNPC = xc->readPC() + disp;
-                    }});
-                    0x1: fbpa(22, {{
-                        NPC = xc->readPC() + disp;
-                        NNPC = NPC + 4;
-                    }}, ',a');
-                }
+                0x8: fbpa(22, annul_code={{
+                                  NPC = xc->readPC() + disp;
+                                  NNPC = NPC + 4;
+                              }});
                 //Branch Never
-                0x0: decode A
-                {
-                    0x0: fbpn(22, {{
-                        NNPC = NNPC;//Don't do anything
-                    }});
-                    0x1: fbpn(22, {{
-                        NNPC = NPC + 8;
-                        NPC = NPC + 4;
-                    }}, ',a');
-                }
+                0x0: fbpn(22, {{;}},
+                             annul_code={{
+                                 NNPC = NPC + 8;
+                                 NPC = NPC + 4;
+                             }});
                 default: decode BPCC {
-                    0x0: fbpfcc0(19, {{
-                        if(passesFpCondition(Fsr<11:10>, COND2))
-                            NNPC = xc->readPC() + disp;
-                        else
-                            handle_annul
-                    }});
-                    0x1: fbpfcc1(19, {{
-                        if(passesFpCondition(Fsr<33:32>, COND2))
-                            NNPC = xc->readPC() + disp;
-                        else
-                            handle_annul
-                    }});
-                    0x2: fbpfcc2(19, {{
-                        if(passesFpCondition(Fsr<35:34>, COND2))
-                            NNPC = xc->readPC() + disp;
-                        else
-                            handle_annul
-                    }});
-                    0x3: fbpfcc3(19, {{
-                        if(passesFpCondition(Fsr<37:36>, COND2))
-                            NNPC = xc->readPC() + disp;
-                        else
-                            handle_annul
-                    }});
+                    0x0: fbpfcc0(19, test=
+                                 {{passesFpCondition(Fsr<11:10>, COND2)}});
+                    0x1: fbpfcc1(19, test=
+                                 {{passesFpCondition(Fsr<33:32>, COND2)}});
+                    0x2: fbpfcc2(19, test=
+                                 {{passesFpCondition(Fsr<35:34>, COND2)}});
+                    0x3: fbpfcc3(19, test=
+                                 {{passesFpCondition(Fsr<37:36>, COND2)}});
                 }
             }
         }
@@ -216,33 +122,18 @@ decode OP default Unknown::unknown()
         0x6: decode COND2 {
             format BranchN {
                 //Branch Always
-                0x8: decode A
-                {
-                    0x0: fba(22, {{
-                        NNPC = xc->readPC() + disp;
-                    }});
-                    0x1: fba(22, {{
-                        NPC = xc->readPC() + disp;
-                        NNPC = NPC + 4;
-                    }}, ',a');
-                }
+                0x8: fba(22, annul_code={{
+                                 NPC = xc->readPC() + disp;
+                                 NNPC = NPC + 4;
+                             }});
                 //Branch Never
-                0x0: decode A
-                {
-                    0x0: fbn(22, {{
-                        NNPC = NNPC;//Don't do anything
-                    }});
-                    0x1: fbn(22, {{
-                        NNPC = NPC + 8;
-                        NPC = NPC + 4;
-                    }}, ',a');
-                }
-                default: fbfcc(22, {{
-                    if(passesFpCondition(Fsr<11:10>, COND2))
-                        NNPC = xc->readPC() + disp;
-                    else
-                        handle_annul
-                }});
+                0x0: fbn(22, {{;}},
+                             annul_code={{
+                                 NNPC = NPC + 8;
+                                 NPC = NPC + 4;
+                             }});
+                default: fbfcc(22, test=
+                               {{passesFpCondition(Fsr<11:10>, COND2)}});
             }
         }
     }
@@ -302,37 +193,23 @@ decode OP default Unknown::unknown()
         }
         format IntOpCc {
             0x10: addcc({{
-                int64_t resTemp, val2 = Rs2_or_imm13;
-                Rd = resTemp = Rs1 + val2;}},
-                {{(Rs1<31:0> + val2<31:0>)<32:>}},
-                {{Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>}},
-                {{(Rs1<63:1> + val2<63:1> + (Rs1 & val2)<0:>)<63:>}},
-                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
-            );
+                    int64_t res, op1 = Rs1, op2 = Rs2_or_imm13;
+                    Rd = res = op1 + op2;
+                }});
             0x11: IntOpCcRes::andcc({{Rd = Rs1 & Rs2_or_imm13;}});
             0x12: IntOpCcRes::orcc({{Rd = Rs1 | Rs2_or_imm13;}});
             0x13: IntOpCcRes::xorcc({{Rd = Rs1 ^ Rs2_or_imm13;}});
             0x14: subcc({{
-                int64_t val2 = Rs2_or_imm13;
-                Rd = Rs1 - val2;}},
-                {{(~(Rs1<31:0> + (~val2)<31:0> + 1))<32:>}},
-                {{(Rs1<31:> != val2<31:>) && (Rs1<31:> != Rd<31:>)}},
-                {{(~(Rs1<63:1> + (~val2)<63:1> +
-                    (Rs1 | ~val2)<0:>))<63:>}},
-                {{Rs1<63:> != val2<63:> && Rs1<63:> != Rd<63:>}}
-            );
+                    int64_t res, op1 = Rs1, op2 = Rs2_or_imm13;
+                    Rd = res = op1 - op2;
+                }}, sub=True);
             0x15: IntOpCcRes::andncc({{Rd = Rs1 & ~Rs2_or_imm13;}});
             0x16: IntOpCcRes::orncc({{Rd = Rs1 | ~Rs2_or_imm13;}});
             0x17: IntOpCcRes::xnorcc({{Rd = ~(Rs1 ^ Rs2_or_imm13);}});
             0x18: addccc({{
-                int64_t resTemp, val2 = Rs2_or_imm13;
-                int64_t carryin = Ccr<0:0>;
-                Rd = resTemp = Rs1 + val2 + carryin;}},
-                {{(Rs1<31:0> + val2<31:0> + carryin)<32:>}},
-                {{Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>}},
-                {{((Rs1 & val2) | (~resTemp & (Rs1 | val2)))<63:>}},
-                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
-            );
+                    int64_t res, op1 = Rs1, op2 = Rs2_or_imm13;
+                    Rd = res = op1 + op2 + Ccr<0:>;
+                }});
             0x1A: IntOpCcRes::umulcc({{
                 uint64_t resTemp;
                 Rd = resTemp = Rs1.udw<31:0> * Rs2_or_imm13.udw<31:0>;
@@ -342,107 +219,80 @@ decode OP default Unknown::unknown()
                 Rd = resTemp = sext<32>(Rs1.sdw<31:0>) * sext<32>(Rs2_or_imm13<31:0>);
                 Y = resTemp<63:32>;}});
             0x1C: subccc({{
-                int64_t resTemp, val2 = Rs2_or_imm13;
-                int64_t carryin = Ccr<0:0>;
-                Rd = resTemp = Rs1 + ~val2 + 1 - carryin;}},
-                {{((~Rs1 & val2) | (resTemp & (~Rs1 | val2)))<31:>}},
-                {{Rs1<31:> != val2<31:> && Rs1<31:> != resTemp<31:>}},
-                {{((~Rs1 & val2) | (resTemp & (~Rs1 | val2)))<63:>}},
-                {{Rs1<63:> != val2<63:> && Rs1<63:> != resTemp<63:>}}
-            );
+                    int64_t res, op1 = Rs1, op2 = Rs2_or_imm13;
+                    Rd = res = op1 - op2 - Ccr<0:>;
+                }}, sub=True);
             0x1D: IntOpCcRes::udivxcc({{
                 if(Rs2_or_imm13.udw == 0) fault = new DivisionByZero;
                 else Rd = Rs1.udw / Rs2_or_imm13.udw;}});
-            0x1E: udivcc({{
-                uint32_t resTemp, val2 = Rs2_or_imm13.udw;
-                int32_t overflow = 0;
-                if(val2 == 0) fault = new DivisionByZero;
-                else
-                {
-                    resTemp = (uint64_t)((Y << 32) | Rs1.udw<31:0>) / val2;
-                    overflow = (resTemp<63:32> != 0);
-                    if(overflow) Rd = resTemp = 0xFFFFFFFF;
-                    else Rd = resTemp;
-                } }},
-                {{0}},
-                {{overflow}},
-                {{0}},
-                {{0}}
-            );
-            0x1F: sdivcc({{
-                int64_t val2 = Rs2_or_imm13.sdw<31:0>;
-                bool overflow = false, underflow = false;
-                if(val2 == 0) fault = new DivisionByZero;
-                else
-                {
-                    Rd = (int64_t)((Y << 32) | Rs1.sdw<31:0>) / val2;
-                    overflow = ((int64_t)Rd >= std::numeric_limits<int32_t>::max());
-                    underflow = ((int64_t)Rd <= std::numeric_limits<int32_t>::min());
-                    if(overflow) Rd = 0x7FFFFFFF;
-                    else if(underflow) Rd = ULL(0xFFFFFFFF80000000);
-                } }},
-                {{0}},
-                {{overflow || underflow}},
-                {{0}},
-                {{0}}
-            );
+            0x1E: IntOpCcRes::udivcc({{
+                    uint32_t resTemp, val2 = Rs2_or_imm13.udw;
+                    int32_t overflow = 0;
+                    if(val2 == 0) fault = new DivisionByZero;
+                    else
+                    {
+                        resTemp = (uint64_t)((Y << 32) | Rs1.udw<31:0>) / val2;
+                        overflow = (resTemp<63:32> != 0);
+                        if(overflow) Rd = resTemp = 0xFFFFFFFF;
+                        else Rd = resTemp;
+                    }
+                }}, iv={{overflow}});
+            0x1F: IntOpCcRes::sdivcc({{
+                    int64_t val2 = Rs2_or_imm13.sdw<31:0>;
+                    bool overflow = false, underflow = false;
+                    if(val2 == 0) fault = new DivisionByZero;
+                    else
+                    {
+                        Rd = (int64_t)((Y << 32) | Rs1.sdw<31:0>) / val2;
+                        overflow = ((int64_t)Rd >= std::numeric_limits<int32_t>::max());
+                        underflow = ((int64_t)Rd <= std::numeric_limits<int32_t>::min());
+                        if(overflow) Rd = 0x7FFFFFFF;
+                        else if(underflow) Rd = ULL(0xFFFFFFFF80000000);
+                    }
+                }}, iv={{overflow || underflow}});
             0x20: taddcc({{
-                int64_t resTemp, val2 = Rs2_or_imm13;
-                Rd = resTemp = Rs1 + val2;
-                int32_t overflow = Rs1<1:0> || val2<1:0> || (Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>);}},
-                {{((Rs1<31:0> + val2<31:0>)<32:0>)}},
-                {{overflow}},
-                {{((Rs1 >> 1) + (val2 >> 1) + (Rs1 & val2 & 0x1))<63:>}},
-                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
-            );
+                    int64_t res, op1 = Rs1, op2 = Rs2_or_imm13;
+                    Rd = res = Rs1 + op2;
+                }}, iv={{
+                    (op1 & mask(2)) || (op2 & mask(2)) ||
+                    findOverflow(32, res, op1, op2)
+                }});
             0x21: tsubcc({{
-                int64_t resTemp, val2 = Rs2_or_imm13;
-                Rd = resTemp = Rs1 + val2;
-                int32_t overflow = Rs1<1:0> || val2<1:0> || (Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>);}},
-                {{(Rs1<31:0> + val2<31:0>)<32:0>}},
-                {{overflow}},
-                {{((Rs1 >> 1) + (val2 >> 1) + (Rs1 & val2 & 0x1))<63:>}},
-                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
-            );
+                    int64_t res, op1 = Rs1, op2 = Rs2_or_imm13;
+                    Rd = res = Rs1 - op2;
+                }}, iv={{
+                    (op1 & mask(2)) || (op2 & mask(2)) ||
+                    findOverflow(32, res, op1, ~op2)
+                }}, sub=True);
             0x22: taddcctv({{
-                int64_t val2 = Rs2_or_imm13;
-                Rd = Rs1 + val2;
-                int32_t overflow = Rs1<1:0> || val2<1:0> ||
-                        (Rs1<31:> == val2<31:> && val2<31:> != Rd<31:>);
-                if(overflow) fault = new TagOverflow;}},
-                {{((Rs1<31:0> + val2<31:0>)<32:0>)}},
-                {{overflow}},
-                {{((Rs1 >> 1) + (val2 >> 1) + (Rs1 & val2 & 0x1))<63:>}},
-                {{Rs1<63:> == val2<63:> && val2<63:> != Rd<63:>}}
-            );
+                    int64_t res, op1 = Rs1, op2 = Rs2_or_imm13;
+                    Rd = res = op1 + op2;
+                    bool overflow = (op1 & mask(2)) || (op2 & mask(2)) ||
+                        findOverflow(32, res, op1, op2);
+                    if(overflow) fault = new TagOverflow;
+                }}, iv={{overflow}});
             0x23: tsubcctv({{
-                int64_t resTemp, val2 = Rs2_or_imm13;
-                Rd = resTemp = Rs1 + val2;
-                int32_t overflow = Rs1<1:0> || val2<1:0> || (Rs1<31:> == val2<31:> && val2<31:> != resTemp<31:>);
-                if(overflow) fault = new TagOverflow;}},
-                {{((Rs1<31:0> + val2<31:0>)<32:0>)}},
-                {{overflow}},
-                {{((Rs1 >> 1) + (val2 >> 1) + (Rs1 & val2 & 0x1))<63:>}},
-                {{Rs1<63:> == val2<63:> && val2<63:> != resTemp<63:>}}
-            );
+                    int64_t res, op1 = Rs1, op2 = Rs2_or_imm13;
+                    Rd = res = op1 - op2;
+                    bool overflow = (op1 & mask(2)) || (op2 & mask(2)) ||
+                        findOverflow(32, res, op1, ~op2);
+                    if(overflow) fault = new TagOverflow;
+                }}, iv={{overflow}}, sub=True);
             0x24: mulscc({{
-                int32_t savedLSB = Rs1<0:>;
+                    int32_t savedLSB = Rs1<0:>;
 
-                //Step 1
-                int64_t multiplicand = Rs2_or_imm13;
-                //Step 2
-                int32_t partialP = Rs1<31:1> |
-                    ((Ccr<3:3> ^ Ccr<1:1>) << 31);
-                //Step 3
-                int32_t added = Y<0:> ? multiplicand : 0;
-                Rd = partialP + added;
-                //Steps 4 & 5
-                Y = Y<31:1> | (savedLSB << 31);}},
-                {{((partialP<31:0> + added<31:0>)<32:0>)}},
-                {{partialP<31:> == added<31:> && added<31:> != Rd<31:>}},
-                {{((partialP >> 1) + (added >> 1) + (partialP & added & 0x1))<63:>}},
-                {{partialP<63:> == added<63:> && partialP<63:> != Rd<63:>}}
-            );
+                    //Step 1
+                    int64_t multiplicand = Rs2_or_imm13;
+                    //Step 2
+                    int32_t partialP = Rs1<31:1> |
+                        ((Ccr<3:3> ^ Ccr<1:1>) << 31);
+                    //Step 3
+                    int32_t added = Y<0:> ? multiplicand : 0;
+                    int64_t res, op1 = partialP, op2 = added;
+                    Rd = res = partialP + added;
+                    //Steps 4 & 5
+                    Y = Y<31:1> | (savedLSB << 31);
+                }});
         }
         format IntOp
         {
@@ -463,7 +313,7 @@ decode OP default Unknown::unknown()
                 //1 should cause an illegal instruction exception
                 0x02: NoPriv::rdccr({{Rd = Ccr;}});
                 0x03: NoPriv::rdasi({{Rd = Asi;}});
-                0x04: PrivCheck::rdtick({{Rd = Tick;}}, {{Tick<63:>}});
+                0x04: Priv::rdtick({{Rd = Tick;}}, {{Tick<63:>}});
                 0x05: NoPriv::rdpc({{
                     if(Pstate<3:>)
                         Rd = (xc->readPC())<31:0>;
@@ -479,7 +329,7 @@ decode OP default Unknown::unknown()
                     0x1: Nop::membar({{/*stuff*/}}, IsMemBarrier, MemReadOp);
                 }
                 0x10: Priv::rdpcr({{Rd = Pcr;}});
-                0x11: PrivCheck::rdpic({{Rd = Pic;}}, {{Pcr<0:>}});
+                0x11: Priv::rdpic({{Rd = Pic;}}, {{Pcr<0:>}});
                 //0x12 should cause an illegal instruction exception
                 0x13: NoPriv::rdgsr({{
                        fault = checkFpEnableFault(xc);
@@ -490,7 +340,7 @@ decode OP default Unknown::unknown()
                 //0x14-0x15 should cause an illegal instruction exception
                 0x16: Priv::rdsoftint({{Rd = Softint;}});
                 0x17: Priv::rdtick_cmpr({{Rd = TickCmpr;}});
-                0x18: PrivCheck::rdstick({{Rd = Stick}}, {{Stick<63:>}});
+                0x18: Priv::rdstick({{Rd = Stick}}, {{Stick<63:>}});
                 0x19: Priv::rdstick_cmpr({{Rd = StickCmpr;}});
                 0x1A: Priv::rdstrand_sts_reg({{
                     if(Pstate<2:> && !Hpstate<2:>)
@@ -504,11 +354,7 @@ decode OP default Unknown::unknown()
             }
             0x29: decode RS1 {
                 0x00: HPriv::rdhprhpstate({{Rd = Hpstate;}});
-                0x01: HPriv::rdhprhtstate({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    Rd = Htstate;
-                }});
+                0x01: HPriv::rdhprhtstate({{Rd = Htstate;}}, checkTl=true);
                 //0x02 should cause an illegal instruction exception
                 0x03: HPriv::rdhprhintp({{Rd = Hintp;}});
                 //0x04 should cause an illegal instruction exception
@@ -518,26 +364,10 @@ decode OP default Unknown::unknown()
                 0x1F: HPriv::rdhprhstick_cmpr({{Rd = HstickCmpr;}});
             }
             0x2A: decode RS1 {
-                0x00: Priv::rdprtpc({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    Rd = Tpc;
-                }});
-                0x01: Priv::rdprtnpc({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    Rd = Tnpc;
-                }});
-                0x02: Priv::rdprtstate({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    Rd = Tstate;
-                }});
-                0x03: Priv::rdprtt({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    Rd = Tt;
-                }});
+                0x00: Priv::rdprtpc({{Rd = Tpc;}}, checkTl=true);
+                0x01: Priv::rdprtnpc({{Rd = Tnpc;}}, checkTl=true);
+                0x02: Priv::rdprtstate({{Rd = Tstate;}}, checkTl=true);
+                0x03: Priv::rdprtt({{Rd = Tt;}}, checkTl=true);
                 0x04: Priv::rdprtick({{Rd = Tick;}});
                 0x05: Priv::rdprtba({{Rd = Tba;}});
                 0x06: Priv::rdprpstate({{Rd = Pstate;}});
@@ -605,7 +435,7 @@ decode OP default Unknown::unknown()
                 //0x07-0x0E should cause an illegal instruction exception
                 0x0F: Trap::softreset({{fault = new SoftwareInitiatedReset;}});
                 0x10: Priv::wrpcr({{Pcr = Rs1 ^ Rs2_or_imm13;}});
-                0x11: PrivCheck::wrpic({{Pic = Rs1 ^ Rs2_or_imm13;}}, {{Pcr<0:>}});
+                0x11: Priv::wrpic({{Pic = Rs1 ^ Rs2_or_imm13;}}, {{Pcr<0:>}});
                 //0x12 should cause an illegal instruction exception
                 0x13: NoPriv::wrgsr({{
                     if(Fprs<2:> == 0 || Pstate<4:> == 0)
@@ -653,30 +483,14 @@ decode OP default Unknown::unknown()
                 }});
             }
             0x32: decode RD {
-                0x00: Priv::wrprtpc({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    else
-                        Tpc = Rs1 ^ Rs2_or_imm13;
-                }});
-                0x01: Priv::wrprtnpc({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    else
-                        Tnpc = Rs1 ^ Rs2_or_imm13;
-                }});
-                0x02: Priv::wrprtstate({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    else
-                        Tstate = Rs1 ^ Rs2_or_imm13;
-                }});
-                0x03: Priv::wrprtt({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    else
-                        Tt = Rs1 ^ Rs2_or_imm13;
-                }});
+                0x00: Priv::wrprtpc(
+                              {{Tpc = Rs1 ^ Rs2_or_imm13;}}, checkTl=true);
+                0x01: Priv::wrprtnpc(
+                              {{Tnpc = Rs1 ^ Rs2_or_imm13;}}, checkTl=true);
+                0x02: Priv::wrprtstate(
+                              {{Tstate = Rs1 ^ Rs2_or_imm13;}}, checkTl=true);
+                0x03: Priv::wrprtt(
+                              {{Tt = Rs1 ^ Rs2_or_imm13;}}, checkTl=true);
                 0x04: HPriv::wrprtick({{Tick = Rs1 ^ Rs2_or_imm13;}});
                 0x05: Priv::wrprtba({{Tba = Rs1 ^ Rs2_or_imm13;}});
                 0x06: Priv::wrprpstate({{Pstate = Rs1 ^ Rs2_or_imm13;}});
@@ -704,11 +518,8 @@ decode OP default Unknown::unknown()
             }
             0x33: decode RD {
                 0x00: HPriv::wrhprhpstate({{Hpstate = Rs1 ^ Rs2_or_imm13;}});
-                0x01: HPriv::wrhprhtstate({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-                    Htstate = Rs1 ^ Rs2_or_imm13;
-                }});
+                0x01: HPriv::wrhprhtstate(
+                              {{Htstate = Rs1 ^ Rs2_or_imm13;}}, checkTl=true);
                 //0x02 should cause an illegal instruction exception
                 0x03: HPriv::wrhprhintp({{Hintp = Rs1 ^ Rs2_or_imm13;}});
                 //0x04 should cause an illegal instruction exception
@@ -718,44 +529,14 @@ decode OP default Unknown::unknown()
             }
             0x34: decode OPF{
                 format FpBasic{
-                    0x01: fmovs({{
-                        Frds.uw = Frs2s.uw;
-                        //fsr.ftt = fsr.cexc = 0
-                        Fsr &= ~(7 << 14);
-                        Fsr &= ~(0x1F);
-                    }});
-                    0x02: fmovd({{
-                        Frd.udw = Frs2.udw;
-                        //fsr.ftt = fsr.cexc = 0
-                        Fsr &= ~(7 << 14);
-                        Fsr &= ~(0x1F);
-                    }});
+                    0x01: fmovs({{Frds.uw = Frs2s.uw;}});
+                    0x02: fmovd({{Frd.udw = Frs2.udw;}});
                     0x03: FpUnimpl::fmovq();
-                    0x05: fnegs({{
-                        Frds.uw = Frs2s.uw ^ (1UL << 31);
-                        //fsr.ftt = fsr.cexc = 0
-                        Fsr &= ~(7 << 14);
-                        Fsr &= ~(0x1F);
-                    }});
-                    0x06: fnegd({{
-                        Frd.udw = Frs2.udw ^ (1ULL << 63);
-                        //fsr.ftt = fsr.cexc = 0
-                        Fsr &= ~(7 << 14);
-                        Fsr &= ~(0x1F);
-                    }});
+                    0x05: fnegs({{Frds.uw = Frs2s.uw ^ (1UL << 31);}});
+                    0x06: fnegd({{Frd.udw = Frs2.udw ^ (1ULL << 63);}});
                     0x07: FpUnimpl::fnegq();
-                    0x09: fabss({{
-                        Frds.uw = ((1UL << 31) - 1) & Frs2s.uw;
-                        //fsr.ftt = fsr.cexc = 0
-                        Fsr &= ~(7 << 14);
-                        Fsr &= ~(0x1F);
-                    }});
-                    0x0A: fabsd({{
-                        Frd.udw = ((1ULL << 63) - 1) & Frs2.udw;
-                        //fsr.ftt = fsr.cexc = 0
-                        Fsr &= ~(7 << 14);
-                        Fsr &= ~(0x1F);
-                    }});
+                    0x09: fabss({{Frds.uw = ((1UL << 31) - 1) & Frs2s.uw;}});
+                    0x0A: fabsd({{Frd.udw = ((1ULL << 63) - 1) & Frs2.udw;}});
                     0x0B: FpUnimpl::fabsq();
                     0x29: fsqrts({{Frds.sf = std::sqrt(Frs2s.sf);}});
                     0x2A: fsqrtd({{Frd.df = std::sqrt(Frs2.df);}});
@@ -774,28 +555,16 @@ decode OP default Unknown::unknown()
                     0x4F: FpUnimpl::fdivq();
                     0x69: fsmuld({{Frd.df = Frs1s.sf * Frs2s.sf;}});
                     0x6E: FpUnimpl::fdmulq();
-                    0x81: fstox({{
-                            Frd.sdw = static_cast<int64_t>(Frs2s.sf);
-                    }});
-                    0x82: fdtox({{
-                            Frd.sdw = static_cast<int64_t>(Frs2.df);
-                    }});
+                    0x81: fstox({{Frd.sdw = static_cast<int64_t>(Frs2s.sf);}});
+                    0x82: fdtox({{Frd.sdw = static_cast<int64_t>(Frs2.df);}});
                     0x83: FpUnimpl::fqtox();
-                    0x84: fxtos({{
-                            Frds.sf = static_cast<float>(Frs2.sdw);
-                    }});
-                    0x88: fxtod({{
-                            Frd.df = static_cast<double>(Frs2.sdw);
-                    }});
+                    0x84: fxtos({{Frds.sf = static_cast<float>(Frs2.sdw);}});
+                    0x88: fxtod({{Frd.df = static_cast<double>(Frs2.sdw);}});
                     0x8C: FpUnimpl::fxtoq();
-                    0xC4: fitos({{
-                            Frds.sf = static_cast<float>(Frs2s.sw);
-                    }});
+                    0xC4: fitos({{Frds.sf = static_cast<float>(Frs2s.sw);}});
                     0xC6: fdtos({{Frds.sf = Frs2.df;}});
                     0xC7: FpUnimpl::fqtos();
-                    0xC8: fitod({{
-                            Frd.df = static_cast<double>(Frs2s.sw);
-                    }});
+                    0xC8: fitod({{Frd.df = static_cast<double>(Frs2s.sw);}});
                     0xC9: fstod({{Frd.df = Frs2s.sf;}});
                     0xCB: FpUnimpl::fqtod();
                     0xCC: FpUnimpl::fitoq();
@@ -1280,9 +1049,6 @@ decode OP default Unknown::unknown()
             }});
             0x3E: decode FCN {
                 0x0: Priv::done({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
-
                     Cwp = Tstate<4:0>;
                     Pstate = Tstate<20:8>;
                     Asi = Tstate<31:24>;
@@ -1292,10 +1058,8 @@ decode OP default Unknown::unknown()
                     NPC = Tnpc;
                     NNPC = Tnpc + 4;
                     Tl = Tl - 1;
-                }});
+                }}, checkTl=true);
                 0x1: Priv::retry({{
-                    if(Tl == 0)
-                        return new IllegalInstruction;
                     Cwp = Tstate<4:0>;
                     Pstate = Tstate<20:8>;
                     Asi = Tstate<31:24>;
@@ -1305,7 +1069,7 @@ decode OP default Unknown::unknown()
                     NPC = Tpc;
                     NNPC = Tnpc;
                     Tl = Tl - 1;
-                }});
+                }}, checkTl=true);
             }
         }
     }
@@ -1352,76 +1116,75 @@ decode OP default Unknown::unknown()
                                Rd.uw = tmp;
                          }}, MEM_SWAP);
         format LoadAlt {
-            0x10: lduwa({{Rd = Mem.uw;}}, {{EXT_ASI}});
-            0x11: lduba({{Rd = Mem.ub;}}, {{EXT_ASI}});
-            0x12: lduha({{Rd = Mem.uhw;}}, {{EXT_ASI}});
+            0x10: lduwa({{Rd = Mem.uw;}});
+            0x11: lduba({{Rd = Mem.ub;}});
+            0x12: lduha({{Rd = Mem.uhw;}});
             0x13: decode EXT_ASI {
                 //ASI_LDTD_AIUP
                 0x22: TwinLoad::ldtx_aiup(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTD_AIUS
                 0x23: TwinLoad::ldtx_aius(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_QUAD_LDD
                 0x24: TwinLoad::ldtx_quad_ldd(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_REAL
                 0x26: TwinLoad::ldtx_real(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_N
                 0x27: TwinLoad::ldtx_n(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_AIUP_L
                 0x2A: TwinLoad::ldtx_aiup_l(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_AIUS_L
                 0x2B: TwinLoad::ldtx_aius_l(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_L
                 0x2C: TwinLoad::ldtx_l(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_REAL_L
                 0x2E: TwinLoad::ldtx_real_l(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_N_L
                 0x2F: TwinLoad::ldtx_n_l(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_P
                 0xE2: TwinLoad::ldtx_p(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_S
                 0xE3: TwinLoad::ldtx_s(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_PL
                 0xEA: TwinLoad::ldtx_pl(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 //ASI_LDTX_SL
                 0xEB: TwinLoad::ldtx_sl(
                     {{RdLow.udw = (Mem.tudw).a;
-                      RdHigh.udw = (Mem.tudw).b;}}, {{EXT_ASI}});
+                      RdHigh.udw = (Mem.tudw).b;}});
                 default: ldtwa({{
                         RdLow = (Mem.tuw).a;
-                        RdHigh = (Mem.tuw).b;
-                        }}, {{EXT_ASI}});
+                        RdHigh = (Mem.tuw).b;}});
             }
         }
         format StoreAlt {
-            0x14: stwa({{Mem.uw = Rd;}}, {{EXT_ASI}});
-            0x15: stba({{Mem.ub = Rd;}}, {{EXT_ASI}});
-            0x16: stha({{Mem.uhw = Rd;}}, {{EXT_ASI}});
+            0x14: stwa({{Mem.uw = Rd;}});
+            0x15: stba({{Mem.ub = Rd;}});
+            0x16: stha({{Mem.uhw = Rd;}});
             0x17: sttwa({{
                       //This temporary needs to be here so that the parser
                       //will correctly identify this instruction as a store.
@@ -1431,25 +1194,25 @@ decode OP default Unknown::unknown()
                       temp.a = RdLow<31:0>;
                       temp.b = RdHigh<31:0>;
                       Mem.tuw = temp;
-                  }}, {{EXT_ASI}});
+                  }});
         }
         format LoadAlt {
-            0x18: ldswa({{Rd = (int32_t)Mem.sw;}}, {{EXT_ASI}});
-            0x19: ldsba({{Rd = (int8_t)Mem.sb;}}, {{EXT_ASI}});
-            0x1A: ldsha({{Rd = (int16_t)Mem.shw;}}, {{EXT_ASI}});
-            0x1B: ldxa({{Rd = (int64_t)Mem.sdw;}}, {{EXT_ASI}});
+            0x18: ldswa({{Rd = (int32_t)Mem.sw;}});
+            0x19: ldsba({{Rd = (int8_t)Mem.sb;}});
+            0x1A: ldsha({{Rd = (int16_t)Mem.shw;}});
+            0x1B: ldxa({{Rd = (int64_t)Mem.sdw;}});
         }
         0x1D: SwapAlt::ldstuba({{Mem.ub = 0xFF;}},
                            {{
                                uint8_t tmp = mem_data;
                                Rd.ub = tmp;
-                           }}, {{EXT_ASI}}, MEM_SWAP);
-        0x1E: StoreAlt::stxa({{Mem.udw = Rd}}, {{EXT_ASI}});
+                           }}, MEM_SWAP);
+        0x1E: StoreAlt::stxa({{Mem.udw = Rd}});
         0x1F: SwapAlt::swapa({{Mem.uw = Rd.uw}},
                          {{
                                uint32_t tmp = mem_data;
                                Rd.uw = tmp;
-                         }}, {{EXT_ASI}}, MEM_SWAP);
+                         }}, MEM_SWAP);
 
         format Trap {
             0x20: Load::ldf({{Frds.uw = Mem.uw;}});
@@ -1483,7 +1246,7 @@ decode OP default Unknown::unknown()
             0x26: stqf({{fault = new FpDisabled;}});
             0x27: Store::stdf({{Mem.udw = Frd.udw;}});
             0x2D: Nop::prefetch({{ }});
-            0x30: LoadAlt::ldfa({{Frds.uw = Mem.uw;}}, {{EXT_ASI}});
+            0x30: LoadAlt::ldfa({{Frds.uw = Mem.uw;}});
             0x32: ldqfa({{fault = new FpDisabled;}});
             format LoadAlt {
                 0x33: decode EXT_ASI {
@@ -1535,7 +1298,7 @@ decode OP default Unknown::unknown()
                         //ASI_BLOCK_AS_IF_USER_SECONDARY_LITTLE
                         0x1F: FailUnimpl::ldblockf_aiusl();
                         //ASI_BLOCK_PRIMARY
-                        0xF0: ldblockf_p({{Frd_N.udw = Mem.udw;}}, {{EXT_ASI}});
+                        0xF0: ldblockf_p({{Frd_N.udw = Mem.udw;}});
                         //ASI_BLOCK_SECONDARY
                         0xF1: FailUnimpl::ldblockf_s();
                         //ASI_BLOCK_PRIMARY_LITTLE
@@ -1618,7 +1381,7 @@ decode OP default Unknown::unknown()
                         //ASI_BLOCK_AS_IF_USER_SECONDARY_LITTLE
                         0x1F: FailUnimpl::stblockf_aiusl();
                         //ASI_BLOCK_PRIMARY
-                        0xF0: stblockf_p({{Mem.udw = Frd_N.udw;}}, {{EXT_ASI}});
+                        0xF0: stblockf_p({{Mem.udw = Frd_N.udw;}});
                         //ASI_BLOCK_SECONDARY
                         0xF1: FailUnimpl::stblockf_s();
                         //ASI_BLOCK_PRIMARY_LITTLE
@@ -1655,11 +1418,11 @@ decode OP default Unknown::unknown()
                          {{
                                uint32_t tmp = mem_data;
                                Rd.uw = tmp;
-                         }}, {{EXT_ASI}}, MEM_SWAP_COND);
+                         }}, MEM_SWAP_COND);
             0x3D: Nop::prefetcha({{ }});
             0x3E: CasAlt::casxa({{mem_data = gtoh(Rs2);
                                 Mem.udw = Rd.udw; }},
-                         {{ Rd.udw = mem_data; }}, {{EXT_ASI}}, MEM_SWAP_COND);
+                         {{ Rd.udw = mem_data; }}, MEM_SWAP_COND);
         }
     }
 }

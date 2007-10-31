@@ -58,8 +58,13 @@
 #ifndef __ARCH_X86_PAGETABLE_HH__
 #define __ARCH_X86_PAGETABLE_HH__
 
+#include <iostream>
+#include <string>
+
 #include "sim/host.hh"
 #include "base/misc.hh"
+
+class Checkpoint;
 
 namespace X86ISA
 {
@@ -68,8 +73,43 @@ namespace X86ISA
         VAddr(Addr a) { panic("not implemented yet."); }
     };
 
-    class PageTableEntry
+    struct TlbEntry
     {
+        // The base of the physical page.
+        Addr paddr;
+
+        // The beginning of the virtual page this entry maps.
+        Addr vaddr;
+        // The size of the page this entry represents.
+        Addr size;
+
+        // Read permission is always available, assuming it isn't blocked by
+        // other mechanisms.
+        bool writable;
+        // Whether this page is accesible without being in supervisor mode.
+        bool user;
+        // Whether to use write through or write back. M5 ignores this and
+        // lets the caches handle the writeback policy.
+        //bool pwt;
+        // Whether the page is cacheable or not.
+        bool uncacheable;
+        // Whether or not to kick this page out on a write to CR3.
+        bool global;
+        // A bit used to form an index into the PAT table.
+        bool patBit;
+        // Whether or not memory on this page can be executed.
+        bool noExec;
+
+        TlbEntry(Addr asn, Addr _vaddr, Addr _paddr);
+        TlbEntry() {}
+
+        Addr pageStart()
+        {
+            return paddr;
+        }
+
+        void serialize(std::ostream &os);
+        void unserialize(Checkpoint *cp, const std::string &section);
     };
 }
 
