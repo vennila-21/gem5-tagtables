@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2007 MIPS Technologies, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,6 +27,7 @@
  *
  * Authors: Gabe Black
  *          Korey Sewell
+ *          Jaidev Patwardhan
  */
 
 #ifndef __MIPS_FAULTS_HH__
@@ -38,7 +39,6 @@
 
 namespace MipsISA
 {
-
 typedef const Addr FaultVect;
 
 class MipsFault : public FaultBase
@@ -47,8 +47,15 @@ class MipsFault : public FaultBase
     virtual bool skipFaultingInstruction() {return false;}
     virtual bool setRestartAddress() {return true;}
   public:
+    Addr BadVAddr;
+    Addr EntryHi_Asid;
+    Addr EntryHi_VPN2;
+    Addr EntryHi_VPN2X;
+    Addr Context_BadVPN2;
 #if FULL_SYSTEM
-    void invoke(ThreadContext * tc);
+  void invoke(ThreadContext * tc) {};
+  void setExceptionState(ThreadContext *,uint8_t);
+  void setHandlerPC(Addr,ThreadContext *);
 #endif
     virtual FaultVect vect() = 0;
     virtual FaultStat & countStat() = 0;
@@ -64,7 +71,20 @@ class MachineCheckFault : public MipsFault
     FaultName name() const {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & countStat() {return _count;}
-    bool isMachineCheckFault() const {return true;}
+    bool isMachineCheckFault() {return true;}
+};
+
+class NonMaskableInterrupt : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+    bool isNonMaskableInterrupt() {return true;}
 };
 
 class AlignmentFault : public MipsFault
@@ -77,9 +97,39 @@ class AlignmentFault : public MipsFault
     FaultName name() const {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & countStat() {return _count;}
-    bool isAlignmentFault() const {return true;}
+    bool isAlignmentFault() {return true;}
 };
 
+class AddressErrorFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
+
+};
+class StoreAddressErrorFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
+
+};
 class UnimplementedOpcodeFault : public MipsFault
 {
   private:
@@ -92,12 +142,160 @@ class UnimplementedOpcodeFault : public MipsFault
     FaultStat & countStat() {return _count;}
 };
 
+
+class TLBRefillIFetchFault : public MipsFault
+{
+  private:
+    Addr vaddr;
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+    void invoke(ThreadContext * tc);
+};
+class TLBInvalidIFetchFault : public MipsFault
+{
+  private:
+    Addr vaddr;
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+    void invoke(ThreadContext * tc);
+};
+
+class NDtbMissFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+};
+
+class PDtbMissFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+};
+
+class DtbPageFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+};
+
+class DtbAcvFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+};
+
+class CacheErrorFault : public MipsFault
+{
+  private:
+    Addr vaddr;
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+    void invoke(ThreadContext * tc);
+};
+
+
+
+
 static inline Fault genMachineCheckFault()
 {
     return new MachineCheckFault;
 }
 
+static inline Fault genAlignmentFault()
+{
+    return new AlignmentFault;
+}
+
 class ResetFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+    void invoke(ThreadContext * tc);
+
+};
+class SystemCallFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+    void invoke(ThreadContext * tc);
+};
+
+class SoftResetFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+    void invoke(ThreadContext * tc);
+};
+class DebugSingleStep : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+    void invoke(ThreadContext * tc);
+};
+class DebugInterrupt : public MipsFault
 {
   private:
     static FaultName _name;
@@ -116,11 +314,13 @@ class CoprocessorUnusableFault : public MipsFault
     static FaultName _name;
     static FaultVect _vect;
     static FaultStat _count;
+    int coProcID;
   public:
     FaultName name() const {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & countStat() {return _count;}
     void invoke(ThreadContext * tc);
+    CoprocessorUnusableFault(int _procid){ coProcID = _procid;}
 };
 
 class ReservedInstructionFault : public MipsFault
@@ -179,9 +379,15 @@ class InterruptFault : public MipsFault
     FaultName name() const {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & countStat() {return _count;}
+
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
+
+    //void invoke(ThreadContext * tc);
 };
 
-class NDtbMissFault : public MipsFault
+class TrapFault : public MipsFault
 {
   private:
     static FaultName _name;
@@ -191,9 +397,12 @@ class NDtbMissFault : public MipsFault
     FaultName name() const {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
 };
 
-class PDtbMissFault : public MipsFault
+class BreakpointFault : public MipsFault
 {
   private:
     static FaultName _name;
@@ -203,9 +412,12 @@ class PDtbMissFault : public MipsFault
     FaultName name() const {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
 };
 
-class DtbPageFault : public MipsFault
+class ItbRefillFault : public MipsFault
 {
   private:
     static FaultName _name;
@@ -215,9 +427,88 @@ class DtbPageFault : public MipsFault
     FaultName name() const {return _name;}
     FaultVect vect() {return _vect;}
     FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
+};
+class DtbRefillFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
 };
 
-class DtbAcvFault : public MipsFault
+class ItbPageFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
+};
+
+class ItbInvalidFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
+
+};
+class TLBModifiedFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
+
+};
+
+class DtbInvalidFault : public MipsFault
+{
+  private:
+    static FaultName _name;
+    static FaultVect _vect;
+    static FaultStat _count;
+  public:
+    FaultName name() const {return _name;}
+    FaultVect vect() {return _vect;}
+    FaultStat & countStat() {return _count;}
+#if FULL_SYSTEM
+    void invoke(ThreadContext * tc);
+#endif
+
+};
+
+class FloatEnableFault : public MipsFault
 {
   private:
     static FaultName _name;
@@ -241,31 +532,7 @@ class ItbMissFault : public MipsFault
     FaultStat & countStat() {return _count;}
 };
 
-class ItbPageFault : public MipsFault
-{
-  private:
-    static FaultName _name;
-    static FaultVect _vect;
-    static FaultStat _count;
-  public:
-    FaultName name() const {return _name;}
-    FaultVect vect() {return _vect;}
-    FaultStat & countStat() {return _count;}
-};
-
 class ItbAcvFault : public MipsFault
-{
-  private:
-    static FaultName _name;
-    static FaultVect _vect;
-    static FaultStat _count;
-  public:
-    FaultName name() const {return _name;}
-    FaultVect vect() {return _vect;}
-    FaultStat & countStat() {return _count;}
-};
-
-class FloatEnableFault : public MipsFault
 {
   private:
     static FaultName _name;
@@ -304,4 +571,4 @@ class DspStateDisabledFault : public MipsFault
 
 } // MipsISA namespace
 
-#endif // __FAULTS_HH__
+#endif // __MIPS_FAULTS_HH__

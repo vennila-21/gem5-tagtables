@@ -307,6 +307,7 @@ PhysicalMemory::doFunctionalAccess(PacketPtr pkt)
     assert(pkt->getAddr() >= start() &&
            pkt->getAddr() + pkt->getSize() <= start() + size());
 
+
     uint8_t *hostAddr = pmemAddr + pkt->getAddr() - start();
 
     if (pkt->cmd == MemCmd::ReadReq) {
