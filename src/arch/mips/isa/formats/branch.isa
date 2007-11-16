@@ -1,0 +1,329 @@
+// -*- mode:c++ -*-
+
+// Copyright © 2007 MIPS Technologies, Inc.  All Rights Reserved
+
+//  This software is part of the M5 simulator.
+
+//  THIS IS A LEGAL AGREEMENT.  BY DOWNLOADING, USING, COPYING, CREATING
+//  DERIVATIVE WORKS, AND/OR DISTRIBUTING THIS SOFTWARE YOU ARE AGREEING
+//  TO THESE TERMS AND CONDITIONS.
+
+//  Permission is granted to use, copy, create derivative works and
+//  distribute this software and such derivative works for any purpose,
+//  so long as (1) the copyright notice above, this grant of permission,
+//  and the disclaimer below appear in all copies and derivative works
+//  made, (2) the copyright notice above is augmented as appropriate to
+//  reflect the addition of any new copyrightable work in a derivative
+//  work (e.g., Copyright © <Publication Year> Copyright Owner), and (3)
+//  the name of MIPS Technologies, Inc. (“MIPS”) is not used in any
+//  advertising or publicity pertaining to the use or distribution of
+//  this software without specific, written prior authorization.
+
+//  THIS SOFTWARE IS PROVIDED “AS IS.”  MIPS MAKES NO WARRANTIES AND
+//  DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, STATUTORY, IMPLIED OR
+//  OTHERWISE, INCLUDING BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+//  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+//  NON-INFRINGEMENT OF THIRD PARTY RIGHTS, REGARDING THIS SOFTWARE.
+//  IN NO EVENT SHALL MIPS BE LIABLE FOR ANY DAMAGES, INCLUDING DIRECT,
+//  INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, OR PUNITIVE DAMAGES OF
+//  ANY KIND OR NATURE, ARISING OUT OF OR IN CONNECTION WITH THIS AGREEMENT,
+//  THIS SOFTWARE AND/OR THE USE OF THIS SOFTWARE, WHETHER SUCH LIABILITY
+//  IS ASSERTED ON THE BASIS OF CONTRACT, TORT (INCLUDING NEGLIGENCE OR
+//  STRICT LIABILITY), OR OTHERWISE, EVEN IF MIPS HAS BEEN WARNED OF THE
+//  POSSIBILITY OF ANY SUCH LOSS OR DAMAGE IN ADVANCE.
+
+//Authors: Korey L. Sewell
+
+////////////////////////////////////////////////////////////////////
+//
+// Control transfer instructions
+//
+
+output header {{
+
+#include <iostream>
+    using namespace std;
+
+    /**
+     * Base class for instructions whose disassembly is not purely a
+     * function of the machine instruction (i.e., it depends on the
+     * PC).  This class overrides the disassemble() method to check
+     * the PC and symbol table values before re-using a cached
+     * disassembly string.  This is necessary for branches and jumps,
+     * where the disassembly string includes the target address (which
+     * may depend on the PC and/or symbol table).
+     */
+    class PCDependentDisassembly : public MipsStaticInst
+    {
+      protected:
+        /// Cached program counter from last disassembly
+        mutable Addr cachedPC;
+
+        /// Cached symbol table pointer from last disassembly
+        mutable const SymbolTable *cachedSymtab;
+
+        /// Constructor
+        PCDependentDisassembly(const char *mnem, MachInst _machInst,
+                               OpClass __opClass)
+            : MipsStaticInst(mnem, _machInst, __opClass),
+              cachedPC(0), cachedSymtab(0)
+        {
+        }
+
+        const std::string &
+        disassemble(Addr pc, const SymbolTable *symtab) const;
+    };
+
+    /**
+     * Base class for branches (PC-relative control transfers),
+     * conditional or unconditional.
+     */
+    class Branch : public PCDependentDisassembly
+    {
+      protected:
+        /// target address (signed) Displacement .
+        int32_t disp;
+
+        /// Constructor.
+        Branch(const char *mnem, MachInst _machInst, OpClass __opClass)
+            : PCDependentDisassembly(mnem, _machInst, __opClass),
+              disp(OFFSET << 2)
+        {
+            //If Bit 17 is 1 then Sign Extend
+            if ( (disp & 0x00020000) > 0  ) {
+                disp |= 0xFFFE0000;
+            }
+        }
+
+        Addr branchTarget(Addr branchPC) const;
+
+        std::string
+        generateDisassembly(Addr pc, const SymbolTable *symtab) const;
+    };
+
+    /**
+     * Base class for jumps (register-indirect control transfers).  In
+     * the Mips ISA, these are always unconditional.
+     */
+    class Jump : public PCDependentDisassembly
+    {
+      protected:
+
+        /// Displacement to target address (signed).
+        int32_t disp;
+
+        uint32_t target;
+
+      public:
+        /// Constructor
+        Jump(const char *mnem, MachInst _machInst, OpClass __opClass)
+            : PCDependentDisassembly(mnem, _machInst, __opClass),
+              disp(JMPTARG << 2)
+        {
+        }
+
+        Addr branchTarget(ThreadContext *tc) const;
+
+        std::string
+        generateDisassembly(Addr pc, const SymbolTable *symtab) const;
+    };
+}};
+
+output decoder {{
+    Addr
+    Branch::branchTarget(Addr branchPC) const
+    {
+        return branchPC + 4 + disp;
+    }
+
+    Addr
+    Jump::branchTarget(ThreadContext *tc) const
+    {
+      Addr NPC = tc->readNextPC();
+      return (NPC & 0xF0000000) | (disp);
+    }
+
+    const std::string &
+    PCDependentDisassembly::disassemble(Addr pc,
+                                        const SymbolTable *symtab) const
+    {
+        if (!cachedDisassembly ||
+            pc != cachedPC || symtab != cachedSymtab)
+        {
+            if (cachedDisassembly)
+                delete cachedDisassembly;
+
+            cachedDisassembly =
+                new std::string(generateDisassembly(pc, symtab));
+            cachedPC = pc;
+            cachedSymtab = symtab;
+        }
+
+        return *cachedDisassembly;
+    }
+
+    std::string
+    Branch::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+    {
+        std::stringstream ss;
+
+        ccprintf(ss, "%-10s ", mnemonic);
+
+        // There's only one register arg (RA), but it could be
+        // either a source (the condition for conditional
+        // branches) or a destination (the link reg for
+        // unconditional branches)
+        if (_numSrcRegs == 1) {
+            printReg(ss, _srcRegIdx[0]);
+            ss << ", ";
+        } else if(_numSrcRegs == 2) {
+            printReg(ss, _srcRegIdx[0]);
+            ss << ", ";
+            printReg(ss, _srcRegIdx[1]);
+            ss << ", ";
+        }
+
+        Addr target = pc + 4 + disp;
+
+        std::string str;
+        if (symtab && symtab->findSymbol(target, str))
+            ss << str;
+        else
+            ccprintf(ss, "0x%x", target);
+
+        return ss.str();
+    }
+
+    std::string
+    Jump::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+    {
+        std::stringstream ss;
+
+        ccprintf(ss, "%-10s ", mnemonic);
+
+        if ( mnemonic == "jal" ) {
+            Addr npc = pc + 4;
+            ccprintf(ss,"0x%x",(npc & 0xF0000000) | disp);
+        } else if (_numSrcRegs == 0) {
+            std::string str;
+            if (symtab && symtab->findSymbol(disp, str))
+                ss << str;
+            else
+                ccprintf(ss, "0x%x", disp);
+        } else if (_numSrcRegs == 1) {
+             printReg(ss, _srcRegIdx[0]);
+        } else if(_numSrcRegs == 2) {
+            printReg(ss, _srcRegIdx[0]);
+            ss << ", ";
+            printReg(ss, _srcRegIdx[1]);
+        }
+
+        return ss.str();
+    }
+}};
+
+def format Branch(code, *opt_flags) {{
+    not_taken_code = '  NNPC = NNPC;\n'
+    not_taken_code += '} \n'
+
+    #Build Instruction Flags
+    #Use Link & Likely Flags to Add Link/Condition Code
+    inst_flags = ('IsDirectControl', )
+    for x in opt_flags:
+        if x == 'Link':
+            code += 'R31 = NNPC;\n'
+        elif x == 'Likely':
+            not_taken_code = '  NPC = NNPC;\n'
+            not_taken_code += '  NNPC = NNPC + 4;\n'
+            not_taken_code += '} \n'
+            inst_flags += ('IsCondDelaySlot', )
+        else:
+            inst_flags += (x, )
+
+    #Take into account uncond. branch instruction
+    if 'cond = 1' in code:
+         inst_flags += ('IsUncondControl', )
+    else:
+         inst_flags += ('IsCondControl', )
+
+    #Condition code
+    code = 'bool cond;\n' + code
+    code += 'if (cond) {\n'
+    code += '  NNPC = NPC + disp;\n'
+    code += '} else {\n'
+    code += not_taken_code
+
+    iop = InstObjParams(name, Name, 'Branch', code, inst_flags)
+    header_output = BasicDeclare.subst(iop)
+    decoder_output = BasicConstructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = BasicExecute.subst(iop)
+}};
+
+def format DspBranch(code, *opt_flags) {{
+    not_taken_code = '  NNPC = NNPC;\n'
+    not_taken_code += '} \n'
+
+    #Build Instruction Flags
+    #Use Link & Likely Flags to Add Link/Condition Code
+    inst_flags = ('IsDirectControl', )
+    for x in opt_flags:
+        if x == 'Link':
+            code += 'R31 = NNPC;\n'
+        elif x == 'Likely':
+            not_taken_code = '  NPC = NNPC;\n'
+            not_taken_code += '  NNPC = NNPC + 4;\n'
+            not_taken_code += '} \n'
+            inst_flags += ('IsCondDelaySlot', )
+        else:
+            inst_flags += (x, )
+
+    #Take into account uncond. branch instruction
+    if 'cond = 1' in code:
+         inst_flags += ('IsUncondControl', )
+    else:
+         inst_flags += ('IsCondControl', )
+
+    #Declaration code
+    decl_code = 'bool cond;\n'
+    decl_code += 'uint32_t dspctl;\n'
+
+    #Fetch code
+    fetch_code = 'dspctl = DSPControl;\n'
+
+    #Condition code
+    code = decl_code + fetch_code + code
+    code += 'if (cond) {\n'
+    code += '  NNPC = NPC + disp;\n'
+    code += '} else {\n'
+    code += not_taken_code
+
+    iop = InstObjParams(name, Name, 'Branch', code, inst_flags)
+    header_output = BasicDeclare.subst(iop)
+    decoder_output = BasicConstructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = BasicExecute.subst(iop)
+}};
+
+def format Jump(code, *opt_flags) {{
+    #Build Instruction Flags
+    #Use Link Flag to Add Link Code
+    inst_flags = ('IsIndirectControl', 'IsUncondControl')
+    for x in opt_flags:
+        if x == 'Link':
+            code = 'R31 = NNPC;\n' + code
+        elif x == 'ClearHazards':
+            code += '/* Code Needed to Clear Execute & Inst Hazards */\n'
+        else:
+            inst_flags += (x, )
+
+    iop = InstObjParams(name, Name, 'Jump', code, inst_flags)
+    header_output = BasicDeclare.subst(iop)
+    decoder_output = BasicConstructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = BasicExecute.subst(iop)
+}};
+
+
+
+

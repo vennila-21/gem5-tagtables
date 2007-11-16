@@ -1,0 +1,198 @@
+// -*- mode:c++ -*-
+
+// Copyright (c) 2007 The Hewlett-Packard Development Company
+// All rights reserved.
+//
+// Redistribution and use of this software in source and binary forms,
+// with or without modification, are permitted provided that the
+// following conditions are met:
+//
+// The software must be used only for Non-Commercial Use which means any
+// use which is NOT directed to receiving any direct monetary
+// compensation for, or commercial advantage from such use.  Illustrative
+// examples of non-commercial use are academic research, personal study,
+// teaching, education and corporate research & development.
+// Illustrative examples of commercial use are distributing products for
+// commercial advantage and providing services using the software for
+// commercial advantage.
+//
+// If you wish to use this software or functionality therein that may be
+// covered by patents for commercial use, please contact:
+//     Director of Intellectual Property Licensing
+//     Office of Strategy and Technology
+//     Hewlett-Packard Company
+//     1501 Page Mill Road
+//     Palo Alto, California  94304
+//
+// Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.  Redistributions
+// in binary form must reproduce the above copyright notice, this list of
+// conditions and the following disclaimer in the documentation and/or
+// other materials provided with the distribution.  Neither the name of
+// the COPYRIGHT HOLDER(s), HEWLETT-PACKARD COMPANY, nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.  No right of
+// sublicense is granted herewith.  Derivatives of the software and
+// output created using the software may be prepared, but only for
+// Non-Commercial Uses.  Derivatives of the software may be shared with
+// others provided: (i) the others agree to abide by the list of
+// conditions herein which includes the Non-Commercial Use restrictions;
+// and (ii) such Derivatives of the software include the above copyright
+// notice to acknowledge the contribution from this software where
+// applicable, this list of conditions and the disclaimer below.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Gabe Black
+
+////////////////////////////////////////////////////////////////////
+//
+//  Code to "specialize" a microcode sequence to use a particular
+//  variety of operands
+//
+
+let {{
+    # This code builds up a decode block which decodes based on switchval.
+    # vals is a dict which matches case values with what should be decoded to.
+    # Each element of the dict is a list containing a function and then the
+    # arguments to pass to it.
+    def doSplitDecode(switchVal, vals, default = None):
+        blocks = OutputBlocks()
+        blocks.decode_block = 'switch(%s) {\n' % switchVal
+        for (val, todo) in vals.items():
+            new_blocks = todo[0](*todo[1:])
+            new_blocks.decode_block = \
+                '\tcase %s: %s\n' % (val, new_blocks.decode_block)
+            blocks.append(new_blocks)
+        if default:
+            new_blocks = default[0](*default[1:])
+            new_blocks.decode_block = \
+                '\tdefault: %s\n' % new_blocks.decode_block
+            blocks.append(new_blocks)
+        blocks.decode_block += '}\n'
+        return blocks
+}};
+
+let {{
+    def doRipRelativeDecode(Name, opTypes, env):
+        # print "RIPing %s with opTypes %s" % (Name, opTypes)
+        normBlocks = specializeInst(Name + "_M", copy.copy(opTypes), copy.copy(env))
+        ripBlocks = specializeInst(Name + "_P", copy.copy(opTypes), copy.copy(env))
+
+        blocks = OutputBlocks()
+        blocks.append(normBlocks)
+        blocks.append(ripBlocks)
+
+        blocks.decode_block = '''
+        if(machInst.modRM.mod == 0 &&
+          machInst.modRM.rm == 5 &&
+          machInst.mode.submode == SixtyFourBitMode)
+        { %s }
+        else
+        { %s }''' % \
+         (ripBlocks.decode_block, normBlocks.decode_block)
+        return blocks
+}};
+
+let {{
+    class OpType(object):
+        parser = re.compile(r"(?P<tag>[A-Z]+)(?P<size>[a-z]*)|(r(?P<reg>[A-Z0-9]+)(?P<rsize>[a-z]*))")
+        def __init__(self, opTypeString):
+            match = OpType.parser.search(opTypeString)
+            if match == None:
+                raise Exception, "Problem parsing operand type %s" % opTypeString
+            self.reg = match.group("reg")
+            self.tag = match.group("tag")
+            self.size = match.group("size")
+            if not self.size:
+                self.size = match.group("rsize")
+
+    ModRMRegIndex = "(MODRM_REG | (REX_R << 3))"
+    ModRMRMIndex = "(MODRM_RM | (REX_B << 3))"
+    InstRegIndex = "(OPCODE_OP_BOTTOM3 | (REX_B << 3))"
+
+    # This function specializes the given piece of code to use a particular
+    # set of argument types described by "opTypes".
+    def specializeInst(Name, opTypes, env):
+        # print "Specializing %s with opTypes %s" % (Name, opTypes)
+        while len(opTypes):
+            # Parse the operand type string we're working with
+            opType = OpType(opTypes[0])
+            opTypes.pop(0)
+
+            if opType.tag not in ("I", "J"):
+                if opType.size:
+                    env.setSize(opType.size)
+
+            if opType.reg:
+                #Figure out what to do with fixed register operands
+                #This is the index to use, so we should stick it some place.
+                if opType.reg in ("A", "B", "C", "D"):
+                    env.addReg("INTREG_R%sX" % opType.reg)
+                else:
+                    env.addReg("INTREG_R%s" % opType.reg)
+                Name += "_R"
+            elif opType.tag == "B":
+                # This refers to registers whose index is encoded as part of the opcode
+                Name += "_R"
+                env.addReg(InstRegIndex)
+            elif opType.tag == "M":
+                # This refers to memory. The macroop constructor sets up modrm
+                # addressing. Non memory modrm settings should cause an error.
+                env.doModRM = True
+                return doRipRelativeDecode(Name, opTypes, env)
+            elif opType.tag == None or opType.size == None:
+                raise Exception, "Problem parsing operand tag: %s" % opType.tag
+            elif opType.tag == "C":
+                env.addReg(ModRMRegIndex)
+                Name += "_C"
+            elif opType.tag == "D":
+                env.addReg(ModRMRegIndex)
+                Name += "_D"
+            elif opType.tag in ("G", "P", "S", "T", "V"):
+                # Use the "reg" field of the ModRM byte to select the register
+                env.addReg(ModRMRegIndex)
+                Name += "_R"
+            elif opType.tag in ("E", "Q", "W"):
+                # This might refer to memory or to a register. We need to
+                # divide it up farther.
+                regEnv = copy.copy(env)
+                regEnv.addReg(ModRMRMIndex)
+                # This refers to memory. The macroop constructor should set up
+                # modrm addressing.
+                memEnv = copy.copy(env)
+                memEnv.doModRM = True
+                return doSplitDecode("MODRM_MOD",
+                    {"3" : (specializeInst, Name + "_R", copy.copy(opTypes), regEnv)},
+                           (doRipRelativeDecode, Name, copy.copy(opTypes), memEnv))
+            elif opType.tag in ("I", "J"):
+                # Immediates
+                Name += "_I"
+            elif opType.tag == "O":
+                # Immediate containing a memory offset
+                Name += "_MI"
+            elif opType.tag in ("PR", "R", "VR"):
+                # Non register modrm settings should cause an error
+                env.addReg(ModRMRMIndex)
+                Name += "_R"
+            elif opType.tag in ("X", "Y"):
+                # This type of memory addressing is for string instructions.
+                # They'll use the right index and segment internally.
+                Name += "_M"
+            else:
+                raise Exception, "Unrecognized tag %s." % opType.tag
+
+        # Generate code to return a macroop of the given name which will
+        # operate in the "emulation environment" env
+        return genMacroop(Name, env)
+}};

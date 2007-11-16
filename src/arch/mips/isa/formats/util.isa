@@ -1,0 +1,128 @@
+// -*- mode:c++ -*-
+
+// Copyright © 2007 MIPS Technologies, Inc.  All Rights Reserved
+
+//  This software is part of the M5 simulator.
+
+//  THIS IS A LEGAL AGREEMENT.  BY DOWNLOADING, USING, COPYING, CREATING
+//  DERIVATIVE WORKS, AND/OR DISTRIBUTING THIS SOFTWARE YOU ARE AGREEING
+//  TO THESE TERMS AND CONDITIONS.
+
+//  Permission is granted to use, copy, create derivative works and
+//  distribute this software and such derivative works for any purpose,
+//  so long as (1) the copyright notice above, this grant of permission,
+//  and the disclaimer below appear in all copies and derivative works
+//  made, (2) the copyright notice above is augmented as appropriate to
+//  reflect the addition of any new copyrightable work in a derivative
+//  work (e.g., Copyright © <Publication Year> Copyright Owner), and (3)
+//  the name of MIPS Technologies, Inc. (“MIPS”) is not used in any
+//  advertising or publicity pertaining to the use or distribution of
+//  this software without specific, written prior authorization.
+
+//  THIS SOFTWARE IS PROVIDED “AS IS.”  MIPS MAKES NO WARRANTIES AND
+//  DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, STATUTORY, IMPLIED OR
+//  OTHERWISE, INCLUDING BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+//  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+//  NON-INFRINGEMENT OF THIRD PARTY RIGHTS, REGARDING THIS SOFTWARE.
+//  IN NO EVENT SHALL MIPS BE LIABLE FOR ANY DAMAGES, INCLUDING DIRECT,
+//  INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, OR PUNITIVE DAMAGES OF
+//  ANY KIND OR NATURE, ARISING OUT OF OR IN CONNECTION WITH THIS AGREEMENT,
+//  THIS SOFTWARE AND/OR THE USE OF THIS SOFTWARE, WHETHER SUCH LIABILITY
+//  IS ASSERTED ON THE BASIS OF CONTRACT, TORT (INCLUDING NEGLIGENCE OR
+//  STRICT LIABILITY), OR OTHERWISE, EVEN IF MIPS HAS BEEN WARNED OF THE
+//  POSSIBILITY OF ANY SUCH LOSS OR DAMAGE IN ADVANCE.
+
+//Authors: Steven K. Reinhardt
+//         Korey L. Sewell
+
+let {{
+def LoadStoreBase(name, Name, ea_code, memacc_code, mem_flags, inst_flags,
+                  postacc_code = '', base_class = 'Memory',
+                  decode_template = BasicDecode, exec_template_base = ''):
+    # Make sure flags are in lists (convert to lists if not).
+    mem_flags = makeList(mem_flags)
+    inst_flags = makeList(inst_flags)
+
+    # add hook to get effective addresses into execution trace output.
+    ea_code += '\nif (traceData) { traceData->setAddr(EA); }\n'
+
+    # Some CPU models execute the memory operation as an atomic unit,
+    # while others want to separate them into an effective address
+    # computation and a memory access operation.  As a result, we need
+    # to generate three StaticInst objects.  Note that the latter two
+    # are nested inside the larger "atomic" one.
+
+    # Generate InstObjParams for each of the three objects.  Note that
+    # they differ only in the set of code objects contained (which in
+    # turn affects the object's overall operand list).
+    iop = InstObjParams(name, Name, base_class,
+                        { 'ea_code':ea_code, 'memacc_code':memacc_code, 'postacc_code':postacc_code },
+                        inst_flags)
+    ea_iop = InstObjParams(name, Name, base_class,
+                        { 'ea_code':ea_code },
+                        inst_flags)
+    memacc_iop = InstObjParams(name, Name, base_class,
+                        { 'memacc_code':memacc_code, 'postacc_code':postacc_code },
+                        inst_flags)
+
+    if mem_flags:
+        s = '\n\tmemAccessFlags = ' + string.join(mem_flags, '|') + ';'
+        iop.constructor += s
+        memacc_iop.constructor += s
+
+    # select templates
+
+    # The InitiateAcc template is the same for StoreCond templates as the
+    # corresponding Store template..
+    StoreCondInitiateAcc = StoreInitiateAcc
+
+    memAccExecTemplate = eval(exec_template_base + 'MemAccExecute')
+    fullExecTemplate = eval(exec_template_base + 'Execute')
+    initiateAccTemplate = eval(exec_template_base + 'InitiateAcc')
+    completeAccTemplate = eval(exec_template_base + 'CompleteAcc')
+    eaCompExecuteTemplate = eval('EACompExecute')
+
+    if (exec_template_base == 'Load' or exec_template_base == 'Store'):
+      memAccSizeTemplate = eval('LoadStoreMemAccSize')
+    else:
+      memAccSizeTemplate = eval('MiscMemAccSize')
+
+    # (header_output, decoder_output, decode_block, exec_output)
+    return (LoadStoreDeclare.subst(iop),
+            EACompConstructor.subst(ea_iop)
+            + MemAccConstructor.subst(memacc_iop)
+            + LoadStoreConstructor.subst(iop),
+            decode_template.subst(iop),
+            eaCompExecuteTemplate.subst(ea_iop)
+            + memAccExecTemplate.subst(memacc_iop)
+            + fullExecTemplate.subst(iop)
+            + initiateAccTemplate.subst(iop)
+            + completeAccTemplate.subst(iop)
+            + memAccSizeTemplate.subst(memacc_iop))
+}};
+
+output header {{
+        std::string inst2string(MachInst machInst);
+}};
+
+output decoder {{
+
+std::string inst2string(MachInst machInst)
+{
+    string str = "";
+    uint32_t mask = 0x80000000;
+
+    for(int i=0; i < 32; i++) {
+        if ((machInst & mask) == 0) {
+            str += "0";
+        } else {
+            str += "1";
+        }
+
+        mask = mask >> 1;
+    }
+
+    return str;
+}
+
+}};
