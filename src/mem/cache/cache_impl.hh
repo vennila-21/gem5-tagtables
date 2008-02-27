@@ -292,7 +292,7 @@ Cache<TagStore>::access(PacketPtr pkt, BlkType *&blk, int &lat)
             }
         }
 
-        if (pkt->needsExclusive() ? blk->isWritable() : blk->isValid()) {
+        if (pkt->needsExclusive() ? blk->isWritable() : blk->isReadable()) {
             // OK to satisfy access
             hits[pkt->cmdToIndex()][0/*pkt->req->getThreadNum()*/]++;
             satisfyCpuSideRequest(pkt, blk);
@@ -318,7 +318,7 @@ Cache<TagStore>::access(PacketPtr pkt, BlkType *&blk, int &lat)
                 incMissCount(pkt);
                 return false;
             }
-            blk->status = BlkValid;
+            blk->status = BlkValid | BlkReadable;
         }
         std::memcpy(blk->data, pkt->getPtr<uint8_t>(), blkSize);
         blk->status |= BlkDirty;
@@ -422,29 +422,16 @@ Cache<TagStore>::timingAccess(PacketPtr pkt)
     }
 
     int lat = hitLatency;
-    bool satisfied = false;
-
-    Addr blk_addr = pkt->getAddr() & ~(Addr(blkSize-1));
-    MSHR *mshr = mshrQueue.findMatch(blk_addr);
-
-    if (!mshr) {
-        // no outstanding access to this block, look up in cache
-        // (otherwise if we allow reads while there's an outstanding
-        // write miss, the read could return stale data out of the
-        // cache block... a more aggressive system could detect the
-        // overlap (if any) and forward data out of the MSHRs, but we
-        // don't do that yet)
-        BlkType *blk = NULL;
-        satisfied = access(pkt, blk, lat);
-    }
+    BlkType *blk = NULL;
+    bool satisfied = access(pkt, blk, lat);
 
 #if 0
+    /** @todo make the fast write alloc (wh64) work with coherence. */
+
     PacketList writebacks;
 
     // If this is a block size write/hint (WH64) allocate the block here
     // if the coherence protocol allows it.
-    /** @todo make the fast write alloc (wh64) work with coherence. */
-    /** @todo Do we want to do fast writes for writebacks as well? */
     if (!blk && pkt->getSize() >= blkSize && coherence->allowFastWrites() &&
         (pkt->cmd == MemCmd::WriteReq
          || pkt->cmd == MemCmd::WriteInvalidateReq) ) {
@@ -483,6 +470,9 @@ Cache<TagStore>::timingAccess(PacketPtr pkt)
         if (prefetchMiss)
             prefetcher->handleMiss(pkt, time);
 
+        Addr blk_addr = pkt->getAddr() & ~(Addr(blkSize-1));
+        MSHR *mshr = mshrQueue.findMatch(blk_addr);
+
         if (mshr) {
             // MSHR hit
             //@todo remove hw_pf here
@@ -508,6 +498,26 @@ Cache<TagStore>::timingAccess(PacketPtr pkt)
             if (pkt->cmd == MemCmd::Writeback) {
                 allocateWriteBuffer(pkt, time, true);
             } else {
+                if (blk && blk->isValid()) {
+                    // If we have a write miss to a valid block, we
+                    // need to mark the block non-readable.  Otherwise
+                    // if we allow reads while there's an outstanding
+                    // write miss, the read could return stale data
+                    // out of the cache block... a more aggressive
+                    // system could detect the overlap (if any) and
+                    // forward data out of the MSHRs, but we don't do
+                    // that yet.  Note that we do need to leave the
+                    // block valid so that it stays in the cache, in
+                    // case we get an upgrade response (and hence no
+                    // new data) when the write miss completes.
+                    // As long as CPUs do proper store/load forwarding
+                    // internally, and have a sufficiently weak memory
+                    // model, this is probably unnecessary, but at some
+                    // point it must have seemed like we needed it...
+                    assert(pkt->needsExclusive() && !blk->isWritable());
+                    blk->status &= ~BlkReadable;
+                }
+
                 allocateMissBuffer(pkt, time, true);
             }
         }
@@ -517,6 +527,7 @@ Cache<TagStore>::timingAccess(PacketPtr pkt)
 }
 
 
+// See comment in cache.hh.
 template<class TagStore>
 PacketPtr
 Cache<TagStore>::getBusPacket(PacketPtr cpu_pkt, BlkType *blk,
@@ -529,14 +540,11 @@ Cache<TagStore>::getBusPacket(PacketPtr cpu_pkt, BlkType *blk,
         return NULL;
     }
 
-    if (!blkValid &&
-        (cpu_pkt->cmd == MemCmd::Writeback ||
-         cpu_pkt->cmd == MemCmd::UpgradeReq)) {
-            // For now, writebacks from upper-level caches that
-            // completely miss in the cache just go through. If we had
-            // "fast write" support (where we could write the whole
-            // block w/o fetching new data) we might want to allocate
-            // on writeback misses instead.
+    if (!blkValid && (cpu_pkt->cmd == MemCmd::Writeback ||
+                      cpu_pkt->cmd == MemCmd::UpgradeReq)) {
+        // Writebacks that weren't allocated in access() and upgrades
+        // from upper-level caches that missed completely just go
+        // through.
         return NULL;
     }
 
@@ -936,10 +944,10 @@ Cache<TagStore>::handleFill(PacketPtr pkt, BlkType *blk,
     }
 
     if (!pkt->sharedAsserted()) {
-        blk->status = BlkValid | BlkWritable;
+        blk->status = BlkValid | BlkReadable | BlkWritable;
     } else {
         assert(!pkt->needsExclusive());
-        blk->status = BlkValid;
+        blk->status = BlkValid | BlkReadable;
     }
 
     DPRINTF(Cache, "Block addr %x moving from state %i to %i\n",
