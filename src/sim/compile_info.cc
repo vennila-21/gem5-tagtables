@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2005 The Regents of The University of Michigan
+ * Copyright (c) 2008 The Hewlett-Packard Development Company
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,28 +26,31 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Nathan Binkert
+ *          Steve Reinhardt
  */
 
-#include <iostream>
+#include <string>
+#include <vector>
 
-#include "base/misc.hh"
-#include "dev/etherpkt.hh"
-#include "sim/serialize.hh"
-
-using namespace std;
-
-void
-EthPacketData::serialize(const string &base, ostream &os)
+std::vector<std::string>
+compileFlags()
 {
-    paramOut(os, base + ".length", length);
-    arrayParamOut(os, base + ".data", data, length);
+    static const char *flags[] = {
+#ifdef DEBUG
+        "DEBUG",
+#endif
+#ifdef NDEBUG
+        "NDEBUG",
+#endif
+#if TRACING_ON
+        "TRACING_ON",
+#endif
+    };
+
+    std::vector<std::string> result;
+    for (int i = 0; i < sizeof(flags) / sizeof(flags[0]); ++i)
+        result.push_back(flags[i]);
+
+    return result;
 }
 
-void
-EthPacketData::unserialize(const string &base, Checkpoint *cp,
-                        const string &section)
-{
-    paramIn(cp, section, base + ".length", length);
-    if (length)
-        arrayParamIn(cp, section, base + ".data", data, length);
-}

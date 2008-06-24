@@ -1,4 +1,4 @@
-# Copyright (c) 2007 The Regents of The University of Michigan
+# Copyright (c) 2005-2007 The Regents of The University of Michigan
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -24,15 +24,15 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Korey Sewell
+# Authors: Nathan Binkert
 
+from m5.SimObject import SimObject
 from m5.params import *
 from m5.proxy import *
-from Device import BasicPioDevice
 
-class MipsConsole(BasicPioDevice):
-    type = 'MipsConsole'
-    cpu = Param.BaseCPU(Parent.cpu[0], "Processor")
-    disk = Param.SimpleDisk("Simple Disk")
-    sim_console = Param.SimConsole(Parent.any, "The Simulator Console")
-    system = Param.MipsSystem(Parent.any, "system object")
+class Terminal(SimObject):
+    type = 'Terminal'
+    intr_control = Param.IntrControl(Parent.any, "interrupt controller")
+    port = Param.TcpPort(3456, "listen port")
+    number = Param.Int(0, "terminal number")
+    output = Param.Bool(True, "Enable output dump to file")

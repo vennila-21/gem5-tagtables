@@ -46,7 +46,7 @@
 ThreadState::ThreadState(BaseCPU *cpu, int _cpuId, int _tid)
     : baseCpu(cpu), cpuId(_cpuId), tid(_tid), lastActivate(0), lastSuspend(0),
       profile(NULL), profileNode(NULL), profilePC(0), quiesceEvent(NULL),
-      physPort(NULL), virtPort(NULL),
+      kernelStats(NULL), physPort(NULL), virtPort(NULL),
       microPC(0), nextMicroPC(1), funcExeInst(0), storeCondFailures(0)
 #else
 ThreadState::ThreadState(BaseCPU *cpu, int _cpuId, int _tid, Process *_process,
@@ -126,7 +126,7 @@ ThreadState::connectPhysPort()
     // already existed.  Fix this memory leak once the bus port IDs
     // for functional ports is resolved.
     if (physPort)
-        physPort->removeConn();
+        physPort->disconnectFromPeer();
     else
         physPort = new FunctionalPort(csprintf("%s-%d-funcport",
                                            baseCpu->name(), tid));
@@ -140,7 +140,7 @@ ThreadState::connectVirtPort()
     // already existed.  Fix this memory leak once the bus port IDs
     // for functional ports is resolved.
     if (virtPort)
-        virtPort->removeConn();
+        virtPort->disconnectFromPeer();
     else
         virtPort = new VirtualPort(csprintf("%s-%d-vport",
                                         baseCpu->name(), tid));
