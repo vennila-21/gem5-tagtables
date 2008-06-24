@@ -26,14 +26,13 @@
 #
 # Authors: Nathan Binkert
 
-from m5.SimObject import SimObject
 from m5.params import *
 from m5.proxy import *
+from Device import BasicPioDevice
 
-class SimConsole(SimObject):
-    type = 'SimConsole'
-    append_name = Param.Bool(True, "append name() to filename")
-    intr_control = Param.IntrControl(Parent.any, "interrupt controller")
-    port = Param.TcpPort(3456, "listen port")
-    number = Param.Int(0, "console number")
-    output = Param.String('console', "file to dump output to")
+class AlphaBackdoor(BasicPioDevice):
+    type = 'AlphaBackdoor'
+    cpu = Param.BaseCPU(Parent.cpu[0], "Processor")
+    disk = Param.SimpleDisk("Simple Disk")
+    terminal = Param.Terminal(Parent.any, "The console terminal")
+    system = Param.AlphaSystem(Parent.any, "system object")

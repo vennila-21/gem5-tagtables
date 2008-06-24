@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2005 The Regents of The University of Michigan
+ * Copyright (c) 2001-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,29 +25,26 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Nathan Binkert
+ * Authors: Steve Reinhardt
+ *          Nathan Binkert
  */
 
-#include <iostream>
+#ifndef __SIM_SIM_OBJECT_PARAMS_HH__
+#define __SIM_SIM_OBJECT_PARAMS_HH__
 
-#include "base/misc.hh"
-#include "dev/etherpkt.hh"
-#include "sim/serialize.hh"
+#ifndef PY_VERSION
+struct PyObject;
+#endif
 
-using namespace std;
+#include <string>
 
-void
-EthPacketData::serialize(const string &base, ostream &os)
+struct SimObjectParams
 {
-    paramOut(os, base + ".length", length);
-    arrayParamOut(os, base + ".data", data, length);
-}
+    virtual ~SimObjectParams() {}
 
-void
-EthPacketData::unserialize(const string &base, Checkpoint *cp,
-                        const string &section)
-{
-    paramIn(cp, section, base + ".length", length);
-    if (length)
-        arrayParamIn(cp, section, base + ".data", data, length);
-}
+    std::string name;
+    PyObject *pyobj;
+};
+
+
+#endif // __SIM_SIM_OBJECT_PARAMS_HH__

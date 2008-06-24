@@ -29,28 +29,28 @@
  */
 
 /** @file
- * System Console Interface
+ * System Console Backdoor Interface
  */
 
-#ifndef __MIPS_CONSOLE_HH__
-#define __MIPS_CONSOLE_HH__
+#ifndef __DEV_ALPHA_BACKDOOR_HH__
+#define __DEV_ALPHA_BACKDOOR_HH__
 
 #include "base/range.hh"
-#include "dev/mips/access.h"
+#include "dev/alpha/access.h"
 #include "dev/io_device.hh"
-#include "params/MipsConsole.hh"
+#include "params/AlphaBackdoor.hh"
 #include "sim/host.hh"
 #include "sim/sim_object.hh"
 
 class BaseCPU;
-class SimConsole;
-class MipsSystem;
+class Terminal;
+class AlphaSystem;
 class SimpleDisk;
 
 /**
  * Memory mapped interface to the system console. This device
  * represents a shared data region between the OS Kernel and the
- * System Console.
+ * System Console Backdoor.
  *
  * The system console is a small standalone program that is initially
  * run when the system boots.  It contains the necessary code to
@@ -72,17 +72,17 @@ class SimpleDisk;
  * primarily used doing boot before the kernel has loaded its device
  * drivers.
  */
-class MipsConsole : public BasicPioDevice
+class AlphaBackdoor : public BasicPioDevice
 {
   protected:
-    struct Access : public MipsAccess
+    struct Access : public AlphaAccess
     {
         void serialize(std::ostream &os);
         void unserialize(Checkpoint *cp, const std::string &section);
     };
 
     union {
-        Access *mipsAccess;
+        Access *alphaAccess;
         uint8_t *consoleData;
     };
 
@@ -90,17 +90,17 @@ class MipsConsole : public BasicPioDevice
     SimpleDisk *disk;
 
     /** the system console (the terminal) is accessable from the console */
-    SimConsole *console;
+    Terminal *terminal;
 
     /** a pointer to the system we are running in */
-    MipsSystem *system;
+    AlphaSystem *system;
 
     /** a pointer to the CPU boot cpu */
     BaseCPU *cpu;
 
   public:
-    typedef MipsConsoleParams Params;
-    MipsConsole(const Params *p);
+    typedef AlphaBackdoorParams Params;
+    AlphaBackdoor(const Params *p);
 
     const Params *
     params() const
@@ -123,4 +123,4 @@ class MipsConsole : public BasicPioDevice
     virtual void unserialize(Checkpoint *cp, const std::string &section);
 };
 
-#endif // __MIPS_CONSOLE_HH__
+#endif // __DEV_ALPHA_BACKDOOR_HH__

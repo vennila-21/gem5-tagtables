@@ -47,7 +47,7 @@ Bridge::BridgePort::BridgePort(const std::string &_name,
                                int _delay, int _nack_delay, int _req_limit,
                                int _resp_limit,
                                std::vector<Range<Addr> > filter_ranges)
-    : Port(_name), bridge(_bridge), otherPort(_otherPort),
+    : Port(_name, _bridge), bridge(_bridge), otherPort(_otherPort),
       delay(_delay), nackDelay(_nack_delay), filterRanges(filter_ranges),
       outstandingResponses(0), queuedRequests(0), inRetry(false),
       reqQueueLimit(_req_limit), respQueueLimit(_resp_limit), sendEvent(this)
@@ -89,7 +89,7 @@ void
 Bridge::init()
 {
     // Make sure that both sides are connected to.
-    if (portA.getPeer() == NULL || portB.getPeer() == NULL)
+    if (!portA.isConnected() || !portB.isConnected())
         fatal("Both ports of bus bridge are not connected to a bus.\n");
 
     if (portA.peerBlockSize() != portB.peerBlockSize())

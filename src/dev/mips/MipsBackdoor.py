@@ -1,4 +1,4 @@
-# Copyright (c) 2005-2007 The Regents of The University of Michigan
+# Copyright (c) 2007 The Regents of The University of Michigan
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -24,15 +24,15 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Nathan Binkert
+# Authors: Korey Sewell
 
 from m5.params import *
 from m5.proxy import *
 from Device import BasicPioDevice
 
-class AlphaConsole(BasicPioDevice):
-    type = 'AlphaConsole'
+class MipsBackdoor(BasicPioDevice):
+    type = 'MipsBackdoor'
     cpu = Param.BaseCPU(Parent.cpu[0], "Processor")
     disk = Param.SimpleDisk("Simple Disk")
-    sim_console = Param.SimConsole(Parent.any, "The Simulator Console")
-    system = Param.AlphaSystem(Parent.any, "system object")
+    terminal = Param.Terminal(Parent.any, "The console terminal")
+    system = Param.MipsSystem(Parent.any, "system object")
