@@ -1,0 +1,29 @@
+M5 Simulator System
+
+Copyright (c) 2001-2008
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Oct  8 2008 20:20:37
+M5 revision 5641:1033c9f7de3f63b99accb1f06962921c3b61b617
+M5 commit date Wed Oct 08 20:18:02 2008 -0700
+M5 started Oct  8 2008 20:55:01
+M5 executing on tater
+command line: build/X86_SE/m5.fast -d build/X86_SE/tests/fast/long/60.bzip2/x86/linux/simple-atomic -re --stdout-file stdout --stderr-file stderr tests/run.py long/60.bzip2/x86/linux/simple-atomic
+Global frequency set at 1000000000000 ticks per second
+spec_init
+Loading Input Data
+Input data 1048576 bytes in length
+Compressing Input Data, level 7
+Compressed data 198546 bytes in length
+Uncompressing Data
+Uncompressed data 1048576 bytes in length
+Uncompressed data compared correctly
+Compressing Input Data, level 9
+Compressed data 198677 bytes in length
+Uncompressing Data
+Uncompressed data 1048576 bytes in length
+Uncompressed data compared correctly
+Tested 1MB buffer: OK!
+Exiting @ tick 2835210954000 because target called exit()
