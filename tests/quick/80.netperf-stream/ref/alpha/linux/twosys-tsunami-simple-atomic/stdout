@@ -1,0 +1,16 @@
+M5 Simulator System
+
+Copyright (c) 2001-2008
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Nov  5 2008 22:27:11
+M5 revision 5719:c9056088f1516d097f7e73673f990175ad238d69
+M5 commit date Wed Nov 05 16:19:17 2008 -0500
+M5 started Nov  5 2008 22:28:13
+M5 executing on zizzer
+command line: build/ALPHA_FS/m5.fast -d build/ALPHA_FS/tests/fast/quick/80.netperf-stream/alpha/linux/twosys-tsunami-simple-atomic -re --stdout-file stdout --stderr-file stderr tests/run.py quick/80.netperf-stream/alpha/linux/twosys-tsunami-simple-atomic
+Global frequency set at 1000000000000 ticks per second
+info: Entering event queue @ 0.  Starting simulation...
+Exiting @ tick 4300236804024 because checkpoint
