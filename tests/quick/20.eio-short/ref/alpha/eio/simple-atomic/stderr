@@ -1,0 +1,4 @@
+warn: Sockets disabled, not accepting gdb connections
+warn: be nice to actually delete the event here
+
+gzip: stdout: Broken pipe
