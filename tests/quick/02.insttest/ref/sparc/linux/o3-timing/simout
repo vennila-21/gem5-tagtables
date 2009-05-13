@@ -1,0 +1,26 @@
+M5 Simulator System
+
+Copyright (c) 2001-2008
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Apr 22 2009 06:58:47
+M5 revision ce26a627c841 6126 default qtip tip stats_no_compat.diff
+M5 started Apr 22 2009 07:32:52
+M5 executing on maize
+command line: build/SPARC_SE/m5.fast -d build/SPARC_SE/tests/fast/quick/02.insttest/sparc/linux/o3-timing -re tests/run.py build/SPARC_SE/tests/fast/quick/02.insttest/sparc/linux/o3-timing
+Global frequency set at 1000000000000 ticks per second
+info: Entering event queue @ 0.  Starting simulation...
+Begining test of difficult SPARC instructions...
+LDSTUB:		Passed
+SWAP:		Passed
+CAS FAIL:	Passed
+CAS WORK:	Passed
+CASX FAIL:	Passed
+CASX WORK:	Passed
+LDTX:		Passed
+LDTW:		Passed
+STTW:		Passed
+Done
+Exiting @ tick 27756500 because target called exit()
