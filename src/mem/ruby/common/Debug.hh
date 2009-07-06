@@ -36,6 +36,8 @@
 
 #include <unistd.h>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include "config/ruby_debug.hh"
 #include "mem/ruby/common/Global.hh"
@@ -70,6 +72,8 @@ enum VerbosityLevel {No_Verb, Low_Verb, Med_Verb, High_Verb};
 class Debug {
 public:
   // Constructors
+  Debug();
+  Debug(const std::string & name, const std::vector<std::string> & argv);
   Debug( const char *filterString, const char *verboseString,
          Time filterStartTime, const char *filename );
 
@@ -77,8 +81,9 @@ public:
   ~Debug();
 
   // Public Methods
+  static bool getProtocolTrace() { return m_protocol_trace; }
   bool validDebug(int module, PriorityLevel priority);
-  void printVerbosity(ostream& out) const;
+  void printVerbosity(std::ostream& out) const;
   void setVerbosity(VerbosityLevel vb);
   static bool checkVerbosityString(const char *verb_str);
   bool setVerbosityString(const char *);
@@ -92,7 +97,7 @@ public:
   bool addFilter(char);
   void clearFilter();
   void allFilter();
-  void print(ostream& out) const;
+  void print(std::ostream& out) const;
   /* old school debugging "vararg": sends messages to screen and log */
   void debugMsg( const char *fmt, ... );
 
@@ -108,6 +113,7 @@ private:
   Debug& operator=(const Debug& obj);
 
   // Data Members (m_ prefix)
+  static bool m_protocol_trace;
   VerbosityLevel m_verbosityLevel;
   int m_filter;
   Time m_starting_cycle;
@@ -116,13 +122,13 @@ private:
 };
 
 // Output operator declaration
-ostream& operator<<(ostream& out, const Debug& obj);
+std::ostream& operator<<(std::ostream& out, const Debug& obj);
 
 // ******************* Definitions *******************
 
 // Output operator definition
 extern inline
-ostream& operator<<(ostream& out, const Debug& obj)
+std::ostream& operator<<(std::ostream& out, const Debug& obj)
 {
   obj.print(out);
   out << flush;
@@ -155,7 +161,7 @@ const bool ASSERT_FLAG = true;
            << __PRETTY_FUNCTION__ << " in "\
            << __FILE__ << ":"\
            << __LINE__ << endl << flush;\
-      if(isatty(STDERR_FILENO)) {\
+      if(isatty(STDIN_FILENO)) {\
         cerr << "At this point you might want to attach a debug to ";\
         cerr << "the running and get to the" << endl;\
         cerr << "crash site; otherwise press enter to continue" << endl;\
@@ -176,7 +182,7 @@ const bool ASSERT_FLAG = true;
          << __PRETTY_FUNCTION__ << " in "\
          << __FILE__ << ":"\
          << __LINE__ << endl << flush;\
-    if(isatty(STDERR_FILENO)) {\
+    if(isatty(STDIN_FILENO)) {\
       cerr << "press enter to continue" << endl;\
       cerr << "PID: " << getpid();\
       cerr << endl << flush; \
@@ -303,5 +309,5 @@ const bool ASSERT_FLAG = true;
   }\
 }
 
-#endif // __MEM_RUBY_DEBUG_HH__
+#endif //DEBUG_H
 

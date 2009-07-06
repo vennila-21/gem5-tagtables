@@ -43,7 +43,7 @@ string string_split(string& str, char split_character)
   string head = "";
   string tail = "";
 
-  unsigned counter = 0;
+  uint counter = 0;
   while(counter < str.size()) {
     if (str[counter] == split_character) {
       counter++;
@@ -89,6 +89,21 @@ float string_to_float(string& str)
   float ret;
   sstr >> ret;
   return ret;
+}
+
+bool string_to_bool(const string & str)
+{
+  string lower(str);
+  for (size_t i=0;i<str.length();i++)
+    lower[i] = tolower(str[i]);
+  if (lower == "true")
+    return true;
+  else if (lower == "false")
+    return false;
+  else
+    assert(0);
+
+  return false;
 }
 
 // Log functions

@@ -27,65 +27,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * $Id$
- */
-
 #include "mem/ruby/common/DataBlock.hh"
 
-DataBlock::DataBlock()
+DataBlock &
+DataBlock::operator=(const DataBlock & obj)
 {
-  if (DATA_BLOCK || XACT_MEMORY) {
-    m_data.setSize(RubyConfig::dataBlockBytes());
-  }
-  clear();
-}
-
-DataBlock::~DataBlock()
-{
-
-}
-
-void DataBlock::clear()
-{
-  int size = m_data.size();
-  for (int i = 0; i < size; i++) {
-    m_data[i] = 0;
-  }
-}
-
-bool DataBlock::equal(const DataBlock& obj) const
-{
-  bool value = true;
-  int size = m_data.size();
-  for (int i = 0; i < size; i++) {
-    value = value && (m_data[i] == obj.m_data[i]);
-  }
-  return value;
-}
-
-void DataBlock::print(ostream& out) const
-{
-  int size = m_data.size();
-  for (int i = 0; i < size; i+=4) {
-    out << hex << *((uint32*)(&(m_data[i]))) << " ";
-  }
-  out << dec << "]" << flush;
-}
-
-uint8 DataBlock::getByte(int whichByte) const
-{
-  if (DATA_BLOCK || XACT_MEMORY) {
-  return m_data[whichByte];
+  if (this == &obj) {
+    //    assert(false);
   } else {
-    return 0;
+    if (!m_alloc)
+      m_data = new uint8[RubySystem::getBlockSizeBytes()];
+    memcpy(m_data, obj.m_data, RubySystem::getBlockSizeBytes());
+    m_alloc = true;
   }
+  return *this;
 }
-
-void DataBlock::setByte(int whichByte, uint8 data)
-{
-  if (DATA_BLOCK || XACT_MEMORY) {
-    m_data[whichByte] = data;
-  }
-}
-
