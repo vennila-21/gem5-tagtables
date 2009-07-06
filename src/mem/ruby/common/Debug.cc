@@ -38,11 +38,13 @@
 #include "mem/ruby/common/Global.hh"
 #include "mem/ruby/common/Debug.hh"
 #include "mem/ruby/eventqueue/RubyEventQueue.hh"
+#include "mem/gems_common/util.hh"
 
 class Debug;
 extern Debug* g_debug_ptr;
 std::ostream * debug_cout_ptr;
 
+bool Debug::m_protocol_trace = false;
 struct DebugComponentData
 {
     const char *desc;
@@ -81,6 +83,32 @@ void changeDebugVerbosity(VerbosityLevel vb)
 void changeDebugFilter(int filter)
 {
   g_debug_ptr->setFilter(filter);
+}
+
+Debug::Debug()
+{
+  m_verbosityLevel = No_Verb;
+  m_starting_cycle = ~0;
+  clearFilter();
+  debug_cout_ptr = &cout;
+}
+
+Debug::Debug( const string & name, const vector<string> & argv )
+{
+  for (size_t i=0;i<argv.size();i+=2){
+    if (argv[i] == "filter_string")
+      setFilterString( argv[i+1].c_str() );
+    else if (argv[i] == "verbosity_string")
+      setVerbosityString( argv[i+1].c_str() );
+    else if (argv[i] == "start_time")
+      m_starting_cycle = atoi( argv[i+1].c_str() );
+    else if (argv[i] == "output_filename")
+      setDebugOutputFile( argv[i+1].c_str() );
+    else if (argv[i] == "protocol_trace")
+      m_protocol_trace = string_to_bool(argv[i+1]);
+    else
+      assert(0);
+  }
 }
 
 Debug::Debug( const char *filterString, const char *verboseString,

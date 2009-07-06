@@ -30,13 +30,15 @@
 /*
  * $Id$
  *
- * Description: See AbstractCacheEntry.h
+ * Description: See AbstractCacheEntry.hh
  *
  */
 
 #include "mem/ruby/slicc_interface/AbstractCacheEntry.hh"
 
 AbstractCacheEntry::AbstractCacheEntry() {
+  m_Address.setAddress(0);
+  m_Permission = AccessPermission_NotPresent;
 }
 
 // still need to define destructor for subclasses

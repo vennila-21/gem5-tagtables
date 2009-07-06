@@ -28,7 +28,7 @@
  */
 
 /*
- * SimpleNetwork.h
+ * SimpleNetwork.hh
  *
  * Description: The SimpleNetwork class implements the interconnection
  * SimpleNetwork between components (processor/cache components and
@@ -55,7 +55,7 @@
  *
  * FIXME: Various flavor of networks are provided as a compiler time
  *        configurable. We currently include this SimpleNetwork in the
- *        makefile's vpath, so that SimpleNetwork.C can provide an alternative
+ *        makefile's vpath, so that SimpleNetwork.cc can provide an alternative
  *        version constructor for the abstract Network class. It is easy to
  *        modify this to make network a runtime configuable. Just make the
  *        abstract Network class take a enumeration parameter, and based on
@@ -83,10 +83,13 @@ class Topology;
 class SimpleNetwork : public Network {
 public:
   // Constructors
-  SimpleNetwork(int nodes);
+  //  SimpleNetwork(int nodes);
+  SimpleNetwork(const string & name);
 
   // Destructor
   ~SimpleNetwork();
+
+  void init(const vector<string> & argv);
 
   // Public Methods
   void printStats(ostream& out) const;
@@ -130,14 +133,11 @@ private:
   Vector<Vector<MessageBuffer*> > m_toNetQueues;
   Vector<Vector<MessageBuffer*> > m_fromNetQueues;
 
-  int m_nodes;
-  int m_virtual_networks;
   Vector<bool> m_in_use;
   Vector<bool> m_ordered;
   Vector<Switch*> m_switch_ptr_vector;
   Vector<MessageBuffer*> m_buffers_to_free;
   Vector<Switch*> m_endpoint_switches;
-  Topology* m_topology_ptr;
 };
 
 // Output operator declaration

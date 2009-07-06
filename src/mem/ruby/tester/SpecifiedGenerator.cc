@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
+ * Copyright (c) 1999-2005 Mark D. Hill and David A. Wood
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,10 +33,6 @@
  */
 
 #include "mem/ruby/tester/SpecifiedGenerator.hh"
-#include "mem/ruby/system/Sequencer.hh"
-#include "mem/ruby/system/System.hh"
-#include "mem/ruby/common/SubBlock.hh"
-#include "mem/ruby/tester/SyntheticDriver.hh"
 
 SpecifiedGenerator::SpecifiedGenerator()
 {
