@@ -1,0 +1,16 @@
+M5 Simulator System
+
+Copyright (c) 2001-2008
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Apr 21 2009 19:00:07
+M5 revision e6dd09514462 6117 default qtip tip stats-update
+M5 started Apr 21 2009 19:57:53
+M5 executing on zizzer
+command line: build/X86_SE/m5.fast -d build/X86_SE/tests/fast/quick/00.hello/x86/linux/simple-atomic -re tests/run.py build/X86_SE/tests/fast/quick/00.hello/x86/linux/simple-atomic
+Global frequency set at 1000000000000 ticks per second
+info: Entering event queue @ 0.  Starting simulation...
+Hello world!
+Exiting @ tick 5491500 because target called exit()
