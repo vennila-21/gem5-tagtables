@@ -98,31 +98,6 @@ Profiler::Profiler(const string & name)
   m_stats_period = 1000000; // Default
   m_periodic_output_file_ptr = &cerr;
 
-//changed by SS
-/*
-  // for MemoryControl:
-  m_memReq = 0;
-  m_memBankBusy = 0;
-  m_memBusBusy = 0;
-  m_memReadWriteBusy = 0;
-  m_memDataBusBusy = 0;
-  m_memTfawBusy = 0;
-  m_memRefresh = 0;
-  m_memRead = 0;
-  m_memWrite = 0;
-  m_memWaitCycles = 0;
-  m_memInputQ = 0;
-  m_memBankQ = 0;
-  m_memArbWait = 0;
-  m_memRandBusy = 0;
-  m_memNotOld = 0;
-
-
-  int totalBanks = RubyConfig::banksPerRank()
-                 * RubyConfig::ranksPerDimm()
-                 * RubyConfig::dimmsPerChannel();
-  m_memBankCount.setSize(totalBanks);
-*/
 }
 
 Profiler::~Profiler()
@@ -405,9 +380,9 @@ void Profiler::printStats(ostream& out, bool short_stats)
 
   out << endl;
 
-  m_L1D_cache_profiler_ptr->printStats(out);
-  m_L1I_cache_profiler_ptr->printStats(out);
-  m_L2_cache_profiler_ptr->printStats(out);
+  //  m_L1D_cache_profiler_ptr->printStats(out);
+  //  m_L1I_cache_profiler_ptr->printStats(out);
+  //  m_L2_cache_profiler_ptr->printStats(out);
 
   out << endl;
 
@@ -798,25 +773,6 @@ void Profiler::clearStats()
   m_ruby_start = g_eventQueue_ptr->getTime();
 }
 
-void Profiler::addPrimaryStatSample(const CacheMsg& msg, NodeID id)
-{
-  if (Protocol::m_TwoLevelCache) {
-    if (msg.getType() == CacheRequestType_IFETCH) {
-      addL1IStatSample(msg, id);
-    } else {
-      addL1DStatSample(msg, id);
-    }
-    // profile the address after an L1 miss (outside of the processor for CMP)
-    if (Protocol::m_CMP) {
-      addAddressTraceSample(msg, id);
-    }
-  } else {
-    addL2StatSample(CacheRequestType_to_GenericRequestType(msg.getType()),
-                    msg.getAccessMode(), msg.getSize(), msg.getPrefetch(), id);
-    addAddressTraceSample(msg, id);
-  }
-}
-
 void Profiler::profileConflictingRequests(const Address& addr)
 {
   assert(addr == line_address(addr));
@@ -830,39 +786,6 @@ void Profiler::profileConflictingRequests(const Address& addr)
   m_conflicting_map_ptr->add(addr, current_time);
 }
 
-void Profiler::addSecondaryStatSample(CacheRequestType requestType, AccessModeType type, int msgSize, PrefetchBit pfBit, NodeID id)
-{
-  addSecondaryStatSample(CacheRequestType_to_GenericRequestType(requestType), type, msgSize, pfBit, id);
-}
-
-void Profiler::addSecondaryStatSample(GenericRequestType requestType, AccessModeType type, int msgSize, PrefetchBit pfBit, NodeID id)
-{
-  addL2StatSample(requestType, type, msgSize, pfBit, id);
-}
-
-void Profiler::addL2StatSample(GenericRequestType requestType, AccessModeType type, int msgSize, PrefetchBit pfBit, NodeID id)
-{
-  m_perProcTotalMisses[id]++;
-  if (type == AccessModeType_SupervisorMode) {
-    m_perProcSupervisorMisses[id]++;
-  } else {
-    m_perProcUserMisses[id]++;
-  }
-  m_L2_cache_profiler_ptr->addStatSample(requestType, type, msgSize, pfBit);
-}
-
-void Profiler::addL1DStatSample(const CacheMsg& msg, NodeID id)
-{
-  m_L1D_cache_profiler_ptr->addStatSample(CacheRequestType_to_GenericRequestType(msg.getType()),
-                                          msg.getAccessMode(), msg.getSize(), msg.getPrefetch());
-}
-
-void Profiler::addL1IStatSample(const CacheMsg& msg, NodeID id)
-{
-  m_L1I_cache_profiler_ptr->addStatSample(CacheRequestType_to_GenericRequestType(msg.getType()),
-                                          msg.getAccessMode(), msg.getSize(), msg.getPrefetch());
-}
-
 void Profiler::addAddressTraceSample(const CacheMsg& msg, NodeID id)
 {
   if (msg.getType() != CacheRequestType_IFETCH) {
@@ -870,7 +793,7 @@ void Profiler::addAddressTraceSample(const CacheMsg& msg, NodeID id)
     // Note: The following line should be commented out if you want to
     // use the special profiling that is part of the GS320 protocol
 
-    // NOTE: Unless PROFILE_HOT_LINES or RubyConfig::getProfileAllInstructions() are enabled, nothing will be profiled by the AddressProfiler
+    // NOTE: Unless PROFILE_HOT_LINES is enabled, nothing will be profiled by the AddressProfiler
     m_address_profiler_ptr->addTraceSample(msg.getLineAddress(), msg.getProgramCounter(), msg.getType(), msg.getAccessMode(), id, false);
   }
 }
@@ -1079,30 +1002,6 @@ int64 Profiler::getTotalTransactionsExecuted() const
   }
 }
 
-
-// The following case statement converts CacheRequestTypes to GenericRequestTypes
-// allowing all profiling to be done with a single enum type instead of slow strings
-GenericRequestType Profiler::CacheRequestType_to_GenericRequestType(const CacheRequestType& type) {
-  switch (type) {
-  case CacheRequestType_LD:
-    return GenericRequestType_LD;
-    break;
-  case CacheRequestType_ST:
-    return GenericRequestType_ST;
-    break;
-  case CacheRequestType_ATOMIC:
-    return GenericRequestType_ATOMIC;
-    break;
-  case CacheRequestType_IFETCH:
-    return GenericRequestType_IFETCH;
-    break;
-  case CacheRequestType_NULL:
-    return GenericRequestType_NULL;
-    break;
-  default:
-    ERROR_MSG("Unexpected cache request type");
-  }
-}
 
 void Profiler::rubyWatch(int id){
     //int rn_g1 = 0;//SIMICS_get_register_number(id, "g1");

@@ -58,7 +58,6 @@
 
 #include "mem/ruby/common/Global.hh"
 #include "mem/protocol/GenericMachineType.hh"
-#include "mem/ruby/config/RubyConfig.hh"
 #include "mem/ruby/common/Histogram.hh"
 #include "mem/ruby/common/Consumer.hh"
 #include "mem/protocol/AccessModeType.hh"
@@ -127,9 +126,6 @@ public:
   AddressProfiler* getAddressProfiler() { return m_address_profiler_ptr; }
   AddressProfiler* getInstructionProfiler() { return m_inst_profiler_ptr; }
 
-  void addPrimaryStatSample(const CacheMsg& msg, NodeID id);
-  void addSecondaryStatSample(GenericRequestType requestType, AccessModeType type, int msgSize, PrefetchBit pfBit, NodeID id);
-  void addSecondaryStatSample(CacheRequestType requestType, AccessModeType type, int msgSize, PrefetchBit pfBit, NodeID id);
   void addAddressTraceSample(const CacheMsg& msg, NodeID id);
 
   void profileRequest(const string& requestStr);
@@ -207,12 +203,6 @@ public:
 private:
   //added by SS
   vector<string> m_memory_control_names;
-  // Private Methods
-  void addL2StatSample(GenericRequestType requestType, AccessModeType type, int msgSize, PrefetchBit pfBit, NodeID id);
-  void addL1DStatSample(const CacheMsg& msg, NodeID id);
-  void addL1IStatSample(const CacheMsg& msg, NodeID id);
-
-  GenericRequestType CacheRequestType_to_GenericRequestType(const CacheRequestType& type);
 
   // Private copy constructor and assignment operator
   Profiler(const Profiler& obj);
