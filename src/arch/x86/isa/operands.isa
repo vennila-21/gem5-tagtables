@@ -1,0 +1,187 @@
+// Copyright (c) 2007 The Regents of The University of Michigan
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Gabe Black
+
+// Copyright (c) 2007-2008 The Hewlett-Packard Development Company
+// All rights reserved.
+//
+// Redistribution and use of this software in source and binary forms,
+// with or without modification, are permitted provided that the
+// following conditions are met:
+//
+// The software must be used only for Non-Commercial Use which means any
+// use which is NOT directed to receiving any direct monetary
+// compensation for, or commercial advantage from such use.  Illustrative
+// examples of non-commercial use are academic research, personal study,
+// teaching, education and corporate research & development.
+// Illustrative examples of commercial use are distributing products for
+// commercial advantage and providing services using the software for
+// commercial advantage.
+//
+// If you wish to use this software or functionality therein that may be
+// covered by patents for commercial use, please contact:
+//     Director of Intellectual Property Licensing
+//     Office of Strategy and Technology
+//     Hewlett-Packard Company
+//     1501 Page Mill Road
+//     Palo Alto, California  94304
+//
+// Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.  Redistributions
+// in binary form must reproduce the above copyright notice, this list of
+// conditions and the following disclaimer in the documentation and/or
+// other materials provided with the distribution.  Neither the name of
+// the COPYRIGHT HOLDER(s), HEWLETT-PACKARD COMPANY, nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.  No right of
+// sublicense is granted herewith.  Derivatives of the software and
+// output created using the software may be prepared, but only for
+// Non-Commercial Uses.  Derivatives of the software may be shared with
+// others provided: (i) the others agree to abide by the list of
+// conditions herein which includes the Non-Commercial Use restrictions;
+// and (ii) such Derivatives of the software include the above copyright
+// notice to acknowledge the contribution from this software where
+// applicable, this list of conditions and the disclaimer below.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Gabe Black
+
+def operand_types {{
+    'sb' : ('signed int', 8),
+    'ub' : ('unsigned int', 8),
+    'sw' : ('signed int', 16),
+    'uw' : ('unsigned int', 16),
+    'sdw' : ('signed int', 32),
+    'udw' : ('unsigned int', 32),
+    'sqw' : ('signed int', 64),
+    'uqw' : ('unsigned int', 64),
+    'sf' : ('float', 32),
+    'df' : ('float', 64),
+}};
+
+let {{
+    def foldInt(idx, foldBit, id):
+        return ('IntReg', 'uqw', 'INTREG_FOLDED(%s, %s)' % (idx, foldBit),
+                'IsInteger', id)
+    def intReg(idx, id):
+        return ('IntReg', 'uqw', idx, 'IsInteger', id)
+    def impIntReg(idx, id):
+        return ('IntReg', 'uqw', 'INTREG_IMPLICIT(%s)' % idx, 'IsInteger', id)
+    def floatReg(idx, id):
+        return ('FloatReg', 'df', idx, 'IsFloating', id)
+    def controlReg(idx, id, ctype = 'uqw'):
+        return ('ControlReg', ctype, idx,
+                (None, None, ['IsSerializeAfter',
+                              'IsSerializing',
+                              'IsNonSpeculative']),
+                id)
+}};
+
+def operands {{
+        'SrcReg1':       foldInt('src1', 'foldOBit', 1),
+        'SSrcReg1':      intReg('src1', 1),
+        'SrcReg2':       foldInt('src2', 'foldOBit', 2),
+        'SSrcReg2':      intReg('src2', 1),
+        'Index':         foldInt('index', 'foldABit', 3),
+        'Base':          foldInt('base', 'foldABit', 4),
+        'DestReg':       foldInt('dest', 'foldOBit', 5),
+        'SDestReg':      intReg('dest', 5),
+        'Data':          foldInt('data', 'foldOBit', 6),
+        'ProdLow':       impIntReg(0, 7),
+        'ProdHi':        impIntReg(1, 8),
+        'Quotient':      impIntReg(2, 9),
+        'Remainder':     impIntReg(3, 10),
+        'Divisor':       impIntReg(4, 11),
+        'Rax':           intReg('(INTREG_RAX)', 12),
+        'Rbx':           intReg('(INTREG_RBX)', 13),
+        'Rcx':           intReg('(INTREG_RCX)', 14),
+        'Rdx':           intReg('(INTREG_RDX)', 15),
+        'Rsp':           intReg('(INTREG_RSP)', 16),
+        'Rbp':           intReg('(INTREG_RBP)', 17),
+        'Rsi':           intReg('(INTREG_RSI)', 18),
+        'Rdi':           intReg('(INTREG_RDI)', 19),
+        'FpSrcReg1':     floatReg('src1', 20),
+        'FpSrcReg2':     floatReg('src2', 21),
+        'FpDestReg':     floatReg('dest', 22),
+        'FpData':        floatReg('data', 23),
+        'RIP':           ('NPC', 'uqw', None, (None, None, 'IsControl'), 50),
+        'uIP':           ('UPC', 'uqw', None, (None, None, 'IsControl'), 51),
+        'nuIP':          ('NUPC', 'uqw', None, (None, None, 'IsControl'), 52),
+        # This holds the condition code portion of the flag register. The
+        # nccFlagBits version holds the rest.
+        'ccFlagBits':    intReg('INTREG_PSEUDO(0)', 60),
+        # These register should needs to be more protected so that later
+        # instructions don't map their indexes with an old value.
+        'nccFlagBits':   controlReg('MISCREG_RFLAGS', 61),
+        'TOP':           controlReg('MISCREG_X87_TOP', 62, ctype='ub'),
+        # The segment base as used by memory instructions.
+        'SegBase':       controlReg('MISCREG_SEG_EFF_BASE(segment)', 70),
+
+        # Operands to get and set registers indexed by the operands of the
+        # original instruction.
+        'ControlDest':   controlReg('MISCREG_CR(dest)', 100),
+        'ControlSrc1':   controlReg('MISCREG_CR(src1)', 101),
+        'DebugDest':     controlReg('MISCREG_DR(dest)', 102),
+        'DebugSrc1':     controlReg('MISCREG_DR(src1)', 103),
+        'SegBaseDest':   controlReg('MISCREG_SEG_BASE(dest)', 104),
+        'SegBaseSrc1':   controlReg('MISCREG_SEG_BASE(src1)', 105),
+        'SegLimitDest':  controlReg('MISCREG_SEG_LIMIT(dest)', 106),
+        'SegLimitSrc1':  controlReg('MISCREG_SEG_LIMIT(src1)', 107),
+        'SegSelDest':    controlReg('MISCREG_SEG_SEL(dest)', 108),
+        'SegSelSrc1':    controlReg('MISCREG_SEG_SEL(src1)', 109),
+        'SegAttrDest':   controlReg('MISCREG_SEG_ATTR(dest)', 110),
+        'SegAttrSrc1':   controlReg('MISCREG_SEG_ATTR(src1)', 111),
+
+        # Operands to access specific control registers directly.
+        'EferOp':        controlReg('MISCREG_EFER', 200),
+        'CR4Op':         controlReg('MISCREG_CR4', 201),
+        'DR7Op':         controlReg('MISCREG_DR7', 202),
+        'LDTRBase':      controlReg('MISCREG_TSL_BASE', 203),
+        'LDTRLimit':     controlReg('MISCREG_TSL_LIMIT', 204),
+        'LDTRSel':       controlReg('MISCREG_TSL', 205),
+        'GDTRBase':      controlReg('MISCREG_TSG_BASE', 206),
+        'GDTRLimit':     controlReg('MISCREG_TSG_LIMIT', 207),
+        'CSBase':        controlReg('MISCREG_CS_EFF_BASE', 208),
+        'CSAttr':        controlReg('MISCREG_CS_ATTR', 209),
+        'MiscRegDest':   controlReg('dest', 210),
+        'MiscRegSrc1':   controlReg('src1', 211),
+        'TscOp':         controlReg('MISCREG_TSC', 212),
+        'M5Reg':         controlReg('MISCREG_M5_REG', 213),
+        'Mem':           ('Mem', 'uqw', None, \
+                          ('IsMemRef', 'IsLoad', 'IsStore'), 300)
+}};
