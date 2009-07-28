@@ -1,0 +1,152 @@
+// -*- mode:c++ -*-
+
+// Copyright (c) 2007 MIPS Technologies, Inc.
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Korey Sewell
+//          Jaidev Patwardhan
+
+def operand_types {{
+    'sb' : ('signed int', 8),
+    'ub' : ('unsigned int', 8),
+    'sh' : ('signed int', 16),
+    'uh' : ('unsigned int', 16),
+    'sw' : ('signed int', 32),
+    'uw' : ('unsigned int', 32),
+    'sd' : ('signed int', 64),
+    'ud' : ('unsigned int', 64),
+    'sf' : ('float', 32),
+    'df' : ('float', 64),
+}};
+
+def operands {{
+    #General Purpose Integer Reg Operands
+    'Rd': ('IntReg', 'uw', 'RD', 'IsInteger', 1),
+    'Rs': ('IntReg', 'uw', 'RS', 'IsInteger', 2),
+    'Rt': ('IntReg', 'uw', 'RT', 'IsInteger', 3),
+
+    #Immediate Value operand
+    'IntImm': ('IntReg', 'uw', 'INTIMM', 'IsInteger', 3),
+
+    #Operands used for Link or Syscall Insts
+    'R31': ('IntReg', 'uw','31','IsInteger', 4),
+    'R2':  ('IntReg', 'uw','2', 'IsInteger', 5),
+
+    #Special Integer Reg operands
+    'LO0':  ('IntReg', 'uw','MipsISA::LO', 'IsInteger', 6),
+    'HI0':  ('IntReg', 'uw','MipsISA::HI', 'IsInteger', 7),
+
+    #Bitfield-dependent HI/LO Register Access
+    'LO_RD_SEL': ('IntReg','uw','MipsISA::DSPLo0 + ACDST*3', None, 6),
+    'HI_RD_SEL': ('IntReg','uw','MipsISA::DSPHi0 + ACDST*3', None, 7),
+    'LO_RS_SEL': ('IntReg','uw','MipsISA::DSPLo0 + ACSRC*3', None, 6),
+    'HI_RS_SEL': ('IntReg','uw','MipsISA::DSPHi0 + ACSRC*3', None, 7),
+
+    #DSP Special Purpose Integer Operands
+    'DSPControl': ('IntReg', 'uw', 'MipsISA::DSPControl', None, 8),
+    'DSPLo0': ('IntReg', 'uw', 'MipsISA::LO', None, 1),
+    'DSPHi0': ('IntReg', 'uw', 'MipsISA::HI', None, 1),
+    'DSPACX0': ('IntReg', 'uw', 'MipsISA::DSPACX0', None, 1),
+    'DSPLo1': ('IntReg', 'uw', 'MipsISA::DSPLo1', None, 1),
+    'DSPHi1': ('IntReg', 'uw', 'MipsISA::DSPHi1', None, 1),
+    'DSPACX1': ('IntReg', 'uw', 'MipsISA::DSPACX1', None, 1),
+    'DSPLo2': ('IntReg', 'uw', 'MipsISA::DSPLo2', None, 1),
+    'DSPHi2': ('IntReg', 'uw', 'MipsISA::DSPHi2', None, 1),
+    'DSPACX2': ('IntReg', 'uw', 'MipsISA::DSPACX2', None, 1),
+    'DSPLo3': ('IntReg', 'uw', 'MipsISA::DSPLo3', None, 1),
+    'DSPHi3': ('IntReg', 'uw', 'MipsISA::DSPHi3', None, 1),
+    'DSPACX3': ('IntReg', 'uw', 'MipsISA::DSPACX3', None, 1),
+
+    #Floating Point Reg Operands
+    'Fd': ('FloatReg', 'sf', 'FD', 'IsFloating', 1),
+    'Fs': ('FloatReg', 'sf', 'FS', 'IsFloating', 2),
+    'Ft': ('FloatReg', 'sf', 'FT', 'IsFloating', 3),
+    'Fr': ('FloatReg', 'sf', 'FR', 'IsFloating', 3),
+
+    #Special Purpose Floating Point Control Reg Operands
+    'FIR':  ('FloatReg', 'uw', 'MipsISA::FIR', 'IsFloating', 1),
+    'FCCR': ('FloatReg', 'uw', 'MipsISA::FCCR', 'IsFloating', 2),
+    'FEXR': ('FloatReg', 'uw', 'MipsISA::FEXR', 'IsFloating', 3),
+    'FENR': ('FloatReg', 'uw', 'MipsISA::FENR', 'IsFloating', 3),
+    'FCSR': ('FloatReg', 'uw', 'MipsISA::FCSR', 'IsFloating', 3),
+
+    #Operands For Paired Singles FP Operations
+    'Fd1': ('FloatReg', 'sf', 'FD', 'IsFloating', 4),
+    'Fd2': ('FloatReg', 'sf', 'FD+1', 'IsFloating', 4),
+    'Fs1': ('FloatReg', 'sf', 'FS', 'IsFloating', 5),
+    'Fs2': ('FloatReg', 'sf', 'FS+1', 'IsFloating', 5),
+    'Ft1': ('FloatReg', 'sf', 'FT', 'IsFloating', 6),
+    'Ft2': ('FloatReg', 'sf', 'FT+1', 'IsFloating', 6),
+    'Fr1': ('FloatReg', 'sf', 'FR', 'IsFloating', 7),
+    'Fr2': ('FloatReg', 'sf', 'FR+1', 'IsFloating', 7),
+
+    #Status Control Reg
+    'Status': ('ControlReg', 'uw', 'MipsISA::Status', None, 1),
+
+    #LL Flag
+    'LLFlag': ('ControlReg', 'uw', 'MipsISA::LLFlag', None, 1),
+
+    # Index Register
+    'Index':('ControlReg','uw','MipsISA::Index',None,1),
+
+
+    'CP0_RD_SEL': ('ControlReg', 'uw', '(RD << 3 | SEL)', None, 1),
+
+    #MT Control Regs
+    'MVPConf0': ('ControlReg', 'uw', 'MipsISA::MVPConf0', None, 1),
+    'MVPControl': ('ControlReg', 'uw', 'MipsISA::MVPControl', None, 1),
+    'TCBind': ('ControlReg', 'uw', 'MipsISA::TCBind', None, 1),
+    'TCStatus': ('ControlReg', 'uw', 'MipsISA::TCStatus', None, 1),
+    'TCRestart': ('ControlReg', 'uw', 'MipsISA::TCRestart', None, 1),
+    'VPEConf0': ('ControlReg', 'uw', 'MipsISA::VPEConf0', None, 1),
+    'VPEControl': ('ControlReg', 'uw', 'MipsISA::VPEControl', None, 1),
+    'YQMask': ('ControlReg', 'uw', 'MipsISA::YQMask', None, 1),
+
+    #CP0 Control Regs
+    'EntryHi': ('ControlReg','uw', 'MipsISA::EntryHi',None,1),
+    'EntryLo0': ('ControlReg','uw', 'MipsISA::EntryLo0',None,1),
+    'EntryLo1': ('ControlReg','uw', 'MipsISA::EntryLo1',None,1),
+    'PageMask': ('ControlReg','uw', 'MipsISA::PageMask',None,1),
+    'Random': ('ControlReg','uw', 'MipsISA::CP0_Random',None,1),
+    'ErrorEPC': ('ControlReg','uw', 'MipsISA::ErrorEPC',None,1),
+    'EPC': ('ControlReg','uw', 'MipsISA::EPC',None,1),
+    'DEPC': ('ControlReg','uw', 'MipsISA::DEPC',None,1),
+    'SRSCtl': ('ControlReg','uw', 'MipsISA::SRSCtl',None,1),
+    'Config': ('ControlReg','uw', 'MipsISA::Config',None,1),
+    'Config3': ('ControlReg','uw', 'MipsISA::Config3',None,1),
+    'Config1': ('ControlReg','uw', 'MipsISA::Config1',None,1),
+    'Config2': ('ControlReg','uw', 'MipsISA::Config2',None,1),
+    'PageGrain': ('ControlReg','uw', 'MipsISA::PageGrain',None,1),
+    'Debug': ('ControlReg','uw', 'MipsISA::Debug',None,1),
+    'Cause': ('ControlReg','uw', 'MipsISA::Cause',None,1),
+
+    #Memory Operand
+    'Mem': ('Mem', 'uw', None, ('IsMemRef', 'IsLoad', 'IsStore'), 4),
+
+    #Program Counter Operands
+    'NPC': ('NPC', 'uw', None, 'IsControl', 4),
+    'NNPC':('NNPC', 'uw', None, 'IsControl', 4)
+}};
