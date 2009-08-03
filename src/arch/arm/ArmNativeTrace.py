@@ -1,4 +1,4 @@
-# Copyright (c) 2006 The Regents of The University of Michigan
+# Copyright (c) 2009 The Regents of The University of Michigan
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -24,10 +24,14 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Korey Sewell
+# Authors: Gabe Black
 
-process1 = LiveProcess(cmd = 'hello', executable = binpath('hello'))
-process2 = LiveProcess(cmd = 'hello', executable = binpath('hello'))
+from m5.SimObject import SimObject
+from m5.params import *
+from NativeTrace import NativeTrace
 
-root.system.cpu.workload = [process1, process2]
-root.system.cpu.numThreads = 2
+class ArmNativeTrace(NativeTrace):
+    type = 'ArmNativeTrace'
+    cxx_class = 'Trace::ArmNativeTrace'
+    stop_on_pc_error = Param.Bool(True,
+            "Stop M5 if it and statetrace's pcs are different")
