@@ -1,0 +1,91 @@
+// -*- mode:c++ -*-
+
+// Copyright (c) 2007-2008 The Florida State University
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Stephen Hines
+
+def operand_types {{
+    'sb' : ('signed int', 8),
+    'ub' : ('unsigned int', 8),
+    'sh' : ('signed int', 16),
+    'uh' : ('unsigned int', 16),
+    'sw' : ('signed int', 32),
+    'uw' : ('unsigned int', 32),
+    'ud' : ('unsigned int', 64),
+    'sf' : ('float', 32),
+    'df' : ('float', 64)
+}};
+
+let {{
+    maybePCRead = '''
+        ((%(reg_idx)s == PCReg) ? (xc->readPC() + 8) :
+         xc->%(func)s(this, %(op_idx)s))
+    '''
+    maybePCWrite = '''
+        ((%(reg_idx)s == PCReg) ? xc->setNextPC(%(final_val)s) :
+         xc->%(func)s(this, %(op_idx)s, %(final_val)s))
+    '''
+}};
+
+def operands {{
+    #General Purpose Integer Reg Operands
+    'Rd': ('IntReg', 'uw', 'RD', 'IsInteger', 1, maybePCRead, maybePCWrite),
+    'Rm': ('IntReg', 'uw', 'RM', 'IsInteger', 2, maybePCRead, maybePCWrite),
+    'Rs': ('IntReg', 'uw', 'RS', 'IsInteger', 3, maybePCRead, maybePCWrite),
+    'Rn': ('IntReg', 'uw', 'RN', 'IsInteger', 4, maybePCRead, maybePCWrite),
+    'R7': ('IntReg', 'uw', '7', 'IsInteger', 5),
+
+    #Destination register for load/store double instructions
+    'Rdo': ('IntReg', 'uw', '(RD & ~1)', 'IsInteger', 4, maybePCRead, maybePCWrite),
+    'Rde': ('IntReg', 'uw', '(RD | 1)', 'IsInteger', 5, maybePCRead, maybePCWrite),
+
+    'Raddr': ('IntReg', 'uw', '17', 'IsInteger', 6),
+    'Rhi': ('IntReg', 'uw', '18', 'IsInteger', 7),
+    'Rlo': ('IntReg', 'uw', '19', 'IsInteger', 8),
+    'LR': ('IntReg', 'uw', '14', 'IsInteger', 9),
+
+    #Register fields for microops
+    'Ra' : ('IntReg', 'uw', 'ura', 'IsInteger', 11, maybePCRead, maybePCWrite),
+    'Rb' : ('IntReg', 'uw', 'urb', 'IsInteger', 12, maybePCRead, maybePCWrite),
+
+    #General Purpose Floating Point Reg Operands
+    'Fd': ('FloatReg', 'df', 'FD', 'IsFloating', 20),
+    'Fn': ('FloatReg', 'df', 'FN', 'IsFloating', 21),
+    'Fm': ('FloatReg', 'df', 'FM', 'IsFloating', 22),
+
+    #Memory Operand
+    'Mem': ('Mem', 'uw', None, ('IsMemRef', 'IsLoad', 'IsStore'), 30),
+
+    'Cpsr': ('ControlReg', 'uw', 'MISCREG_CPSR', 'IsInteger', 40),
+    'Fpsr': ('ControlReg', 'uw', 'MISCREG_FPSR', 'IsInteger', 41),
+    'Fpsid': ('ControlReg', 'uw', 'MISCREG_FPSID', 'IsInteger', 42),
+    'Fpscr': ('ControlReg', 'uw', 'MISCREG_FPSCR', 'IsInteger', 43),
+    'Fpexc': ('ControlReg', 'uw', 'MISCREG_FPEXC', 'IsInteger', 44),
+    'NPC': ('NPC', 'uw', None, (None, None, 'IsControl'), 45),
+    'NNPC': ('NNPC', 'uw', None, (None, None, 'IsControl'), 46)
+
+}};
