@@ -820,8 +820,8 @@
                     Rdx = result.rdx;
                     }});
                 0x3: Inst::BT(Ev,Gv);
-                0x4: shld_Ev_Gv_Ib();
-                0x5: shld_Ev_Gv_rCl();
+                0x4: Inst::SHLD(Ev,Gv,Ib);
+                0x5: Inst::SHLD(Ev,Gv);
                 0x6: xbts_and_cmpxchg();
                 0x7: ibts_and_cmpxchg();
             }
@@ -831,7 +831,7 @@
                 0x2: rsm_smm();
                 0x3: Inst::BTS(Ev,Gv);
                 0x4: Inst::SHRD(Ev,Gv,Ib);
-                0x5: shrd_Ev_Gv_rCl();
+                0x5: Inst::SHRD(Ev,Gv);
                 //0x6: group16();
                 0x6: decode MODRM_REG {
                     0x0: fxsave();
@@ -898,7 +898,8 @@
                 0x1: Inst::XADD(Ev,Gv);
                 //0x7: group9();
                 0x7: decode MODRM_REG {
-                    0x1: cmpxchg_Mq();
+                    //Also CMPXCHG16B
+                    0x1: Inst::CMPXCHG8B(Mdp);
                     0x6: decode LEGACY_OP {
                         0x1: vmclear_Mq();
                         default: decode LEGACY_REP {
@@ -1067,7 +1068,7 @@
                 }
                 default: Inst::UD2();
             }
-            0x1E: decode OPCODE_OP_BOTTOM3 {
+            0x1E: decode LEGACY_DECODEVAL {
                 // no prefix
                 0x0: decode OPCODE_OP_BOTTOM3 {
                     0x1: psllw_Pq_Qq();
