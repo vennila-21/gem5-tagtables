@@ -1,0 +1,16 @@
+M5 Simulator System
+
+Copyright (c) 2001-2008
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Jul  6 2009 11:02:48
+M5 revision d3635cac686a 6289 default ruby_refs.diff qtip tip
+M5 started Jul  6 2009 11:10:46
+M5 executing on maize
+command line: build/ALPHA_FS/m5.fast -d build/ALPHA_FS/tests/fast/quick/10.linux-boot/alpha/linux/tsunami-simple-timing -re tests/run.py build/ALPHA_FS/tests/fast/quick/10.linux-boot/alpha/linux/tsunami-simple-timing
+Global frequency set at 1000000000000 ticks per second
+info: kernel located at: /dist/m5/system/binaries/vmlinux
+info: Entering event queue @ 0.  Starting simulation...
+Exiting @ tick 1930164593000 because m5_exit instruction encountered
