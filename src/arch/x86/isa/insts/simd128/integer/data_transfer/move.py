@@ -54,11 +54,40 @@
 # Authors: Gabe Black
 
 microcode = '''
-# MOVD
-# MOVQ
+def macroop MOVQ_XMM_XMM {
+    movfp xmml, xmmlm
+    lfpimm xmmh, 0
+};
+
+def macroop MOVQ_XMM_M {
+    ldfp xmml, seg, sib, disp, dataSize=8
+    lfpimm xmmh, 0
+};
+
+def macroop MOVQ_XMM_P {
+    rdip t7
+    ldfp xmml, seg, riprel, disp, dataSize=8
+    lfpimm xmmh, 0
+};
+
+def macroop MOVQ_M_XMM {
+    stfp xmml, seg, sib, disp, dataSize=8
+};
+
+def macroop MOVQ_P_XMM {
+    rdip t7
+    stfp xmml, seg, riprel, disp, dataSize=8
+};
+
+def macroop MOVDQ2Q_MMX_XMM {
+    movfp mmx, xmmlm, dataSize=8
+};
+
+def macroop MOVQ2DQ_XMM_MMX {
+    movfp xmml, mmxm, dataSize=8
+    lfpimm xmmh, 0
+};
+'''
 # MOVDQA
 # MOVDQU
-# MOVDQ2Q
-# MOVQ2DQ
 # LDDQU
-'''
