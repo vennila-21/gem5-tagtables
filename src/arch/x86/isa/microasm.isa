@@ -112,6 +112,8 @@ let {{
         "regm" : regIdx("env.regm"),
         "xmmlm" : regIdx("FLOATREG_XMM_LOW(env.regm)"),
         "xmmhm" : regIdx("FLOATREG_XMM_HIGH(env.regm)"),
+        "mmx" : regIdx("FLOATREG_MMX(env.reg)"),
+        "mmxm" : regIdx("FLOATREG_MMX(env.regm)"),
         "imm" : "adjustedImm",
         "disp" : "adjustedDisp",
         "seg" : regIdx("env.seg"),
@@ -217,6 +219,8 @@ let {{
         return regIdx("NUM_FLOATREGS + (((%s) + 8) %% 8)" % index)
 
     assembler.symbols["st"] = stack_index
+    assembler.symbols["sti"] = stack_index("env.reg")
+    assembler.symbols["stim"] = stack_index("env.regm")
 
     macroopDict = assembler.assemble(microcode)
 

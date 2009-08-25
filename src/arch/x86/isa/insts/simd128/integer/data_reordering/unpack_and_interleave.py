@@ -54,12 +54,150 @@
 # Authors: Gabe Black
 
 microcode = '''
-# PUNPCKHBW
-# PUNPCKHWD
-# PUNPCKHDQ
-# PUNPCKHQDQ
-# PUNPCKLBW
-# PUNPCKLWD
-# PUNPCKLDQ
-# PUNPCKLQDQ
+def macroop PUNPCKLBW_XMM_XMM {
+    unpack xmmh, xmml, xmmlm, ext=1, size=1
+    unpack xmml, xmml, xmmlm, ext=0, size=1
+};
+
+def macroop PUNPCKLBW_XMM_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    unpack xmmh, xmml, ufp1, ext=1, size=1
+    unpack xmml, xmml, ufp1, ext=0, size=1
+};
+
+def macroop PUNPCKLBW_XMM_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    unpack xmmh, xmml, ufp1, ext=1, size=1
+    unpack xmml, xmml, ufp1, ext=0, size=1
+};
+
+def macroop PUNPCKLWD_XMM_XMM {
+    unpack xmmh, xmml, xmmlm, ext=1, size=2
+    unpack xmml, xmml, xmmlm, ext=0, size=2
+};
+
+def macroop PUNPCKLWD_XMM_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    unpack xmmh, xmml, ufp1, ext=1, size=2
+    unpack xmml, xmml, ufp1, ext=0, size=2
+};
+
+def macroop PUNPCKLWD_XMM_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    unpack xmmh, xmml, ufp1, ext=1, size=2
+    unpack xmml, xmml, ufp1, ext=0, size=2
+};
+
+def macroop PUNPCKLDQ_XMM_XMM {
+    unpack xmmh, xmml, xmmlm, ext=1, size=4
+    unpack xmml, xmml, xmmlm, ext=0, size=4
+};
+
+def macroop PUNPCKLDQ_XMM_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    unpack xmmh, xmml, ufp1, ext=1, size=4
+    unpack xmml, xmml, ufp1, ext=0, size=4
+};
+
+def macroop PUNPCKLDQ_XMM_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    unpack xmmh, xmml, ufp1, ext=1, size=4
+    unpack xmml, xmml, ufp1, ext=0, size=4
+};
+
+def macroop PUNPCKHBW_XMM_XMM {
+    unpack xmml, xmmh, xmmhm, ext=0, size=1
+    unpack xmmh, xmmh, xmmhm, ext=1, size=1
+};
+
+def macroop PUNPCKHBW_XMM_M {
+    lea t1, seg, sib, disp, dataSize=asz
+    ldfp ufp1, seg, [1, t0, t1], 8, dataSize=8
+    unpack xmml, xmmh, ufp1, ext=0, size=1
+    unpack xmmh, xmmh, ufp1, ext=1, size=1
+};
+
+def macroop PUNPCKHBW_XMM_P {
+    rdip t7
+    lea t1, seg, riprel, disp, dataSize=asz
+    ldfp ufp1, seg, [1, t0, t1], 8, dataSize=8
+    unpack xmml, xmmh, ufp1, ext=0, size=1
+    unpack xmmh, xmmh, ufp1, ext=1, size=1
+};
+
+def macroop PUNPCKHWD_XMM_XMM {
+    unpack xmml, xmmh, xmmhm, ext=0, size=2
+    unpack xmmh, xmmh, xmmhm, ext=1, size=2
+};
+
+def macroop PUNPCKHWD_XMM_M {
+    lea t1, seg, sib, disp, dataSize=asz
+    ldfp ufp1, seg, [1, t0, t1], 8, dataSize=8
+    unpack xmml, xmmh, ufp1, ext=0, size=2
+    unpack xmmh, xmmh, ufp1, ext=1, size=2
+};
+
+def macroop PUNPCKHWD_XMM_P {
+    rdip t7
+    lea t1, seg, riprel, disp, dataSize=asz
+    ldfp ufp1, seg, [1, t0, t1], 8, dataSize=8
+    unpack xmml, xmmh, ufp1, ext=0, size=2
+    unpack xmmh, xmmh, ufp1, ext=1, size=2
+};
+
+def macroop PUNPCKHDQ_XMM_XMM {
+    unpack xmml, xmmh, xmmhm, ext=0, size=4
+    unpack xmmh, xmmh, xmmhm, ext=1, size=4
+};
+
+def macroop PUNPCKHDQ_XMM_M {
+    lea t1, seg, sib, disp, dataSize=asz
+    ldfp ufp1, seg, [1, t0, t1], 8, dataSize=8
+    unpack xmml, xmmh, ufp1, ext=0, size=4
+    unpack xmmh, xmmh, ufp1, ext=1, size=4
+};
+
+def macroop PUNPCKHDQ_XMM_P {
+    rdip t7
+    lea t1, seg, riprel, disp, dataSize=asz
+    ldfp ufp1, seg, [1, t0, t1], 8, dataSize=8
+    unpack xmml, xmmh, ufp1, ext=0, size=4
+    unpack xmmh, xmmh, ufp1, ext=1, size=4
+};
+
+def macroop PUNPCKHQDQ_XMM_XMM {
+    movfp xmml, xmmh
+    movfp xmmh, xmmhm
+};
+
+def macroop PUNPCKHQDQ_XMM_M {
+    lea t1, seg, sib, disp, dataSize=asz
+    ldfp ufp1, seg, [1, t0, t1], 8, dataSize=8
+    movfp xmml, xmmh
+    movfp xmmh, ufp1
+};
+
+def macroop PUNPCKHQDQ_XMM_P {
+    rdip t7
+    lea t1, seg, riprel, disp, dataSize=asz
+    ldfp ufp1, seg, riprel, 8, dataSize=8
+    movfp xmml, xmmh
+    movfp xmmh, ufp1
+};
+
+def macroop PUNPCKLQDQ_XMM_XMM {
+    movfp xmmh, xmmlm
+};
+
+def macroop PUNPCKLQDQ_XMM_M {
+    ldfp xmmh, seg, sib, disp, dataSize=8
+};
+
+def macroop PUNPCKLQDQ_XMM_P {
+    rdip t7
+    ldfp xmmh, seg, riprel, disp, dataSize=8
+};
 '''

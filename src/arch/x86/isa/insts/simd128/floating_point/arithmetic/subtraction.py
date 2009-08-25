@@ -54,22 +54,73 @@
 # Authors: Gabe Black
 
 microcode = '''
-# SUBPS
-# SUBPD
-# SUBSS
-
-def macroop SUBSD_R_R {
-    subfp xmml, xmml, xmmlm
+def macroop SUBSS_XMM_XMM {
+    msubf xmml, xmml, xmmlm, size=4, ext=1
 };
 
-def macroop SUBSD_R_M {
-    ldfp ufp1, seg, sib, disp
-    subfp xmml, xmml, ufp1
+def macroop SUBSS_XMM_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    msubf xmml, xmml, ufp1, size=4, ext=1
 };
 
-def macroop SUBSD_R_P {
+def macroop SUBSS_XMM_P {
     rdip t7
-    ldfp ufp1, seg, riprel, disp
-    subfp xmml, xmml, ufp1
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    msubf xmml, xmml, ufp1, size=4, ext=1
+};
+
+def macroop SUBSD_XMM_XMM {
+    msubf xmml, xmml, xmmlm, size=8, ext=1
+};
+
+def macroop SUBSD_XMM_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    msubf xmml, xmml, ufp1, size=8, ext=1
+};
+
+def macroop SUBSD_XMM_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    msubf xmml, xmml, ufp1, size=8, ext=1
+};
+
+def macroop SUBPS_XMM_XMM {
+    msubf xmml, xmml, xmmlm, size=4, ext=0
+    msubf xmmh, xmmh, xmmhm, size=4, ext=0
+};
+
+def macroop SUBPS_XMM_M {
+    ldfp ufp1, seg, sib, "DISPLACEMENT", dataSize=8
+    ldfp ufp2, seg, sib, "DISPLACEMENT + 8", dataSize=8
+    msubf xmml, xmml, ufp1, size=4, ext=0
+    msubf xmmh, xmmh, ufp2, size=4, ext=0
+};
+
+def macroop SUBPS_XMM_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, "DISPLACEMENT", dataSize=8
+    ldfp ufp2, seg, riprel, "DISPLACEMENT + 8", dataSize=8
+    msubf xmml, xmml, ufp1, size=4, ext=0
+    msubf xmmh, xmmh, ufp2, size=4, ext=0
+};
+
+def macroop SUBPD_XMM_XMM {
+    msubf xmml, xmml, xmmlm, size=8, ext=0
+    msubf xmmh, xmmh, xmmhm, size=8, ext=0
+};
+
+def macroop SUBPD_XMM_M {
+    ldfp ufp1, seg, sib, "DISPLACEMENT", dataSize=8
+    ldfp ufp2, seg, sib, "DISPLACEMENT + 8", dataSize=8
+    msubf xmml, xmml, ufp1, size=8, ext=0
+    msubf xmmh, xmmh, ufp2, size=8, ext=0
+};
+
+def macroop SUBPD_XMM_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, "DISPLACEMENT", dataSize=8
+    ldfp ufp2, seg, riprel, "DISPLACEMENT + 8", dataSize=8
+    msubf xmml, xmml, ufp1, size=8, ext=0
+    msubf xmmh, xmmh, ufp2, size=8, ext=0
 };
 '''

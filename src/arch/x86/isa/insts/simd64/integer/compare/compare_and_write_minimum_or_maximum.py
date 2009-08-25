@@ -54,8 +54,63 @@
 # Authors: Gabe Black
 
 microcode = '''
-# PMAXUB
-# PMINUB
-# PMAXSW
-# PMINSW
+def macroop PMINUB_MMX_MMX {
+    mmini mmx, mmx, mmxm, size=1, ext=0
+};
+
+def macroop PMINUB_MMX_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    mmini mmx, mmx, ufp1, size=1, ext=0
+};
+
+def macroop PMINUB_MMX_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    mmini mmx, mmx, ufp1, size=1, ext=0
+};
+
+def macroop PMINSW_MMX_MMX {
+    mmini mmx, mmx, mmxm, size=2, ext=2
+};
+
+def macroop PMINSW_MMX_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    mmini mmx, mmx, ufp1, size=2, ext=2
+};
+
+def macroop PMINSW_MMX_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    mmini mmx, mmx, ufp1, size=2, ext=2
+};
+
+def macroop PMAXUB_MMX_MMX {
+    mmaxi mmx, mmx, mmxm, size=1, ext=0
+};
+
+def macroop PMAXUB_MMX_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    mmaxi mmx, mmx, ufp1, size=1, ext=0
+};
+
+def macroop PMAXUB_MMX_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    mmaxi mmx, mmx, ufp1, size=1, ext=0
+};
+
+def macroop PMAXSW_MMX_MMX {
+    mmaxi mmx, mmx, mmxm, size=2, ext=2
+};
+
+def macroop PMAXSW_MMX_M {
+    ldfp ufp1, seg, sib, disp, dataSize=8
+    mmaxi mmx, mmx, ufp1, size=2, ext=2
+};
+
+def macroop PMAXSW_MMX_P {
+    rdip t7
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    mmaxi mmx, mmx, ufp1, size=2, ext=2
+};
 '''
