@@ -26,6 +26,7 @@ num_memories = 1
 memory_size_mb = 1024
 num_dma = 1
 
+#default protocol 
 protocol = "MESI_CMP_directory"
 
 # check for overrides
@@ -40,6 +41,13 @@ for i in 0..$*.size-1 do
   elsif $*[i] == "-p"
     num_cores = $*[i+1].to_i
     i = i+1
+  elsif $*[i] == "-R"
+    if $*[i+1] == "rand"
+      RubySystem.random_seed = "rand"
+    else
+      RubySystem.random_seed = $*[i+1].to_i
+    end
+    i = i+ 1
   elsif $*[i] == "-s"
     memory_size_mb = $*[i+1].to_i
     i = i + 1
@@ -49,7 +57,7 @@ end
 net_ports = Array.new
 iface_ports = Array.new
 
-#assert(protocol == "MESI_CMP_directory", __FILE__+" cannot be used with protocol "+protocol);
+assert((protocol == "MESI_CMP_directory" or protocol == "MOESI_CMP_directory"), __FILE__+" cannot be used with protocol "+protocol);
 
 require protocol+".rb"
 
@@ -64,9 +72,7 @@ num_cores.times { |n|
                                                            icache, dcache,
                                                            sequencer,
                                                            num_l2_banks)
-  end
-
-  if protocol == "MESI_CMP_directory"
+  elsif protocol == "MESI_CMP_directory"
     net_ports << MESI_CMP_directory_L1CacheController.new("L1CacheController_"+n.to_s,
                                                            "L1Cache",
                                                            icache, dcache,
@@ -80,15 +86,14 @@ num_l2_banks.times { |n|
     net_ports << MOESI_CMP_directory_L2CacheController.new("L2CacheController_"+n.to_s,
                                                            "L2Cache",
                                                            cache)
-  end
-
-  if protocol == "MESI_CMP_directory"
+  elsif protocol == "MESI_CMP_directory"
     net_ports << MESI_CMP_directory_L2CacheController.new("L2CacheController_"+n.to_s,
                                                            "L2Cache",
                                                            cache)
   end
 
-
+  net_ports.last.request_latency = l2_cache_latency + 2
+  net_ports.last.response_latency = l2_cache_latency + 2
 }
 num_memories.times { |n|
   directory = DirectoryMemory.new("DirectoryMemory_"+n.to_s, memory_size_mb/num_memories)
@@ -98,9 +103,7 @@ num_memories.times { |n|
                                                              "Directory",
                                                              directory, 
                                                              memory_control)
-  end
-
-  if protocol == "MESI_CMP_directory"
+  elsif protocol == "MESI_CMP_directory"
     net_ports << MESI_CMP_directory_DirectoryController.new("DirectoryController_"+n.to_s,
                                                              "Directory",
                                                              directory,
@@ -115,9 +118,7 @@ num_dma.times { |n|
     net_ports << MOESI_CMP_directory_DMAController.new("DMAController_"+n.to_s,
                                                        "DMA",
                                                        dma_sequencer)
-  end
-
-  if protocol == "MESI_CMP_directory"
+  elsif protocol == "MESI_CMP_directory"
     net_ports << MESI_CMP_directory_DMAController.new("DMAController_"+n.to_s,
                                                        "DMA",
                                                        dma_sequencer)

@@ -9,7 +9,7 @@ class NetPort < LibRubyObject
 
   # buffer_size limits the size of all other buffers connecting to
   # SLICC Controllers.  When 0, infinite buffering is used.
-  default_param :buffer_size, Integer, 0
+  default_param :buffer_size, Integer, 32
 
   # added by SS for TBE
   default_param :number_of_TBEs, Integer, 256
@@ -36,19 +36,19 @@ class Debug < LibRubyObject
   #   1. change protocol_trace = true
   #   2. enable debug in the Ruby Makefile
   #   3. set start_time = 1
-  default_param :protocol_trace, Boolean, true
+  default_param :protocol_trace, Boolean, false
 
   # a string for filtering debugging output (for all g_debug vars see Debug.h)
-  default_param :filter_string, String, "none"
+  default_param :filter_string, String, ""
 
   # filters debugging messages based on priority (low, med, high)
-  default_param :verbosity_string, String, "none"
+  default_param :verbosity_string, String, ""
 
   # filters debugging messages based on a ruby time
   default_param :start_time, Integer, 1
   
   # sends debugging messages to a output filename
-  default_param :output_filename, String, "debug_ss"
+  default_param :output_filename, String, ""
 end
 
 class Topology < LibRubyObject
@@ -163,48 +163,9 @@ class MOESI_CMP_directory_DirectoryController < DirectoryController
 end
 
 class MOESI_CMP_directory_DMAController < DMAController
-  default_param :request_latency, Integer, 6
-  default_param :response_latency, Integer, 6
+  default_param :request_latency, Integer, 14
+  default_param :response_latency, Integer, 14
 end
-
-class RubySystem
-
-  # Random seed used by the simulation. If set to "rand", the seed
-  # will be set to the current wall clock at libruby
-  # initialization. Otherwise, set this to an integer.
-  default_param :random_seed, Object, 1234 #"rand"
-
-  # When set to true, the simulation will insert random delays on
-  # message enqueue times.  Note that even if this is set to false,
-  # you can still have a non-deterministic simulation if random seed
-  # is set to "rand".  This is because the Ruby swtiches use random
-  # link priority elevation
-  default_param :randomization, Boolean, false
-
-  # tech_nm is the device size used to calculate latency and area
-  # information about system components
-  default_param :tech_nm, Integer, 45
-
-  # default frequency for the system
-  default_param :freq_mhz, Integer, 3000
-
-  # the default cache block size in the system
-  # libruby does not currently support different block sizes
-  # among different caches
-  # Must be a power of two
-  default_param :block_size_bytes, Integer, 64
-
-  # The default debug object. There shouldn't be a reason to ever
-  # change this line.  To adjust debug paramters statically, adjust
-  # them in the Debug class above.  To adjust these fields
-  # dynamically, access this RubySystem object,
-  # e.g. RubySystem.debug.protocol_trace = true
-  default_param :debug, Debug, Debug.new("dbg0")
-  default_param :tracer, Tracer, Tracer.new("tracer0")
-
-  default_param :profiler, Profiler, Profiler.new("profiler0")
-end
-#added by SS
 
 class MESI_CMP_directory_L2CacheController < CacheController
   default_param :l2_request_latency, Integer, 2
@@ -231,4 +192,45 @@ end
 class MESI_CMP_directory_DMAController < DMAController
   default_param :request_latency, Integer, 6
 end
+
+class RubySystem
+
+  # Random seed used by the simulation. If set to "rand", the seed
+  # will be set to the current wall clock at libruby
+  # initialization. Otherwise, set this to an integer.
+  default_param :random_seed, Object, 1234 #"rand"
+
+  # When set to true, the simulation will insert random delays on
+  # message enqueue times.  Note that even if this is set to false,
+  # you can still have a non-deterministic simulation if random seed
+  # is set to "rand".  This is because the Ruby swtiches use random
+  # link priority elevation
+  default_param :randomization, Boolean, true
+
+  # tech_nm is the device size used to calculate latency and area
+  # information about system components
+  default_param :tech_nm, Integer, 45
+
+  # default frequency for the system
+  default_param :freq_mhz, Integer, 3000
+
+  # the default cache block size in the system
+  # libruby does not currently support different block sizes
+  # among different caches
+  # Must be a power of two
+  default_param :block_size_bytes, Integer, 64
+
+  # The default debug object. There shouldn't be a reason to ever
+  # change this line.  To adjust debug paramters statically, adjust
+  # them in the Debug class above.  To adjust these fields
+  # dynamically, access this RubySystem object,
+  # e.g. RubySystem.debug.protocol_trace = true
+  default_param :debug, Debug, Debug.new("dbg0")
+  default_param :tracer, Tracer, Tracer.new("tracer0")
+
+  default_param :profiler, Profiler, Profiler.new("profiler0")
+end
+#added by SS
+
+
 
