@@ -1,0 +1,15 @@
+M5 Simulator System
+
+Copyright (c) 2001-2008
+The Regents of The University of Michigan
+All Rights Reserved
+
+
+M5 compiled Mar 22 2010 20:37:53
+M5 revision 8f0f6a2f2f48 7039 default qtip tip inorder_twolf qbase
+M5 started Mar 22 2010 20:37:54
+M5 executing on zooks
+command line: build/ALPHA_SE/m5.fast -d build/ALPHA_SE/tests/fast/long/50.vortex/alpha/tru64/inorder-timing -re tests/run.py build/ALPHA_SE/tests/fast/long/50.vortex/alpha/tru64/inorder-timing
+Global frequency set at 1000000000000 ticks per second
+info: Entering event queue @ 0.  Starting simulation...
+info: Increasing stack size by one page.
