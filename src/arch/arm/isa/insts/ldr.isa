@@ -1,0 +1,354 @@
+// -*- mode:c++ -*-
+
+// Copyright (c) 2010 ARM Limited
+// All rights reserved
+//
+// The license below extends only to copyright in the software and shall
+// not be construed as granting a license to any other intellectual
+// property including but not limited to intellectual property relating
+// to a hardware implementation of the functionality of the software
+// licensed hereunder.  You may use the software subject to the license
+// terms below provided that you ensure that this notice is replicated
+// unmodified and in its entirety in all distributions of the software,
+// modified or unmodified, in source code or in binary form.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Gabe Black
+
+let {{
+
+    header_output = ""
+    decoder_output = ""
+    exec_output = ""
+
+    def loadImmClassName(post, add, writeback, \
+                         size=4, sign=False, user=False):
+        return memClassName("LOAD_IMM", post, add, writeback,
+                            size, sign, user)
+
+    def loadRegClassName(post, add, writeback, \
+                         size=4, sign=False, user=False):
+        return memClassName("LOAD_REG", post, add, writeback,
+                            size, sign, user)
+
+    def loadDoubleImmClassName(post, add, writeback):
+        return memClassName("LOAD_IMMD", post, add, writeback, 4, False, False)
+
+    def loadDoubleRegClassName(post, add, writeback):
+        return memClassName("LOAD_REGD", post, add, writeback, 4, False, False)
+
+    def emitLoad(name, Name, imm, eaCode, accCode, \
+                 memFlags, instFlags, base, double=False):
+        global header_output, decoder_output, exec_output
+
+        (newHeader,
+         newDecoder,
+         newExec) = loadStoreBase(name, Name, imm,
+                                  eaCode, accCode, "",
+                                  memFlags, instFlags, double, False,
+                                  base, execTemplateBase = 'Load')
+
+        header_output += newHeader
+        decoder_output += newDecoder
+        exec_output += newExec
+
+    def buildImmLoad(mnem, post, add, writeback, \
+                     size=4, sign=False, user=False, \
+                     prefetch=False, ldrex=False, vldr=False):
+        name = mnem
+        Name = loadImmClassName(post, add, writeback, \
+                                size, sign, user)
+
+        if add:
+            op = " +"
+        else:
+            op = " -"
+
+        offset = op + " imm"
+        eaCode = "EA = Base"
+        if not post:
+            eaCode += offset
+        eaCode += ";"
+
+        memFlags = ["ArmISA::TLB::MustBeOne", "%d" % (size - 1)]
+        if user:
+            memFlags.append("ArmISA::TLB::UserMode")
+
+        if prefetch:
+            Name = "%s_%s" % (mnem.upper(), Name)
+            memFlags.append("Request::PREFETCH")
+            accCode = '''
+            uint64_t temp = Mem%s;\n
+            temp = temp;
+            ''' % buildMemSuffix(sign, size)
+        elif vldr:
+            Name = "%s_%s" % (mnem.upper(), Name)
+            accCode = "FpDest.uw = cSwap(Mem%s, ((CPSR)Cpsr).e);\n" % \
+                buildMemSuffix(sign, size)
+        else:
+            if ldrex:
+                memFlags.append("Request::LLSC")
+                Name = "%s_%s" % (mnem.upper(), Name)
+            accCode = "IWDest = cSwap(Mem%s, ((CPSR)Cpsr).e);" % \
+                buildMemSuffix(sign, size)
+
+        if not prefetch and not ldrex and not vldr:
+            memFlags.append("ArmISA::TLB::AllowUnaligned")
+
+        if writeback:
+            accCode += "Base = Base %s;\n" % offset
+        base = buildMemBase("MemoryImm", post, writeback)
+
+        emitLoad(name, Name, True, eaCode, accCode, memFlags, [], base)
+
+    def buildRfeLoad(mnem, post, add, writeback):
+        name = mnem
+        Name = "RFE_" + loadImmClassName(post, add, writeback, 8)
+
+        offset = 0
+        if post != add:
+            offset += 4
+        if not add:
+            offset -= 8
+
+        eaCode = "EA = Base + %d;" % offset
+
+        wbDiff = -8
+        if add:
+            wbDiff = 8
+        accCode = '''
+        CPSR cpsr = Cpsr;
+        SCTLR sctlr = Sctlr;
+        NPC = cSwap<uint32_t>(Mem.ud, cpsr.e);
+        uint32_t newCpsr =
+            cpsrWriteByInstr(cpsr | CondCodes,
+                             cSwap<uint32_t>(Mem.ud >> 32, cpsr.e),
+                             0xF, true, sctlr.nmfi);
+        Cpsr = ~CondCodesMask & newCpsr;
+        CondCodes = CondCodesMask & newCpsr;
+        '''
+        if writeback:
+            accCode += "Base = Base + %s;\n" % wbDiff
+
+        global header_output, decoder_output, exec_output
+
+        (newHeader,
+         newDecoder,
+         newExec) = RfeBase(name, Name, eaCode, accCode,
+             ["ArmISA::TLB::AlignWord", "ArmISA::TLB::MustBeOne"], [])
+
+        header_output += newHeader
+        decoder_output += newDecoder
+        exec_output += newExec
+
+    def buildRegLoad(mnem, post, add, writeback, size=4, sign=False, \
+                     user=False, prefetch=False):
+        name = mnem
+        Name = loadRegClassName(post, add, writeback,
+                                size, sign, user)
+
+        if add:
+            op = " +"
+        else:
+            op = " -"
+
+        offset = op + " shift_rm_imm(Index, shiftAmt," + \
+                      " shiftType, CondCodes<29:>)"
+        eaCode = "EA = Base"
+        if not post:
+            eaCode += offset
+        eaCode += ";"
+
+        memFlags = ["%d" % (size - 1), "ArmISA::TLB::MustBeOne"]
+        if user:
+            memFlags.append("ArmISA::TLB::UserMode")
+
+        if prefetch:
+            Name = "%s_%s" % (mnem.upper(), Name)
+            memFlags.append("Request::PREFETCH")
+            accCode = '''
+            uint64_t temp = Mem%s;\n
+            temp = temp;
+            ''' % buildMemSuffix(sign, size)
+        else:
+            accCode = "IWDest = cSwap(Mem%s, ((CPSR)Cpsr).e);" % \
+                buildMemSuffix(sign, size)
+        if writeback:
+            accCode += "Base = Base %s;\n" % offset
+
+        if not prefetch:
+            memFlags.append("ArmISA::TLB::AllowUnaligned")
+
+        base = buildMemBase("MemoryReg", post, writeback)
+
+        emitLoad(name, Name, False, eaCode, accCode, \
+                 memFlags, [], base)
+
+    def buildDoubleImmLoad(mnem, post, add, writeback, \
+                           ldrex=False, vldr=False):
+        name = mnem
+        Name = loadDoubleImmClassName(post, add, writeback)
+
+        if add:
+            op = " +"
+        else:
+            op = " -"
+
+        offset = op + " imm"
+        eaCode = "EA = Base"
+        if not post:
+            eaCode += offset
+        eaCode += ";"
+
+        if not vldr:
+            accCode = '''
+            CPSR cpsr = Cpsr;
+            Dest = cSwap<uint32_t>(Mem.ud, cpsr.e);
+            Dest2 = cSwap<uint32_t>(Mem.ud >> 32, cpsr.e);
+            '''
+        else:
+            accCode = '''
+            uint64_t swappedMem = cSwap(Mem.ud, ((CPSR)Cpsr).e);
+            FpDest.uw = (uint32_t)swappedMem;
+            FpDest2.uw = (uint32_t)(swappedMem >> 32);
+            '''
+        if ldrex:
+            memFlags = ["Request::LLSC"]
+        else:
+            memFlags = []
+        if ldrex or vldr:
+            Name = "%s_%s" % (mnem.upper(), Name)
+        if writeback:
+            accCode += "Base = Base %s;\n" % offset
+        base = buildMemBase("MemoryDImm", post, writeback)
+
+        memFlags.extend(["ArmISA::TLB::MustBeOne",
+                         "ArmISA::TLB::AlignWord"])
+
+        emitLoad(name, Name, True, eaCode, accCode, \
+                 memFlags, [], base, double=True)
+
+    def buildDoubleRegLoad(mnem, post, add, writeback):
+        name = mnem
+        Name = loadDoubleRegClassName(post, add, writeback)
+
+        if add:
+            op = " +"
+        else:
+            op = " -"
+
+        offset = op + " shift_rm_imm(Index, shiftAmt," + \
+                      " shiftType, CondCodes<29:>)"
+        eaCode = "EA = Base"
+        if not post:
+            eaCode += offset
+        eaCode += ";"
+
+        accCode = '''
+        CPSR cpsr = Cpsr;
+        Dest = cSwap<uint32_t>(Mem.ud, cpsr.e);
+        Dest2 = cSwap<uint32_t>(Mem.ud >> 32, cpsr.e);
+        '''
+        if writeback:
+            accCode += "Base = Base %s;\n" % offset
+        base = buildMemBase("MemoryDReg", post, writeback)
+
+        emitLoad(name, Name, False, eaCode, accCode,
+                 ["ArmISA::TLB::MustBeOne", "ArmISA::TLB::AlignWord"],
+                 [], base, double=True)
+
+    def buildLoads(mnem, size=4, sign=False, user=False):
+        buildImmLoad(mnem, True, True, True, size, sign, user)
+        buildRegLoad(mnem, True, True, True, size, sign, user)
+        buildImmLoad(mnem, True, False, True, size, sign, user)
+        buildRegLoad(mnem, True, False, True, size, sign, user)
+        buildImmLoad(mnem, False, True, True, size, sign, user)
+        buildRegLoad(mnem, False, True, True, size, sign, user)
+        buildImmLoad(mnem, False, False, True, size, sign, user)
+        buildRegLoad(mnem, False, False, True, size, sign, user)
+        buildImmLoad(mnem, False, True, False, size, sign, user)
+        buildRegLoad(mnem, False, True, False, size, sign, user)
+        buildImmLoad(mnem, False, False, False, size, sign, user)
+        buildRegLoad(mnem, False, False, False, size, sign, user)
+
+    def buildDoubleLoads(mnem):
+        buildDoubleImmLoad(mnem, True, True, True)
+        buildDoubleRegLoad(mnem, True, True, True)
+        buildDoubleImmLoad(mnem, True, False, True)
+        buildDoubleRegLoad(mnem, True, False, True)
+        buildDoubleImmLoad(mnem, False, True, True)
+        buildDoubleRegLoad(mnem, False, True, True)
+        buildDoubleImmLoad(mnem, False, False, True)
+        buildDoubleRegLoad(mnem, False, False, True)
+        buildDoubleImmLoad(mnem, False, True, False)
+        buildDoubleRegLoad(mnem, False, True, False)
+        buildDoubleImmLoad(mnem, False, False, False)
+        buildDoubleRegLoad(mnem, False, False, False)
+
+    def buildRfeLoads(mnem):
+        buildRfeLoad(mnem, True, True, True)
+        buildRfeLoad(mnem, True, True, False)
+        buildRfeLoad(mnem, True, False, True)
+        buildRfeLoad(mnem, True, False, False)
+        buildRfeLoad(mnem, False, True, True)
+        buildRfeLoad(mnem, False, True, False)
+        buildRfeLoad(mnem, False, False, True)
+        buildRfeLoad(mnem, False, False, False)
+
+    def buildPrefetches(mnem):
+        buildRegLoad(mnem, False, False, False, size=1, prefetch=True)
+        buildImmLoad(mnem, False, False, False, size=1, prefetch=True)
+        buildRegLoad(mnem, False, True, False, size=1, prefetch=True)
+        buildImmLoad(mnem, False, True, False, size=1, prefetch=True)
+
+    buildLoads("ldr")
+    buildLoads("ldrt", user=True)
+    buildLoads("ldrb", size=1)
+    buildLoads("ldrbt", size=1, user=True)
+    buildLoads("ldrsb", size=1, sign=True)
+    buildLoads("ldrsbt", size=1, sign=True, user=True)
+    buildLoads("ldrh", size=2)
+    buildLoads("ldrht", size=2, user=True)
+    buildLoads("hdrsh", size=2, sign=True)
+    buildLoads("ldrsht", size=2, sign=True, user=True)
+
+    buildDoubleLoads("ldrd")
+
+    buildRfeLoads("rfe")
+
+    buildPrefetches("pld")
+    buildPrefetches("pldw")
+    buildPrefetches("pli")
+
+    buildImmLoad("ldrex", False, True, False, size=4, ldrex=True)
+    buildImmLoad("ldrexh", False, True, False, size=2, ldrex=True)
+    buildImmLoad("ldrexb", False, True, False, size=1, ldrex=True)
+    buildDoubleImmLoad("ldrexd", False, True, False, ldrex=True)
+
+    buildImmLoad("vldr", False, True, False, size=4, vldr=True)
+    buildImmLoad("vldr", False, False, False, size=4, vldr=True)
+    buildDoubleImmLoad("vldr", False, True, False, vldr=True)
+    buildDoubleImmLoad("vldr", False, False, False, vldr=True)
+}};

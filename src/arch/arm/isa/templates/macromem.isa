@@ -1,0 +1,160 @@
+// -*- mode:c++ -*-
+
+// Copyright (c) 2010 ARM Limited
+// All rights reserved
+//
+// The license below extends only to copyright in the software and shall
+// not be construed as granting a license to any other intellectual
+// property including but not limited to intellectual property relating
+// to a hardware implementation of the functionality of the software
+// licensed hereunder.  You may use the software subject to the license
+// terms below provided that you ensure that this notice is replicated
+// unmodified and in its entirety in all distributions of the software,
+// modified or unmodified, in source code or in binary form.
+//
+// Copyright (c) 2007-2008 The Florida State University
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Stephen Hines
+//          Gabe Black
+
+////////////////////////////////////////////////////////////////////
+//
+// Load/store microops
+//
+
+def template MicroMemDeclare {{
+    class %(class_name)s : public %(base_class)s
+    {
+      public:
+        %(class_name)s(ExtMachInst machInst,
+                       RegIndex _ura, RegIndex _urb, bool _up,
+                       uint8_t _imm);
+        %(BasicExecDeclare)s
+        %(InitiateAccDeclare)s
+        %(CompleteAccDeclare)s
+    };
+}};
+
+def template MicroMemConstructor {{
+    %(class_name)s::%(class_name)s(ExtMachInst machInst,
+                                   RegIndex _ura,
+                                   RegIndex _urb,
+                                   bool _up,
+                                   uint8_t _imm)
+        : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s,
+                         _ura, _urb, _up, _imm)
+    {
+        %(constructor)s;
+    }
+}};
+
+////////////////////////////////////////////////////////////////////
+//
+// Integer = Integer op Immediate microops
+//
+
+def template MicroIntDeclare {{
+    class %(class_name)s : public %(base_class)s
+    {
+      public:
+        %(class_name)s(ExtMachInst machInst,
+                       RegIndex _ura, RegIndex _urb,
+                       uint8_t _imm);
+        %(BasicExecDeclare)s
+    };
+}};
+
+def template MicroIntConstructor {{
+    %(class_name)s::%(class_name)s(ExtMachInst machInst,
+                                   RegIndex _ura,
+                                   RegIndex _urb,
+                                   uint8_t _imm)
+        : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s,
+                         _ura, _urb, _imm)
+    {
+        %(constructor)s;
+    }
+}};
+
+////////////////////////////////////////////////////////////////////
+//
+// Macro Memory-format instructions
+//
+
+def template MacroMemDeclare {{
+/**
+ * Static instructions class for a store multiple instruction
+ */
+class %(class_name)s : public %(base_class)s
+{
+    public:
+        // Constructor
+        %(class_name)s(ExtMachInst machInst, IntRegIndex rn,
+                bool index, bool up, bool user, bool writeback, bool load,
+                uint32_t reglist);
+        %(BasicExecPanic)s
+};
+}};
+
+def template MacroMemConstructor {{
+%(class_name)s::%(class_name)s(ExtMachInst machInst, IntRegIndex rn,
+        bool index, bool up, bool user, bool writeback, bool load,
+        uint32_t reglist)
+    : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s, rn,
+                     index, up, user, writeback, load, reglist)
+{
+    %(constructor)s;
+}
+
+}};
+
+def template MacroVFPMemDeclare {{
+/**
+ * Static instructions class for a store multiple instruction
+ */
+class %(class_name)s : public %(base_class)s
+{
+    public:
+        // Constructor
+        %(class_name)s(ExtMachInst machInst, IntRegIndex rn,
+                RegIndex vd, bool single, bool up, bool writeback,
+                bool load, uint32_t offset);
+        %(BasicExecPanic)s
+};
+}};
+
+def template MacroVFPMemConstructor {{
+%(class_name)s::%(class_name)s(ExtMachInst machInst, IntRegIndex rn,
+        RegIndex vd, bool single, bool up, bool writeback, bool load,
+        uint32_t offset)
+    : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s, rn,
+                     vd, single, up, writeback, load, offset)
+{
+    %(constructor)s;
+}
+
+}};

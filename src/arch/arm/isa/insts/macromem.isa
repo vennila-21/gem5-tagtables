@@ -1,0 +1,152 @@
+// -*- mode:c++ -*-
+
+// Copyright (c) 2010 ARM Limited
+// All rights reserved
+//
+// The license below extends only to copyright in the software and shall
+// not be construed as granting a license to any other intellectual
+// property including but not limited to intellectual property relating
+// to a hardware implementation of the functionality of the software
+// licensed hereunder.  You may use the software subject to the license
+// terms below provided that you ensure that this notice is replicated
+// unmodified and in its entirety in all distributions of the software,
+// modified or unmodified, in source code or in binary form.
+//
+// Copyright (c) 2007-2008 The Florida State University
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Stephen Hines
+//          Gabe Black
+
+////////////////////////////////////////////////////////////////////
+//
+// Load/store microops
+//
+
+let {{
+    microLdrUopCode = "IWRa = cSwap(Mem.uw, ((CPSR)Cpsr).e);"
+    microLdrUopIop = InstObjParams('ldr_uop', 'MicroLdrUop',
+                                   'MicroMemOp',
+                                   {'memacc_code': microLdrUopCode,
+                                    'ea_code': 'EA = Rb + (up ? imm : -imm);',
+                                    'predicate_test': predicateTest},
+                                   ['IsMicroop'])
+
+    microLdrFpUopCode = "Fa.uw = cSwap(Mem.uw, ((CPSR)Cpsr).e);"
+    microLdrFpUopIop = InstObjParams('ldrfp_uop', 'MicroLdrFpUop',
+                                     'MicroMemOp',
+                                     {'memacc_code': microLdrFpUopCode,
+                                      'ea_code': 'EA = Rb + (up ? imm : -imm);',
+                                      'predicate_test': predicateTest},
+                                     ['IsMicroop'])
+
+    microLdrRetUopCode = '''
+        CPSR cpsr = Cpsr;
+        SCTLR sctlr = Sctlr;
+        uint32_t newCpsr =
+            cpsrWriteByInstr(cpsr | CondCodes, Spsr, 0xF, true, sctlr.nmfi);
+        Cpsr = ~CondCodesMask & newCpsr;
+        CondCodes = CondCodesMask & newCpsr;
+        IWNPC = cSwap(Mem.uw, cpsr.e) | ((Spsr & 0x20) ? 1 : 0);
+    '''
+    microLdrRetUopIop = InstObjParams('ldr_ret_uop', 'MicroLdrRetUop',
+                                      'MicroMemOp',
+                                      {'memacc_code': microLdrRetUopCode,
+                                       'ea_code':
+                                          'EA = Rb + (up ? imm : -imm);',
+                                       'predicate_test': condPredicateTest},
+                                      ['IsMicroop'])
+
+    microStrUopCode = "Mem = cSwap(Ra.uw, ((CPSR)Cpsr).e);"
+    microStrUopIop = InstObjParams('str_uop', 'MicroStrUop',
+                                   'MicroMemOp',
+                                   {'memacc_code': microStrUopCode,
+                                    'postacc_code': "",
+                                    'ea_code': 'EA = Rb + (up ? imm : -imm);',
+                                    'predicate_test': predicateTest},
+                                   ['IsMicroop'])
+
+    microStrFpUopCode = "Mem = cSwap(Fa.uw, ((CPSR)Cpsr).e);"
+    microStrFpUopIop = InstObjParams('strfp_uop', 'MicroStrFpUop',
+                                     'MicroMemOp',
+                                     {'memacc_code': microStrFpUopCode,
+                                      'postacc_code': "",
+                                      'ea_code': 'EA = Rb + (up ? imm : -imm);',
+                                      'predicate_test': predicateTest},
+                                     ['IsMicroop'])
+
+    header_output = decoder_output = exec_output = ''
+
+    loadIops = (microLdrUopIop, microLdrFpUopIop, microLdrRetUopIop)
+    storeIops = (microStrUopIop, microStrFpUopIop)
+    for iop in loadIops + storeIops:
+        header_output += MicroMemDeclare.subst(iop)
+        decoder_output += MicroMemConstructor.subst(iop)
+    for iop in loadIops:
+        exec_output += LoadExecute.subst(iop) + \
+                       LoadInitiateAcc.subst(iop) + \
+                       LoadCompleteAcc.subst(iop)
+    for iop in storeIops:
+        exec_output += StoreExecute.subst(iop) + \
+                       StoreInitiateAcc.subst(iop) + \
+                       StoreCompleteAcc.subst(iop)
+}};
+
+////////////////////////////////////////////////////////////////////
+//
+// Integer = Integer op Immediate microops
+//
+
+let {{
+    microAddiUopIop = InstObjParams('addi_uop', 'MicroAddiUop',
+                                    'MicroIntOp',
+                                    {'code': 'Ra = Rb + imm;',
+                                     'predicate_test': predicateTest},
+                                    ['IsMicroop'])
+
+    microSubiUopIop = InstObjParams('subi_uop', 'MicroSubiUop',
+                                    'MicroIntOp',
+                                    {'code': 'Ra = Rb - imm;',
+                                     'predicate_test': predicateTest},
+                                    ['IsMicroop'])
+
+    header_output = MicroIntDeclare.subst(microAddiUopIop) + \
+                    MicroIntDeclare.subst(microSubiUopIop)
+    decoder_output = MicroIntConstructor.subst(microAddiUopIop) + \
+                     MicroIntConstructor.subst(microSubiUopIop)
+    exec_output = PredOpExecute.subst(microAddiUopIop) + \
+                  PredOpExecute.subst(microSubiUopIop)
+}};
+
+let {{
+    iop = InstObjParams("ldmstm", "LdmStm", 'MacroMemOp', "", [])
+    header_output = MacroMemDeclare.subst(iop)
+    decoder_output = MacroMemConstructor.subst(iop)
+
+    vfpIop = InstObjParams("vldmstm", "VLdmStm", 'MacroVFPMemOp', "", [])
+    header_output += MacroVFPMemDeclare.subst(vfpIop)
+    decoder_output += MacroVFPMemConstructor.subst(vfpIop)
+}};

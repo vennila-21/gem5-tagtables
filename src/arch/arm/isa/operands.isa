@@ -1,0 +1,192 @@
+// -*- mode:c++ -*-
+// Copyright (c) 2010 ARM Limited
+// All rights reserved
+//
+// The license below extends only to copyright in the software and shall
+// not be construed as granting a license to any other intellectual
+// property including but not limited to intellectual property relating
+// to a hardware implementation of the functionality of the software
+// licensed hereunder.  You may use the software subject to the license
+// terms below provided that you ensure that this notice is replicated
+// unmodified and in its entirety in all distributions of the software,
+// modified or unmodified, in source code or in binary form.
+//
+// Copyright (c) 2007-2008 The Florida State University
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Authors: Stephen Hines
+
+def operand_types {{
+    'sb' : ('signed int', 8),
+    'ub' : ('unsigned int', 8),
+    'sh' : ('signed int', 16),
+    'uh' : ('unsigned int', 16),
+    'sw' : ('signed int', 32),
+    'uw' : ('unsigned int', 32),
+    'ud' : ('unsigned int', 64),
+    'sf' : ('float', 32),
+    'df' : ('float', 64)
+}};
+
+let {{
+    maybePCRead = '''
+        ((%(reg_idx)s == PCReg) ? (readPC(xc) & ~PcModeMask) :
+         xc->%(func)s(this, %(op_idx)s))
+    '''
+    maybeAlignedPCRead = '''
+        ((%(reg_idx)s == PCReg) ? (roundDown(readPC(xc) & ~PcModeMask, 4)) :
+         xc->%(func)s(this, %(op_idx)s))
+    '''
+    maybePCWrite = '''
+        ((%(reg_idx)s == PCReg) ? setNextPC(xc, %(final_val)s) :
+         xc->%(func)s(this, %(op_idx)s, %(final_val)s))
+    '''
+    maybeIWPCWrite = '''
+        ((%(reg_idx)s == PCReg) ? setIWNextPC(xc, %(final_val)s) :
+         xc->%(func)s(this, %(op_idx)s, %(final_val)s))
+    '''
+    maybeAIWPCWrite = '''
+        if (%(reg_idx)s == PCReg) {
+            bool thumb = THUMB;
+            if (thumb) {
+                setNextPC(xc, %(final_val)s);
+            } else {
+                setIWNextPC(xc, %(final_val)s);
+            }
+        } else {
+            xc->%(func)s(this, %(op_idx)s, %(final_val)s);
+        }
+    '''
+
+    readNPC = 'xc->readNextPC() & ~PcModeMask'
+    writeNPC = 'setNextPC(xc, %(final_val)s)'
+    writeIWNPC = 'setIWNextPC(xc, %(final_val)s)'
+    forceNPC = 'xc->setNextPC(%(final_val)s)'
+}};
+
+def operands {{
+    #Abstracted integer reg operands
+    'Dest': ('IntReg', 'uw', 'dest', 'IsInteger', 2,
+             maybePCRead, maybePCWrite),
+    'FpDest': ('FloatReg', 'sf', '(dest + 0)', 'IsFloating', 2),
+    'FpDestP0': ('FloatReg', 'sf', '(dest + 0)', 'IsFloating', 2),
+    'FpDestP1': ('FloatReg', 'sf', '(dest + 1)', 'IsFloating', 2),
+    'FpDestP2': ('FloatReg', 'sf', '(dest + 2)', 'IsFloating', 2),
+    'FpDestP3': ('FloatReg', 'sf', '(dest + 3)', 'IsFloating', 2),
+    'Result': ('IntReg', 'uw', 'result', 'IsInteger', 2,
+               maybePCRead, maybePCWrite),
+    'Dest2': ('IntReg', 'uw', 'dest2', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'FpDest2': ('FloatReg', 'sf', '(dest2 + 0)', 'IsFloating', 2),
+    'FpDest2P0': ('FloatReg', 'sf', '(dest2 + 0)', 'IsFloating', 2),
+    'FpDest2P1': ('FloatReg', 'sf', '(dest2 + 1)', 'IsFloating', 2),
+    'FpDest2P2': ('FloatReg', 'sf', '(dest2 + 2)', 'IsFloating', 2),
+    'FpDest2P3': ('FloatReg', 'sf', '(dest2 + 3)', 'IsFloating', 2),
+    'IWDest': ('IntReg', 'uw', 'dest', 'IsInteger', 2,
+               maybePCRead, maybeIWPCWrite),
+    'AIWDest': ('IntReg', 'uw', 'dest', 'IsInteger', 2,
+                maybePCRead, maybeAIWPCWrite),
+    'SpMode': ('IntReg', 'uw',
+               'intRegInMode((OperatingMode)regMode, INTREG_SP)',
+               'IsInteger', 2),
+    'MiscDest': ('ControlReg', 'uw', 'dest', (None, None, 'IsControl'), 2),
+    'Base': ('IntReg', 'uw', 'base', 'IsInteger', 0,
+             maybeAlignedPCRead, maybePCWrite),
+    'Index': ('IntReg', 'uw', 'index', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'Op1': ('IntReg', 'uw', 'op1', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'FpOp1': ('FloatReg', 'sf', '(op1 + 0)', 'IsFloating', 2),
+    'FpOp1P0': ('FloatReg', 'sf', '(op1 + 0)', 'IsFloating', 2),
+    'FpOp1P1': ('FloatReg', 'sf', '(op1 + 1)', 'IsFloating', 2),
+    'FpOp1P2': ('FloatReg', 'sf', '(op1 + 2)', 'IsFloating', 2),
+    'FpOp1P3': ('FloatReg', 'sf', '(op1 + 3)', 'IsFloating', 2),
+    'MiscOp1': ('ControlReg', 'uw', 'op1', (None, None, 'IsControl'), 2),
+    'Op2': ('IntReg', 'uw', 'op2', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'FpOp2': ('FloatReg', 'sf', '(op2 + 0)', 'IsFloating', 2),
+    'FpOp2P0': ('FloatReg', 'sf', '(op2 + 0)', 'IsFloating', 2),
+    'FpOp2P1': ('FloatReg', 'sf', '(op2 + 1)', 'IsFloating', 2),
+    'FpOp2P2': ('FloatReg', 'sf', '(op2 + 2)', 'IsFloating', 2),
+    'FpOp2P3': ('FloatReg', 'sf', '(op2 + 3)', 'IsFloating', 2),
+    'Op3': ('IntReg', 'uw', 'op3', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'Shift': ('IntReg', 'uw', 'shift', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'Reg0': ('IntReg', 'uw', 'reg0', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'Reg1': ('IntReg', 'uw', 'reg1', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'Reg2': ('IntReg', 'uw', 'reg2', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    'Reg3': ('IntReg', 'uw', 'reg3', 'IsInteger', 2,
+              maybePCRead, maybePCWrite),
+    #General Purpose Integer Reg Operands
+    'Rd': ('IntReg', 'uw', 'RD', 'IsInteger', 2, maybePCRead, maybePCWrite),
+    'Rm': ('IntReg', 'uw', 'RM', 'IsInteger', 2, maybePCRead, maybePCWrite),
+    'Rs': ('IntReg', 'uw', 'RS', 'IsInteger', 2, maybePCRead, maybePCWrite),
+    'Rn': ('IntReg', 'uw', 'RN', 'IsInteger', 2, maybePCRead, maybePCWrite),
+    'R7': ('IntReg', 'uw', '7', 'IsInteger', 2),
+    'R0': ('IntReg', 'uw', '0', 'IsInteger', 2),
+
+    'LR': ('IntReg', 'uw', 'INTREG_LR', 'IsInteger', 2),
+    'CondCodes': ('IntReg', 'uw', 'INTREG_CONDCODES', None, 2),
+    'OptCondCodes': ('IntReg', 'uw',
+            '''(condCode == COND_AL || condCode == COND_UC) ?
+               INTREG_ZERO : INTREG_CONDCODES''', None, 2),
+
+    #Register fields for microops
+    'Ra' : ('IntReg', 'uw', 'ura', 'IsInteger', 2, maybePCRead, maybePCWrite),
+    'IWRa' : ('IntReg', 'uw', 'ura', 'IsInteger', 2,
+            maybePCRead, maybeIWPCWrite),
+    'Fa' : ('FloatReg', 'sf', 'ura', 'IsFloating', 2),
+    'Rb' : ('IntReg', 'uw', 'urb', 'IsInteger', 2, maybePCRead, maybePCWrite),
+
+    #General Purpose Floating Point Reg Operands
+    'Fd': ('FloatReg', 'df', 'FD', 'IsFloating', 2),
+    'Fn': ('FloatReg', 'df', 'FN', 'IsFloating', 2),
+    'Fm': ('FloatReg', 'df', 'FM', 'IsFloating', 2),
+
+    #Memory Operand
+    'Mem': ('Mem', 'uw', None, ('IsMemRef', 'IsLoad', 'IsStore'), 2),
+
+    'Cpsr': ('ControlReg', 'uw', 'MISCREG_CPSR', (None, None, 'IsControl'), 1),
+    'Itstate': ('ControlReg', 'ub', 'MISCREG_ITSTATE', None, 2),
+    'Spsr': ('ControlReg', 'uw', 'MISCREG_SPSR', None, 2),
+    'Fpsr': ('ControlReg', 'uw', 'MISCREG_FPSR', None, 2),
+    'Fpsid': ('ControlReg', 'uw', 'MISCREG_FPSID', None, 2),
+    'Fpscr': ('ControlReg', 'uw', 'MISCREG_FPSCR', None, 2),
+    'Fpexc': ('ControlReg', 'uw', 'MISCREG_FPEXC', None, 2),
+    'Sctlr': ('ControlReg', 'uw', 'MISCREG_SCTLR', None, 2),
+    'SevMailbox': ('ControlReg', 'uw', 'MISCREG_SEV_MAILBOX', None, 2),
+    'PC': ('PC', 'ud', None, None, 2),
+    'NPC': ('NPC', 'ud', None, (None, None, 'IsControl'), 2,
+            readNPC, writeNPC),
+    'FNPC': ('NPC', 'ud', None, (None, None, 'IsControl'), 2,
+             readNPC, forceNPC),
+    'IWNPC': ('NPC', 'ud', None, (None, None, 'IsControl'), 2,
+              readNPC, writeIWNPC),
+}};
