@@ -1,0 +1,13 @@
+Redirecting stdout to build/SPARC_SE/tests/opt/long/50.vortex/sparc/linux/simple-timing/simout
+Redirecting stderr to build/SPARC_SE/tests/opt/long/50.vortex/sparc/linux/simple-timing/simerr
+gem5 Simulator System.  http://gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 compiled Jun 12 2011 07:14:44
+gem5 started Jun 12 2011 07:15:05
+gem5 executing on zizzer
+command line: build/SPARC_SE/gem5.opt -d build/SPARC_SE/tests/opt/long/50.vortex/sparc/linux/simple-timing -re tests/run.py build/SPARC_SE/tests/opt/long/50.vortex/sparc/linux/simple-timing
+Global frequency set at 1000000000000 ticks per second
+info: Entering event queue @ 0.  Starting simulation...
+info: Increasing stack size by one page.
+Exiting @ tick 202941992000 because target called exit()
