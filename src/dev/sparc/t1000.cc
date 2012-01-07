@@ -48,17 +48,7 @@ using namespace TheISA;
 
 T1000::T1000(const Params *p)
     : Platform(p), system(p->system)
-{
-    // set the back pointer from the system to myself
-    system->platform = this;
-}
-
-Tick
-T1000::intrFrequency()
-{
-    panic("Need implementation\n");
-    M5_DUMMY_RETURN
-}
+{}
 
 void
 T1000::postConsoleInt()

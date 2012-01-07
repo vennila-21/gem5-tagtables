@@ -190,12 +190,7 @@ let {{
     exec_output += PredOpExecute.subst(loadsymbolIop)
 
     initparamCode = '''
-#if FULL_SYSTEM
     Rt = PseudoInst::initParam(xc->tcBase());
-#else
-    PseudoInst::panicFsOnlyPseudoInst("initparam");
-    Rt = 0;
-#endif
     '''
 
     initparamIop = InstObjParams("initparam", "Initparam", "PredOp",

@@ -41,29 +41,22 @@
 #include "base/loader/symtab.hh"
 #include "base/misc.hh"
 #include "base/statistics.hh"
-#include "config/full_system.hh"
 #include "cpu/pc_event.hh"
 #include "enums/MemoryMode.hh"
+#include "kern/system_events.hh"
 #include "mem/port.hh"
 #include "params/System.hh"
 #include "sim/sim_object.hh"
 
-#if FULL_SYSTEM
-#include "kern/system_events.hh"
-#endif
-
 class BaseCPU;
-class ThreadContext;
+class BaseRemoteGDB;
+class FunctionalPort;
+class GDBListener;
 class ObjectFile;
 class PhysicalMemory;
-
-#if FULL_SYSTEM
 class Platform;
-class FunctionalPort;
+class ThreadContext;
 class VirtualPort;
-#endif
-class GDBListener;
-class BaseRemoteGDB;
 
 class System : public SimObject
 {
@@ -113,8 +106,8 @@ class System : public SimObject
      */
     bool isMemory(const Addr addr) const;
 
-#if FULL_SYSTEM
-    Platform *platform;
+    Addr pagePtr;
+
     uint64_t init_param;
 
     /** Port to physical memory used for writing object files into ram at
@@ -145,10 +138,6 @@ class System : public SimObject
      */
     Addr loadAddrMask;
 
-#else
-
-    Addr pagePtr;
-
   protected:
     uint64_t nextPID;
 
@@ -163,9 +152,6 @@ class System : public SimObject
 
     /** Amount of physical memory that exists */
     Addr memSize();
-
-
-#endif // FULL_SYSTEM
 
   protected:
     Enums::MemoryMode memoryMode;
@@ -212,13 +198,15 @@ class System : public SimObject
         return count;
     }
 
-#if FULL_SYSTEM
     /**
      * Fix up an address used to match PCs for hooking simulator
      * events on to target function executions.  See comment in
      * system.cc for details.
      */
-    virtual Addr fixFuncEventAddr(Addr addr) = 0;
+    virtual Addr fixFuncEventAddr(Addr addr)
+    {
+        panic("Base fixFuncEventAddr not implemented.\n");
+    }
 
     /**
      * Add a function-based event to the given function, to be looked
@@ -244,7 +232,6 @@ class System : public SimObject
         return addFuncEvent<T>(kernelSymtab, lbl);
     }
 
-#endif
   public:
     std::vector<BaseRemoteGDB *> remoteGDB;
     std::vector<GDBListener *> gdbListen;
@@ -266,7 +253,6 @@ class System : public SimObject
 
   public:
 
-#if FULL_SYSTEM
     /**
      * Returns the addess the kernel starts at.
      * @return address the kernel starts at
@@ -285,13 +271,9 @@ class System : public SimObject
      */
     Addr getKernelEntry() const { return kernelEntry; }
 
-#else
-
     /// Allocate npages contiguous unused physical pages
     /// @return Starting address of first page
     Addr allocPhysPages(int npages);
-
-#endif // FULL_SYSTEM
 
     int registerThreadContext(ThreadContext *tc, int assigned=-1);
     void replaceThreadContext(ThreadContext *tc, int context_id);

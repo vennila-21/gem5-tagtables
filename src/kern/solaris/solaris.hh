@@ -32,14 +32,6 @@
 #define __SOLARIS_HH__
 
 #include "base/types.hh"
-#include "config/full_system.hh"
-
-#if FULL_SYSTEM
-
-class Solaris {};
-
-#else //!FULL_SYSTEM
-
 #include "kern/operatingsystem.hh"
 
 class TranslatingPort;
@@ -125,8 +117,5 @@ class Solaris : public OperatingSystem
     } utsname;
 
 };  // class Solaris
-
-
-#endif // FULL_SYSTEM
 
 #endif // __SOLARIS_HH__

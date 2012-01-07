@@ -31,6 +31,7 @@
 
 #include <string>
 
+#include "arch/isa_traits.hh"
 #include "base/chunk_generator.hh"
 #include "config/the_isa.hh"
 #include "mem/page_table.hh"
@@ -40,10 +41,9 @@
 
 using namespace TheISA;
 
-TranslatingPort::TranslatingPort(const std::string &_name,
-                                 Process *p, AllocType alloc)
-    : FunctionalPort(_name), pTable(p->pTable), process(p),
-      allocating(alloc)
+TranslatingPort::TranslatingPort(const std::string &_name, Process *p,
+                                 AllocType alloc)
+    : FunctionalPort(_name), pTable(p->pTable), process(p), allocating(alloc)
 { }
 
 TranslatingPort::~TranslatingPort()
@@ -52,10 +52,10 @@ TranslatingPort::~TranslatingPort()
 bool
 TranslatingPort::tryReadBlob(Addr addr, uint8_t *p, int size)
 {
-    Addr paddr;
     int prevSize = 0;
 
     for (ChunkGenerator gen(addr, size, VMPageSize); !gen.done(); gen.next()) {
+        Addr paddr;
 
         if (!pTable->translate(gen.addr(),paddr))
             return false;
@@ -78,11 +78,10 @@ TranslatingPort::readBlob(Addr addr, uint8_t *p, int size)
 bool
 TranslatingPort::tryWriteBlob(Addr addr, uint8_t *p, int size)
 {
-
-    Addr paddr;
     int prevSize = 0;
 
     for (ChunkGenerator gen(addr, size, VMPageSize); !gen.done(); gen.next()) {
+        Addr paddr;
 
         if (!pTable->translate(gen.addr(), paddr)) {
             if (allocating == Always) {
@@ -117,9 +116,8 @@ TranslatingPort::writeBlob(Addr addr, uint8_t *p, int size)
 bool
 TranslatingPort::tryMemsetBlob(Addr addr, uint8_t val, int size)
 {
-    Addr paddr;
-
     for (ChunkGenerator gen(addr, size, VMPageSize); !gen.done(); gen.next()) {
+        Addr paddr;
 
         if (!pTable->translate(gen.addr(), paddr)) {
             if (allocating == Always) {
@@ -130,7 +128,6 @@ TranslatingPort::tryMemsetBlob(Addr addr, uint8_t val, int size)
                 return false;
             }
         }
-
         Port::memsetBlob(paddr, val, gen.size());
     }
 
@@ -148,14 +145,15 @@ TranslatingPort::memsetBlob(Addr addr, uint8_t val, int size)
 bool
 TranslatingPort::tryWriteString(Addr addr, const char *str)
 {
-    Addr paddr,vaddr;
     uint8_t c;
 
-    vaddr = addr;
+    Addr vaddr = addr;
 
     do {
         c = *str++;
-        if (!pTable->translate(vaddr++,paddr))
+        Addr paddr;
+
+        if (!pTable->translate(vaddr++, paddr))
             return false;
 
         Port::writeBlob(paddr, &c, 1);
@@ -174,13 +172,14 @@ TranslatingPort::writeString(Addr addr, const char *str)
 bool
 TranslatingPort::tryReadString(std::string &str, Addr addr)
 {
-    Addr paddr,vaddr;
     uint8_t c;
 
-    vaddr = addr;
+    Addr vaddr = addr;
 
     do {
-        if (!pTable->translate(vaddr++,paddr))
+        Addr paddr;
+
+        if (!pTable->translate(vaddr++, paddr))
             return false;
 
         Port::readBlob(paddr, &c, 1);

@@ -34,39 +34,43 @@
 #include <string>
 
 #include "arch/isa_traits.hh"
-#include "arch/utility.hh"
-#include "config/the_isa.hh"
-#include "cpu/base.hh"
-#include "cpu/simple_thread.hh"
-#include "cpu/thread_context.hh"
-#include "params/BaseCPU.hh"
-
-#if FULL_SYSTEM
 #include "arch/kernel_stats.hh"
 #include "arch/stacktrace.hh"
+#include "arch/utility.hh"
 #include "base/callback.hh"
 #include "base/cprintf.hh"
 #include "base/output.hh"
 #include "base/trace.hh"
+#include "config/the_isa.hh"
+#include "cpu/base.hh"
 #include "cpu/profile.hh"
 #include "cpu/quiesce_event.hh"
+#include "cpu/simple_thread.hh"
+#include "cpu/thread_context.hh"
+#include "mem/translating_port.hh"
 #include "mem/vport.hh"
+#include "params/BaseCPU.hh"
+#include "sim/full_system.hh"
+#include "sim/process.hh"
 #include "sim/serialize.hh"
 #include "sim/sim_exit.hh"
-#else
-#include "mem/translating_port.hh"
-#include "sim/process.hh"
 #include "sim/system.hh"
-#endif
 
 using namespace std;
 
 // constructor
-#if FULL_SYSTEM
+SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, Process *_process,
+                           TheISA::TLB *_itb, TheISA::TLB *_dtb)
+    : ThreadState(_cpu, _thread_num, _process),
+      cpu(_cpu), itb(_itb), dtb(_dtb)
+{
+    clearArchRegs();
+    tc = new ProxyThreadContext<SimpleThread>(this);
+}
 SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
                            TheISA::TLB *_itb, TheISA::TLB *_dtb,
                            bool use_kernel_stats)
-    : ThreadState(_cpu, _thread_num),
+    : ThreadState(_cpu, _thread_num, NULL),
       cpu(_cpu), system(_sys), itb(_itb), dtb(_dtb)
 
 {
@@ -93,34 +97,17 @@ SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
     if (use_kernel_stats)
         kernelStats = new TheISA::Kernel::Statistics(system);
 }
-#else
-SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, Process *_process,
-                           TheISA::TLB *_itb, TheISA::TLB *_dtb)
-    : ThreadState(_cpu, _thread_num, _process),
-      cpu(_cpu), itb(_itb), dtb(_dtb)
-{
-    clearArchRegs();
-    tc = new ProxyThreadContext<SimpleThread>(this);
-}
-
-#endif
 
 SimpleThread::SimpleThread()
-#if FULL_SYSTEM
-    : ThreadState(NULL, -1)
-#else
     : ThreadState(NULL, -1, NULL)
-#endif
 {
     tc = new ProxyThreadContext<SimpleThread>(this);
 }
 
 SimpleThread::~SimpleThread()
 {
-#if FULL_SYSTEM
     delete physPort;
     delete virtPort;
-#endif
     delete tc;
 }
 
@@ -128,29 +115,27 @@ void
 SimpleThread::takeOverFrom(ThreadContext *oldContext)
 {
     // some things should already be set up
-#if FULL_SYSTEM
-    assert(system == oldContext->getSystemPtr());
-#else
+    if (FullSystem)
+        assert(system == oldContext->getSystemPtr());
     assert(process == oldContext->getProcessPtr());
-#endif
 
     copyState(oldContext);
-#if FULL_SYSTEM
-    EndQuiesceEvent *quiesce = oldContext->getQuiesceEvent();
-    if (quiesce) {
-        // Point the quiesce event's TC at this TC so that it wakes up
-        // the proper CPU.
-        quiesce->tc = tc;
-    }
-    if (quiesceEvent) {
-        quiesceEvent->tc = tc;
-    }
+    if (FullSystem) {
+        EndQuiesceEvent *quiesce = oldContext->getQuiesceEvent();
+        if (quiesce) {
+            // Point the quiesce event's TC at this TC so that it wakes up
+            // the proper CPU.
+            quiesce->tc = tc;
+        }
+        if (quiesceEvent) {
+            quiesceEvent->tc = tc;
+        }
 
-    TheISA::Kernel::Statistics *stats = oldContext->getKernelStats();
-    if (stats) {
-        kernelStats = stats;
+        TheISA::Kernel::Statistics *stats = oldContext->getKernelStats();
+        if (stats) {
+            kernelStats = stats;
+        }
     }
-#endif
 
     storeCondFailures = 0;
 
@@ -162,16 +147,16 @@ SimpleThread::copyTC(ThreadContext *context)
 {
     copyState(context);
 
-#if FULL_SYSTEM
-    EndQuiesceEvent *quiesce = context->getQuiesceEvent();
-    if (quiesce) {
-        quiesceEvent = quiesce;
+    if (FullSystem) {
+        EndQuiesceEvent *quiesce = context->getQuiesceEvent();
+        if (quiesce) {
+            quiesceEvent = quiesce;
+        }
+        TheISA::Kernel::Statistics *stats = context->getKernelStats();
+        if (stats) {
+            kernelStats = stats;
+        }
     }
-    TheISA::Kernel::Statistics *stats = context->getKernelStats();
-    if (stats) {
-        kernelStats = stats;
-    }
-#endif
 }
 
 void
@@ -180,9 +165,8 @@ SimpleThread::copyState(ThreadContext *oldContext)
     // copy over functional state
     _status = oldContext->status();
     copyArchRegs(oldContext);
-#if !FULL_SYSTEM
-    funcExeInst = oldContext->readFuncExeInst();
-#endif
+    if (FullSystem)
+        funcExeInst = oldContext->readFuncExeInst();
 
     _threadId = oldContext->threadId();
     _contextId = oldContext->contextId();
@@ -219,14 +203,12 @@ SimpleThread::unserialize(Checkpoint *cp, const std::string &section)
     isa.unserialize(cpu, cp, section);
 }
 
-#if FULL_SYSTEM
 void
 SimpleThread::dumpFuncProfile()
 {
     std::ostream *os = simout.create(csprintf("profile.%s.dat", cpu->name()));
     profile->dump(tc, *os);
 }
-#endif
 
 void
 SimpleThread::activate(int delay)
@@ -255,15 +237,6 @@ SimpleThread::suspend()
 
     lastActivate = curTick();
     lastSuspend = curTick();
-/*
-#if FULL_SYSTEM
-    // Don't change the status from active if there are pending interrupts
-    if (cpu->checkInterrupts()) {
-        assert(status() == ThreadContext::Active);
-        return;
-    }
-#endif
-*/
     _status = ThreadContext::Suspended;
     cpu->suspendContext(_threadId);
 }
@@ -283,10 +256,8 @@ SimpleThread::halt()
 void
 SimpleThread::regStats(const string &name)
 {
-#if FULL_SYSTEM
-    if (kernelStats)
+    if (FullSystem && kernelStats)
         kernelStats->regStats(name + ".kern");
-#endif
 }
 
 void

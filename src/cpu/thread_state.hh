@@ -36,13 +36,9 @@
 #include "cpu/base.hh"
 #include "cpu/profile.hh"
 #include "cpu/thread_context.hh"
-
-#if !FULL_SYSTEM
 #include "mem/mem_object.hh"
 #include "sim/process.hh"
-#endif
 
-#if FULL_SYSTEM
 class EndQuiesceEvent;
 class FunctionProfile;
 class ProfileNode;
@@ -51,7 +47,6 @@ namespace TheISA {
         class Statistics;
     };
 };
-#endif
 
 class Checkpoint;
 class Port;
@@ -66,11 +61,7 @@ class TranslatingPort;
 struct ThreadState {
     typedef ThreadContext::Status Status;
 
-#if FULL_SYSTEM
-    ThreadState(BaseCPU *cpu, ThreadID _tid);
-#else
     ThreadState(BaseCPU *cpu, ThreadID _tid, Process *_process);
-#endif
 
     ~ThreadState();
 
@@ -92,12 +83,11 @@ struct ThreadState {
 
     Tick readLastSuspend() { return lastSuspend; }
 
-#if FULL_SYSTEM
-    void connectMemPorts(ThreadContext *tc);
-
     void connectPhysPort();
 
     void connectVirtPort(ThreadContext *tc);
+
+    void connectMemPorts(ThreadContext *tc);
 
     void dumpFuncProfile();
 
@@ -109,18 +99,17 @@ struct ThreadState {
 
     TheISA::Kernel::Statistics *getKernelStats() { return kernelStats; }
 
-    FunctionalPort *getPhysPort() { return physPort; }
-
-    void setPhysPort(FunctionalPort *port) { physPort = port; }
-
-    VirtualPort *getVirtPort() { return virtPort; }
-#else
     Process *getProcessPtr() { return process; }
 
     TranslatingPort *getMemPort();
 
     void setMemPort(TranslatingPort *_port) { port = _port; }
-#endif
+
+    VirtualPort *getVirtPort() { return virtPort; }
+
+    FunctionalPort *getPhysPort() { return physPort; }
+
+    void setPhysPort(FunctionalPort *port) { physPort = port; }
 
     /** Reads the number of instructions functionally executed and
      * committed.
@@ -177,7 +166,6 @@ struct ThreadState {
     /** Last time suspend was called on this thread. */
     Tick lastSuspend;
 
-#if FULL_SYSTEM
   public:
     FunctionProfile *profile;
     ProfileNode *profileNode;
@@ -185,19 +173,19 @@ struct ThreadState {
     EndQuiesceEvent *quiesceEvent;
 
     TheISA::Kernel::Statistics *kernelStats;
+
   protected:
-    /** A functional port outgoing only for functional accesses to physical
-     * addresses.*/
-    FunctionalPort *physPort;
+    Process *process;
+
+    TranslatingPort *port;
 
     /** A functional port, outgoing only, for functional accesse to virtual
      * addresses. */
     VirtualPort *virtPort;
-#else
-    TranslatingPort *port;
 
-    Process *process;
-#endif
+    /** A functional port outgoing only for functional accesses to physical
+     * addresses.*/
+    FunctionalPort *physPort;
 
   public:
     /*

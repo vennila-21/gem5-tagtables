@@ -26,7 +26,9 @@
 #
 # Authors: Gabe Black
 
+from m5.defines import buildEnv
 from m5.params import *
+from m5.proxy import *
 from Device import BasicPioDevice
 
 class X86LocalApic(BasicPioDevice):

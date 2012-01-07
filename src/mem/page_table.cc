@@ -221,12 +221,13 @@ PageTable::unserialize(Checkpoint *cp, const std::string &section)
 {
     int i = 0, count;
     paramIn(cp, section, "ptable.size", count);
-    Addr vaddr;
-    TheISA::TlbEntry *entry;
 
     pTable.clear();
 
-    while(i < count) {
+    while (i < count) {
+        TheISA::TlbEntry *entry;
+        Addr vaddr;
+
         paramIn(cp, csprintf("%s.Entry%d", name(), i), "vaddr", vaddr);
         entry = new TheISA::TlbEntry();
         entry->unserialize(cp, csprintf("%s.Entry%d", name(), i));

@@ -58,7 +58,7 @@ PioPort::getDeviceAddressRanges(AddrRangeList &resp, bool &snoop)
 
 
 PioDevice::PioDevice(const Params *p)
-    : MemObject(p), platform(p->platform), sys(p->system), pioPort(NULL)
+    : MemObject(p), sys(p->system), pioPort(NULL)
 {}
 
 PioDevice::~PioDevice()
@@ -71,7 +71,7 @@ void
 PioDevice::init()
 {
     if (!pioPort)
-        panic("Pio port not connected to anything!");
+        panic("Pio port %s not connected to anything!", name());
     pioPort->sendStatusChange(Port::RangeChange);
 }
 

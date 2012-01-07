@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007 MIPS Technologies, Inc.
+ * Copyright (c) 2004-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,20 +25,28 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Korey Sewell
- *
+ * Authors: Gabe Black
  */
 
-#include "arch/isa_traits.hh"
-#include "cpu/inorder/cpu.hh"
-#include "cpu/inorder/thread_state.hh"
-#include "cpu/exetrace.hh"
+#ifndef __ARCH_POWER_KERNEL_STATS_HH__
+#define __ARCH_POWER_KERNEL_STATS_HH__
 
-using namespace TheISA;
+#include "kern/kernel_stats.hh"
 
-void 
-InOrderThreadState::dumpFuncProfile()    
+namespace PowerISA {
+namespace Kernel {
+
+enum cpu_mode { hypervisor, kernel, user, idle, cpu_mode_num };
+extern const char *modestr[];
+
+class Statistics : public ::Kernel::Statistics
 {
-    std::ostream *os = simout.create(csprintf("profile.%s.dat", cpu->name()));
-    profile->dump(tc, *os);
-}
+  public:
+    Statistics(System *system) : ::Kernel::Statistics(system)
+    {}
+};
+
+} // namespace PowerISA::Kernel
+} // namespace PowerISA
+
+#endif // __ARCH_POWER_KERNEL_STATS_HH__

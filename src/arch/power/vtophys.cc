@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2002, 2005 The Regents of The University of Michigan
+ * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * Copyright (c) 2007 MIPS Technologies, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,22 +26,24 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Nathan Binkert
- *          Steve Reinhardt
+ * Authors: Ali Saidi
+ *          Nathan Binkert
+ *          Jaidev Patwardhan
  */
 
-#include "config/full_system.hh"
-#include "cpu/base.hh"
-#include "cpu/thread_context.hh"
+#include "arch/power/vtophys.hh"
 
-#if FULL_SYSTEM
+using namespace std;
 
-////////////////////////////////////////////////////////////////////////
-//
-//  Machine dependent functions
-//
-void
-MipsISA::initCPU(ThreadContext *tc, int cpuId)
-{}
+Addr
+PowerISA::vtophys(Addr vaddr)
+{
+    fatal("VTOPHYS: Unimplemented on POWER\n");
+}
 
-#endif // FULL_SYSTEM || BARE_IRON
+Addr
+PowerISA::vtophys(ThreadContext *tc, Addr addr)
+{
+    fatal("VTOPHYS: Unimplemented on POWER\n");
+}
+
