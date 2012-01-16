@@ -37,7 +37,6 @@
 #include "arch/mips/types.hh"
 #include "base/misc.hh"
 #include "base/types.hh"
-#include "config/full_system.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
 
@@ -108,6 +107,7 @@ RoundPage(Addr addr)
 // CPU Utility
 //
 void startupCPU(ThreadContext *tc, int cpuId);
+void initCPU(ThreadContext *tc, int cpuId);
 
 void copyRegs(ThreadContext *src, ThreadContext *dest);
 void copyMiscRegs(ThreadContext *src, ThreadContext *dest);

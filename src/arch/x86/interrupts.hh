@@ -176,6 +176,9 @@ class Interrupts : public BasicPioDevice, IntDev
     int initialApicId;
 
   public:
+
+    int getInitialApicId() { return initialApicId; }
+
     /*
      * Params stuff.
      */

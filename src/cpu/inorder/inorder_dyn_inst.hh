@@ -45,7 +45,6 @@
 #include "base/fast_alloc.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/inorder/inorder_trace.hh"
 #include "cpu/inorder/pipeline_traits.hh"
@@ -517,15 +516,12 @@ class InOrderDynInst : public FastAlloc, public RefCounted
     void setCurResSlot(unsigned slot_num) { curResSlot = slot_num; }
 
     /** Calls a syscall. */
-#if FULL_SYSTEM
     /** Calls hardware return from error interrupt. */
     Fault hwrei();
     /** Traps to handle specified fault. */
     void trap(Fault fault);
     bool simPalCheck(int palFunc);
-#else
     short syscallNum;
-#endif
 
     /** Emulates a syscall. */
     void syscall(int64_t callnum);

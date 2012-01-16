@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007 MIPS Technologies, Inc.
+ * Copyright (c) 2011 Google
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,20 +25,13 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Korey Sewell
- *
+ * Authors: Gabe Black
  */
 
-#include "arch/isa_traits.hh"
-#include "cpu/inorder/cpu.hh"
-#include "cpu/inorder/thread_state.hh"
-#include "cpu/exetrace.hh"
+#include "arch/power/interrupts.hh"
 
-using namespace TheISA;
-
-void 
-InOrderThreadState::dumpFuncProfile()    
+PowerISA::Interrupts *
+PowerInterruptsParams::create()
 {
-    std::ostream *os = simout.create(csprintf("profile.%s.dat", cpu->name()));
-    profile->dump(tc, *os);
+    return new PowerISA::Interrupts(this);
 }

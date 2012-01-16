@@ -43,7 +43,6 @@
 #include "arch/types.hh"
 #include "base/statistics.hh"
 #include "base/types.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/inorder/inorder_dyn_inst.hh"
 #include "cpu/inorder/pipeline_stage.hh"
@@ -413,7 +412,6 @@ class InOrderCPU : public BaseCPU
     /** Get a Memory Port */
     Port* getPort(const std::string &if_name, int idx = 0);
 
-#if FULL_SYSTEM
     /** HW return from error interrupt. */
     Fault hwrei(ThreadID tid);
 
@@ -439,14 +437,13 @@ class InOrderCPU : public BaseCPU
 
     /** Check if this address is a valid data address. */
     bool validDataAddr(Addr addr) { return true; }
-#else
+
     /** Schedule a syscall on the CPU */
     void syscallContext(Fault fault, ThreadID tid, DynInstPtr inst,
                         int delay = 0);
 
     /** Executes a syscall.*/
     void syscall(int64_t callnum, ThreadID tid);
-#endif
 
     /** Schedule a trap on the CPU */
     void trapContext(Fault fault, ThreadID tid, DynInstPtr inst, int delay = 0);
@@ -753,9 +750,7 @@ class InOrderCPU : public BaseCPU
     /** Wakes the CPU, rescheduling the CPU if it's not already active. */
     void wakeCPU();
 
-#if FULL_SYSTEM
     virtual void wakeup();
-#endif
 
     /* LL/SC debug functionality
     unsigned stCondFails;
@@ -784,10 +779,8 @@ class InOrderCPU : public BaseCPU
         return total;
     }
 
-#if FULL_SYSTEM
     /** Pointer to the system. */
     System *system;
-#endif
 
     /** The global sequence number counter. */
     InstSeqNum globalSeqNum[ThePipeline::MaxThreads];

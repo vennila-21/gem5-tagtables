@@ -28,45 +28,33 @@
  * Authors: Kevin Lim
  */
 
+#include "arch/kernel_stats.hh"
 #include "base/output.hh"
 #include "cpu/base.hh"
 #include "cpu/profile.hh"
+#include "cpu/quiesce_event.hh"
 #include "cpu/thread_state.hh"
 #include "mem/port.hh"
 #include "mem/translating_port.hh"
+#include "mem/vport.hh"
+#include "sim/full_system.hh"
 #include "sim/serialize.hh"
 
-#if FULL_SYSTEM
-#include "arch/kernel_stats.hh"
-#include "cpu/quiesce_event.hh"
-#include "mem/vport.hh"
-#endif
-
-#if FULL_SYSTEM
-ThreadState::ThreadState(BaseCPU *cpu, ThreadID _tid)
-#else
 ThreadState::ThreadState(BaseCPU *cpu, ThreadID _tid, Process *_process)
-#endif
     : numInst(0), numLoad(0), _status(ThreadContext::Halted),
       baseCpu(cpu), _threadId(_tid), lastActivate(0), lastSuspend(0),
-#if FULL_SYSTEM
       profile(NULL), profileNode(NULL), profilePC(0), quiesceEvent(NULL),
-      kernelStats(NULL), physPort(NULL), virtPort(NULL),
-#else
-      port(NULL), process(_process),
-#endif
-      funcExeInst(0), storeCondFailures(0)
+      kernelStats(NULL), process(_process), port(NULL), virtPort(NULL),
+      physPort(NULL), funcExeInst(0), storeCondFailures(0)
 {
 }
 
 ThreadState::~ThreadState()
 {
-#if !FULL_SYSTEM
     if (port) {
         delete port->getPeer();
         delete port;
     }
-#endif
 }
 
 void
@@ -76,14 +64,14 @@ ThreadState::serialize(std::ostream &os)
     // thread_num and cpu_id are deterministic from the config
     SERIALIZE_SCALAR(funcExeInst);
 
-#if FULL_SYSTEM
-    Tick quiesceEndTick = 0;
-    if (quiesceEvent->scheduled())
-        quiesceEndTick = quiesceEvent->when();
-    SERIALIZE_SCALAR(quiesceEndTick);
-    if (kernelStats)
-        kernelStats->serialize(os);
-#endif
+    if (FullSystem) {
+        Tick quiesceEndTick = 0;
+        if (quiesceEvent->scheduled())
+            quiesceEndTick = quiesceEvent->when();
+        SERIALIZE_SCALAR(quiesceEndTick);
+        if (kernelStats)
+            kernelStats->serialize(os);
+    }
 }
 
 void
@@ -94,22 +82,14 @@ ThreadState::unserialize(Checkpoint *cp, const std::string &section)
     // thread_num and cpu_id are deterministic from the config
     UNSERIALIZE_SCALAR(funcExeInst);
 
-#if FULL_SYSTEM
-    Tick quiesceEndTick;
-    UNSERIALIZE_SCALAR(quiesceEndTick);
-    if (quiesceEndTick)
-        baseCpu->schedule(quiesceEvent, quiesceEndTick);
-    if (kernelStats)
-        kernelStats->unserialize(cp, section);
-#endif
-}
-
-#if FULL_SYSTEM
-void
-ThreadState::connectMemPorts(ThreadContext *tc)
-{
-    connectPhysPort();
-    connectVirtPort(tc);
+    if (FullSystem) {
+        Tick quiesceEndTick;
+        UNSERIALIZE_SCALAR(quiesceEndTick);
+        if (quiesceEndTick)
+            baseCpu->schedule(quiesceEvent, quiesceEndTick);
+        if (kernelStats)
+            kernelStats->unserialize(cp, section);
+    }
 }
 
 void
@@ -141,6 +121,13 @@ ThreadState::connectVirtPort(ThreadContext *tc)
 }
 
 void
+ThreadState::connectMemPorts(ThreadContext *tc)
+{
+    connectPhysPort();
+    connectVirtPort(tc);
+}
+
+void
 ThreadState::profileClear()
 {
     if (profile)
@@ -154,7 +141,6 @@ ThreadState::profileSample()
         profile->sample(profileNode, profilePC);
 }
 
-#else
 TranslatingPort *
 ThreadState::getMemPort()
 {
@@ -162,14 +148,13 @@ ThreadState::getMemPort()
         return port;
 
     /* Use this port to for syscall emulation writes to memory. */
-    port = new TranslatingPort(csprintf("%s-%d-funcport", baseCpu->name(), _threadId),
-                               process, TranslatingPort::NextPage);
+    port = new TranslatingPort(csprintf("%s-%d-funcport", baseCpu->name(),
+                               _threadId), process, TranslatingPort::NextPage);
 
     connectToMemFunc(port);
 
     return port;
 }
-#endif
 
 void
 ThreadState::connectToMemFunc(Port *port)

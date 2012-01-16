@@ -33,17 +33,16 @@
 
 #include "arch/sparc/faults.hh"
 #include "arch/sparc/isa_traits.hh"
+#include "arch/sparc/process.hh"
 #include "arch/sparc/types.hh"
 #include "base/bitfield.hh"
 #include "base/trace.hh"
-#include "config/full_system.hh"
+#include "sim/full_system.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
-#if !FULL_SYSTEM
-#include "arch/sparc/process.hh"
 #include "mem/page_table.hh"
 #include "sim/process.hh"
-#endif
+#include "sim/full_system.hh"
 
 using namespace std;
 
@@ -494,12 +493,13 @@ getPrivVector(ThreadContext *tc, Addr &PC, Addr &NPC, MiscReg TT, MiscReg TL)
     NPC = PC + sizeof(MachInst);
 }
 
-#if FULL_SYSTEM
-
 void
 SparcFaultBase::invoke(ThreadContext * tc, StaticInstPtr inst)
 {
     FaultBase::invoke(tc);
+    if (!FullSystem)
+        return;
+
     countStat()++;
 
     // We can refer to this to see what the trap level -was-, but something
@@ -619,94 +619,110 @@ PowerOnReset::invoke(ThreadContext *tc, StaticInstPtr inst)
     */
 }
 
-#else // !FULL_SYSTEM
-
 void
 FastInstructionAccessMMUMiss::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    Process *p = tc->getProcessPtr();
-    TlbEntry entry;
-    bool success = p->pTable->lookup(vaddr, entry);
-    if (!success) {
-        panic("Tried to execute unmapped address %#x.\n", vaddr);
+    if (FullSystem) {
+        SparcFaultBase::invoke(tc, inst);
     } else {
-        Addr alignedVaddr = p->pTable->pageAlign(vaddr);
-        tc->getITBPtr()->insert(alignedVaddr, 0 /*partition id*/,
-                p->M5_pid /*context id*/, false, entry.pte);
+        Process *p = tc->getProcessPtr();
+        TlbEntry entry;
+        bool success = p->pTable->lookup(vaddr, entry);
+        if (!success) {
+            panic("Tried to execute unmapped address %#x.\n", vaddr);
+        } else {
+            Addr alignedVaddr = p->pTable->pageAlign(vaddr);
+            tc->getITBPtr()->insert(alignedVaddr, 0 /*partition id*/,
+                    p->M5_pid /*context id*/, false, entry.pte);
+        }
     }
 }
 
 void
 FastDataAccessMMUMiss::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    Process *p = tc->getProcessPtr();
-    TlbEntry entry;
-    bool success = p->pTable->lookup(vaddr, entry);
-    if (!success) {
-        if (p->fixupStackFault(vaddr))
-            success = p->pTable->lookup(vaddr, entry);
-    }
-    if (!success) {
-        panic("Tried to access unmapped address %#x.\n", vaddr);
+    if (FullSystem) {
+        SparcFaultBase::invoke(tc, inst);
     } else {
-        Addr alignedVaddr = p->pTable->pageAlign(vaddr);
-        tc->getDTBPtr()->insert(alignedVaddr, 0 /*partition id*/,
-                p->M5_pid /*context id*/, false, entry.pte);
+        Process *p = tc->getProcessPtr();
+        TlbEntry entry;
+        bool success = p->pTable->lookup(vaddr, entry);
+        if (!success) {
+            if (p->fixupStackFault(vaddr))
+                success = p->pTable->lookup(vaddr, entry);
+        }
+        if (!success) {
+            panic("Tried to access unmapped address %#x.\n", vaddr);
+        } else {
+            Addr alignedVaddr = p->pTable->pageAlign(vaddr);
+            tc->getDTBPtr()->insert(alignedVaddr, 0 /*partition id*/,
+                    p->M5_pid /*context id*/, false, entry.pte);
+        }
     }
 }
 
 void
 SpillNNormal::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    doNormalFault(tc, trapType(), false);
+    if (FullSystem) {
+        SparcFaultBase::invoke(tc, inst);
+    } else {
+        doNormalFault(tc, trapType(), false);
 
-    Process *p = tc->getProcessPtr();
+        Process *p = tc->getProcessPtr();
 
-    //XXX This will only work in faults from a SparcLiveProcess
-    SparcLiveProcess *lp = dynamic_cast<SparcLiveProcess *>(p);
-    assert(lp);
+        //XXX This will only work in faults from a SparcLiveProcess
+        SparcLiveProcess *lp = dynamic_cast<SparcLiveProcess *>(p);
+        assert(lp);
 
-    // Then adjust the PC and NPC
-    tc->pcState(lp->readSpillStart());
+        // Then adjust the PC and NPC
+        tc->pcState(lp->readSpillStart());
+    }
 }
 
 void
 FillNNormal::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    doNormalFault(tc, trapType(), false);
+    if (FullSystem) {
+        SparcFaultBase::invoke(tc, inst);
+    } else {
+        doNormalFault(tc, trapType(), false);
 
-    Process *p = tc->getProcessPtr();
+        Process *p = tc->getProcessPtr();
 
-    //XXX This will only work in faults from a SparcLiveProcess
-    SparcLiveProcess *lp = dynamic_cast<SparcLiveProcess *>(p);
-    assert(lp);
+        //XXX This will only work in faults from a SparcLiveProcess
+        SparcLiveProcess *lp = dynamic_cast<SparcLiveProcess *>(p);
+        assert(lp);
 
-    // Then adjust the PC and NPC
-    tc->pcState(lp->readFillStart());
+        // Then adjust the PC and NPC
+        tc->pcState(lp->readFillStart());
+    }
 }
 
 void
 TrapInstruction::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    // In SE, this mechanism is how the process requests a service from the
-    // operating system. We'll get the process object from the thread context
-    // and let it service the request.
+    if (FullSystem) {
+        SparcFaultBase::invoke(tc, inst);
+    } else {
+        // In SE, this mechanism is how the process requests a service from
+        // the operating system. We'll get the process object from the thread
+        // context and let it service the request.
 
-    Process *p = tc->getProcessPtr();
+        Process *p = tc->getProcessPtr();
 
-    SparcLiveProcess *lp = dynamic_cast<SparcLiveProcess *>(p);
-    assert(lp);
+        SparcLiveProcess *lp = dynamic_cast<SparcLiveProcess *>(p);
+        assert(lp);
 
-    lp->handleTrap(_n, tc);
+        lp->handleTrap(_n, tc);
 
-    // We need to explicitly advance the pc, since that's not done for us
-    // on a faulting instruction
-    PCState pc = tc->pcState();
-    pc.advance();
-    tc->pcState(pc);
+        // We need to explicitly advance the pc, since that's not done for us
+        // on a faulting instruction
+        PCState pc = tc->pcState();
+        pc.advance();
+        tc->pcState(pc);
+    }
 }
-
-#endif
 
 } // namespace SparcISA
 

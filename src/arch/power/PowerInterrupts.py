@@ -1,6 +1,4 @@
-# -*- mode:python -*-
-
-# Copyright (c) 2006 The Regents of The University of Michigan
+# Copyright (c) 2011 Google
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,43 +26,8 @@
 #
 # Authors: Gabe Black
 
-Import('*')
+from m5.SimObject import SimObject
 
-if env['TARGET_ISA'] == 'x86':
-    SimObject('Pc.py')
-    Source('pc.cc')
-
-    SimObject('SouthBridge.py')
-    Source('south_bridge.cc')
-
-    SimObject('Cmos.py')
-    Source('cmos.cc')
-    DebugFlag('CMOS', 'Accesses to CMOS devices')
-
-    SimObject('I8259.py')
-    Source('i8259.cc')
-    DebugFlag('I8259', 'Accesses to the I8259 PIC devices')
-
-    SimObject('I8254.py')
-    Source('i8254.cc')
-    DebugFlag('I8254', 'Interrupts from the I8254 timer');
-
-    SimObject('I8237.py')
-    Source('i8237.cc')
-    DebugFlag('I8237', 'The I8237 dma controller');
-
-    SimObject('I8042.py')
-    Source('i8042.cc')
-    DebugFlag('I8042', 'The I8042 keyboard controller');
-
-    SimObject('PcSpeaker.py')
-    Source('speaker.cc')
-    DebugFlag('PcSpeaker')
-
-    SimObject('I82094AA.py')
-    Source('i82094aa.cc')
-    DebugFlag('I82094AA')
-
-    SimObject('X86IntPin.py')
-    Source('intdev.cc')
-    DebugFlag('IntDev')
+class PowerInterrupts(SimObject):
+    type = 'PowerInterrupts'
+    cxx_class = 'PowerISA::Interrupts'

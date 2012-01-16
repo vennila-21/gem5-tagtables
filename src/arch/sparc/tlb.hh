@@ -34,7 +34,6 @@
 #include "arch/sparc/asi.hh"
 #include "arch/sparc/tlb_map.hh"
 #include "base/misc.hh"
-#include "config/full_system.hh"
 #include "mem/request.hh"
 #include "params/SparcTLB.hh"
 #include "sim/fault_fwd.hh"
@@ -48,11 +47,9 @@ namespace SparcISA
 
 class TLB : public BaseTLB
 {
-#if !FULL_SYSTEM
     // These faults need to be able to populate the tlb in SE mode.
     friend class FastInstructionAccessMMUMiss;
     friend class FastDataAccessMMUMiss;
-#endif
 
     // TLB state
   protected:
@@ -167,10 +164,8 @@ class TLB : public BaseTLB
     Fault translateAtomic(RequestPtr req, ThreadContext *tc, Mode mode);
     void translateTiming(RequestPtr req, ThreadContext *tc,
             Translation *translation, Mode mode);
-#if FULL_SYSTEM
     Tick doMmuRegRead(ThreadContext *tc, Packet *pkt);
     Tick doMmuRegWrite(ThreadContext *tc, Packet *pkt);
-#endif
     void GetTsbPtr(ThreadContext *tc, Addr addr, int ctx, Addr *ptrs);
 
     // Checkpointing

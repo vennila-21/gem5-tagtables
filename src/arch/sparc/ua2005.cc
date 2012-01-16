@@ -36,6 +36,7 @@
 #include "debug/Quiesce.hh"
 #include "debug/Timer.hh"
 #include "sim/system.hh"
+#include "sim/full_system.hh"
 
 using namespace SparcISA;
 using namespace std;
@@ -207,12 +208,10 @@ ISA::setFSReg(int miscReg, const MiscReg &val, ThreadContext *tc)
       case MISCREG_HPSTATE:
         // T1000 spec says impl. dependent val must always be 1
         setMiscRegNoEffect(miscReg, val | HPSTATE::id);
-#if FULL_SYSTEM
         if (hpstate & HPSTATE::tlz && tl == 0 && !(hpstate & HPSTATE::hpriv))
             cpu->postInterrupt(IT_TRAP_LEVEL_ZERO, 0);
         else
             cpu->clearInterrupt(IT_TRAP_LEVEL_ZERO, 0);
-#endif
         break;
       case MISCREG_HTSTATE:
         setMiscRegNoEffect(miscReg, val);
@@ -226,7 +225,7 @@ ISA::setFSReg(int miscReg, const MiscReg &val, ThreadContext *tc)
             DPRINTF(Quiesce, "Cpu executed quiescing instruction\n");
             // Time to go to sleep
             tc->suspend();
-            if (tc->getKernelStats())
+            if (FullSystem && tc->getKernelStats())
                 tc->getKernelStats()->quiesce();
         }
         break;

@@ -52,8 +52,7 @@ class TranslatingPort : public FunctionalPort
     AllocType allocating;
 
   public:
-    TranslatingPort(const std::string &_name,
-                    Process *p, AllocType alloc);
+    TranslatingPort(const std::string &_name, Process *p, AllocType alloc);
     virtual ~TranslatingPort();
 
     bool tryReadBlob(Addr addr, uint8_t *p, int size);

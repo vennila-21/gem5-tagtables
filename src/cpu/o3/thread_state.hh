@@ -35,19 +35,15 @@
 #include "base/output.hh"
 #include "cpu/thread_context.hh"
 #include "cpu/thread_state.hh"
+#include "sim/full_system.hh"
 #include "sim/sim_exit.hh"
 
-class Event;
-class Process;
-
-#if FULL_SYSTEM
 class EndQuiesceEvent;
-class FunctionProfile;
-class ProfileNode;
-#else
+class Event;
 class FunctionalMemory;
+class FunctionProfile;
 class Process;
-#endif
+class ProfileNode;
 
 /**
  * Class that has various thread state, such as the status, the
@@ -75,31 +71,27 @@ struct O3ThreadState : public ThreadState {
      */
     bool trapPending;
 
-#if FULL_SYSTEM
-    O3ThreadState(O3CPU *_cpu, int _thread_num)
-        : ThreadState(_cpu, _thread_num),
-          cpu(_cpu), inSyscall(0), trapPending(0)
-    {
-        if (cpu->params()->profile) {
-            profile = new FunctionProfile(cpu->params()->system->kernelSymtab);
-            Callback *cb =
-                new MakeCallback<O3ThreadState,
-                &O3ThreadState::dumpFuncProfile>(this);
-            registerExitCallback(cb);
-        }
-
-        // let's fill with a dummy node for now so we don't get a segfault
-        // on the first cycle when there's no node available.
-        static ProfileNode dummyNode;
-        profileNode = &dummyNode;
-        profilePC = 3;
-    }
-#else
     O3ThreadState(O3CPU *_cpu, int _thread_num, Process *_process)
         : ThreadState(_cpu, _thread_num, _process),
           cpu(_cpu), inSyscall(0), trapPending(0)
-    { }
-#endif
+    {
+        if (FullSystem) {
+            if (cpu->params()->profile) {
+                profile = new FunctionProfile(
+                        cpu->params()->system->kernelSymtab);
+                Callback *cb =
+                    new MakeCallback<O3ThreadState,
+                    &O3ThreadState::dumpFuncProfile>(this);
+                registerExitCallback(cb);
+            }
+
+            // let's fill with a dummy node for now so we don't get a segfault
+            // on the first cycle when there's no node available.
+            static ProfileNode dummyNode;
+            profileNode = &dummyNode;
+            profilePC = 3;
+        }
+    }
 
     /** Pointer to the ThreadContext of this thread. */
     ThreadContext *tc;
@@ -107,18 +99,14 @@ struct O3ThreadState : public ThreadState {
     /** Returns a pointer to the TC of this thread. */
     ThreadContext *getTC() { return tc; }
 
-#if !FULL_SYSTEM
     /** Handles the syscall. */
     void syscall(int64_t callnum) { process->syscall(callnum, tc); }
-#endif
 
-#if FULL_SYSTEM
     void dumpFuncProfile()
     {
         std::ostream *os = simout.create(csprintf("profile.%s.dat", cpu->name()));
         profile->dump(tc, *os);
     }
-#endif
 };
 
 #endif // __CPU_O3_THREAD_STATE_HH__

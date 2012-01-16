@@ -40,7 +40,6 @@
 #include "base/loader/symtab.hh"
 #include "base/intmath.hh"
 #include "base/statistics.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/thread_context.hh"
 #include "mem/page_table.hh"
@@ -76,15 +75,6 @@
 
 using namespace std;
 using namespace TheISA;
-
-//
-// The purpose of this code is to fake the loader & syscall mechanism
-// when there's no OS: thus there's no resone to use it in FULL_SYSTEM
-// mode when we do have an OS
-//
-#if FULL_SYSTEM
-#error "process.cc not compatible with FULL_SYSTEM"
-#endif
 
 // current number of allocated processes
 int num_processes = 0;
@@ -727,7 +717,6 @@ LiveProcess::create(LiveProcessParams * params)
 #else
 #error "THE_ISA not set"
 #endif
-
 
     if (process == NULL)
         fatal("Unknown error creating process object.");
