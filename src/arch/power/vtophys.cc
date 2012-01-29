@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007 MIPS Technologies, Inc.
+ * Copyright (c) 2012 Google
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,18 +25,22 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Jaidev Patwardhan
+ * Authors: Gabe Black
  */
 
-#ifndef __ARCH_MIPS_CORE_SPECIFIC_HH__
-#define __ARCH_MIPS_CORE_SPECIFIC_HH__
+#include "arch/power/vtophys.hh"
 
-#include "arch/mips/isa_traits.hh"
+using namespace std;
 
-class ThreadContext;
+Addr
+PowerISA::vtophys(Addr vaddr)
+{
+    fatal("vtophys: Unimplemented on POWER\n");
+}
 
-namespace MipsISA {
-    void initCPU(ThreadContext *tc, int cpuId);
-};
+Addr
+PowerISA::vtophys(ThreadContext *tc, Addr addr)
+{
+    fatal("vtophys: Unimplemented on POWER\n");
+}
 
-#endif // __ARCH_MIPS_CORE_SPECIFIC_HH__

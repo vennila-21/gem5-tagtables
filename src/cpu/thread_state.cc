@@ -28,52 +28,37 @@
  * Authors: Kevin Lim
  */
 
+#include "arch/kernel_stats.hh"
 #include "base/output.hh"
 #include "cpu/base.hh"
 #include "cpu/profile.hh"
+#include "cpu/quiesce_event.hh"
 #include "cpu/thread_state.hh"
+#include "mem/fs_translating_port_proxy.hh"
+#include "mem/port.hh"
 #include "mem/port_proxy.hh"
 #include "mem/se_translating_port_proxy.hh"
+#include "sim/full_system.hh"
 #include "sim/serialize.hh"
 #include "sim/system.hh"
 
-#if FULL_SYSTEM
-#include "arch/kernel_stats.hh"
-#include "cpu/quiesce_event.hh"
-#include "mem/fs_translating_port_proxy.hh"
-#endif
-
-#if FULL_SYSTEM
-ThreadState::ThreadState(BaseCPU *cpu, ThreadID _tid)
-#else
 ThreadState::ThreadState(BaseCPU *cpu, ThreadID _tid, Process *_process)
-#endif
     : numInst(0), numLoad(0), _status(ThreadContext::Halted),
       baseCpu(cpu), _threadId(_tid), lastActivate(0), lastSuspend(0),
-#if FULL_SYSTEM
       profile(NULL), profileNode(NULL), profilePC(0), quiesceEvent(NULL),
-      kernelStats(NULL), physProxy(NULL), virtProxy(NULL),
-#else
-      proxy(NULL), process(_process),
-#endif
-      funcExeInst(0), storeCondFailures(0)
+      kernelStats(NULL), process(_process), physProxy(NULL), virtProxy(NULL),
+      proxy(NULL), funcExeInst(0), storeCondFailures(0)
 {
 }
 
 ThreadState::~ThreadState()
 {
-#if FULL_SYSTEM
-    if (physProxy != NULL) {
+    if (physProxy != NULL)
         delete physProxy;
-    }
-    if (virtProxy != NULL) {
+    if (virtProxy != NULL)
         delete virtProxy;
-    }
-#else
-    if (proxy != NULL) {
+    if (proxy != NULL)
         delete proxy;
-    }
-#endif
 }
 
 void
@@ -83,14 +68,15 @@ ThreadState::serialize(std::ostream &os)
     // thread_num and cpu_id are deterministic from the config
     SERIALIZE_SCALAR(funcExeInst);
 
-#if FULL_SYSTEM
+    if (!FullSystem)
+        return;
+
     Tick quiesceEndTick = 0;
     if (quiesceEvent->scheduled())
         quiesceEndTick = quiesceEvent->when();
     SERIALIZE_SCALAR(quiesceEndTick);
     if (kernelStats)
         kernelStats->serialize(os);
-#endif
 }
 
 void
@@ -101,17 +87,17 @@ ThreadState::unserialize(Checkpoint *cp, const std::string &section)
     // thread_num and cpu_id are deterministic from the config
     UNSERIALIZE_SCALAR(funcExeInst);
 
-#if FULL_SYSTEM
+    if (!FullSystem)
+        return;
+
     Tick quiesceEndTick;
     UNSERIALIZE_SCALAR(quiesceEndTick);
     if (quiesceEndTick)
         baseCpu->schedule(quiesceEvent, quiesceEndTick);
     if (kernelStats)
         kernelStats->unserialize(cp, section);
-#endif
 }
 
-#if FULL_SYSTEM
 void
 ThreadState::initMemProxies(ThreadContext *tc)
 {
@@ -139,7 +125,6 @@ ThreadState::profileSample()
         profile->sample(profileNode, profilePC);
 }
 
-#else
 SETranslatingPortProxy *
 ThreadState::getMemProxy()
 {
@@ -153,4 +138,3 @@ ThreadState::getMemProxy()
 
     return proxy;
 }
-#endif

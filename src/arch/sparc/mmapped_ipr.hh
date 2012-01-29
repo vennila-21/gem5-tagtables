@@ -38,7 +38,6 @@
  */
 
 #include "arch/sparc/tlb.hh"
-#include "config/full_system.hh"
 #include "cpu/thread_context.hh"
 #include "mem/packet.hh"
 
@@ -48,21 +47,13 @@ namespace SparcISA
 inline Tick
 handleIprRead(ThreadContext *xc, Packet *pkt)
 {
-#if FULL_SYSTEM
     return xc->getDTBPtr()->doMmuRegRead(xc, pkt);
-#else
-    panic("Shouldn't have a memory mapped register in SE\n");
-#endif
 }
 
 inline Tick
 handleIprWrite(ThreadContext *xc, Packet *pkt)
 {
-#if FULL_SYSTEM
     return xc->getDTBPtr()->doMmuRegWrite(xc, pkt);
-#else
-    panic("Shouldn't have a memory mapped register in SE\n");
-#endif
 }
 
 

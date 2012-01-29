@@ -55,8 +55,6 @@ Pc::Pc(const Params *p)
     : Platform(p), system(p->system)
 {
     southBridge = NULL;
-    // set the back pointer from the system to myself
-    system->platform = this;
 }
 
 void
@@ -115,13 +113,6 @@ Pc::init()
      */
     southBridge->pic1->maskAll();
     southBridge->pic2->maskAll();
-}
-
-Tick
-Pc::intrFrequency()
-{
-    panic("Need implementation for intrFrequency\n");
-    M5_DUMMY_RETURN
 }
 
 void

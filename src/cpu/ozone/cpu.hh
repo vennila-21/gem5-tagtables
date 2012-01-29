@@ -33,8 +33,8 @@
 
 #include <set>
 
+#include "arch/alpha/tlb.hh"
 #include "base/statistics.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/ozone/rename_table.hh"
 #include "cpu/ozone/thread_state.hh"
@@ -48,31 +48,20 @@
 #include "sim/eventq.hh"
 
 // forward declarations
-#if FULL_SYSTEM
-#include "arch/alpha/tlb.hh"
-
-namespace TheISA
-{
-    class TLB;
-}
-class PhysicalMemory;
-class MemoryController;
 
 namespace TheISA {
     namespace Kernel {
         class Statistics;
     };
+    class TLB;
 };
-
-#else
-
-class Process;
-
-#endif // FULL_SYSTEM
 
 class Checkpoint;
 class EndQuiesceEvent;
+class MemoryController;
 class MemObject;
+class PhysicalMemory;
+class Process;
 class Request;
 
 namespace Trace {
@@ -116,7 +105,6 @@ class OzoneCPU : public BaseCPU
 
         TheISA::TLB * getDTBPtr() { return cpu->dtb; }
 
-#if FULL_SYSTEM
         System *getSystemPtr() { return cpu->system; }
 
         PhysicalMemory *getPhysMemPtr() { return cpu->physmem; }
@@ -124,15 +112,14 @@ class OzoneCPU : public BaseCPU
         TheISA::Kernel::Statistics *getKernelStats()
         { return thread->getKernelStats(); }
 
+        Process *getProcessPtr() { return thread->getProcessPtr(); }
+
         PortProxy* getPhysProxy() { return thread->getPhysProxy(); }
 
         FSTranslatingPortProxy* getVirtProxy()
         { return thread->getVirtProxy(); }
-#else
-        SETranslatingPortProxy* getMemProxy() { return thread->getMemProxy(); }
 
-        Process *getProcessPtr() { return thread->getProcessPtr(); }
-#endif
+        SETranslatingPortProxy* getMemProxy() { return thread->getMemProxy(); }
 
         Status status() const { return thread->status(); }
 
@@ -148,9 +135,7 @@ class OzoneCPU : public BaseCPU
         /// Set the status to Halted.
         void halt();
 
-#if FULL_SYSTEM
         void dumpFuncProfile();
-#endif
 
         void takeOverFrom(ThreadContext *old_context);
 
@@ -159,7 +144,6 @@ class OzoneCPU : public BaseCPU
         void serialize(std::ostream &os);
         void unserialize(Checkpoint *cp, const std::string &section);
 
-#if FULL_SYSTEM
         EndQuiesceEvent *getQuiesceEvent();
 
         Tick readLastActivate();
@@ -167,7 +151,6 @@ class OzoneCPU : public BaseCPU
 
         void profileClear();
         void profileSample();
-#endif
 
         int threadId();
 
@@ -227,12 +210,10 @@ class OzoneCPU : public BaseCPU
 
         bool misspeculating() { return false; }
 
-#if !FULL_SYSTEM
         Counter readFuncExeInst() { return thread->funcExeInst; }
 
         void setFuncExeInst(Counter new_val)
         { thread->funcExeInst = new_val; }
-#endif
     };
 
     // Ozone specific thread context
@@ -326,7 +307,6 @@ class OzoneCPU : public BaseCPU
 
     int switchCount;
 
-#if FULL_SYSTEM
     Addr dbg_vtophys(Addr addr);
 
     bool interval_stats;
@@ -335,7 +315,6 @@ class OzoneCPU : public BaseCPU
     TheISA::TLB *dtb;
     System *system;
     PhysicalMemory *physmem;
-#endif
 
     virtual Port *getPort(const std::string &name, int idx);
 
@@ -414,13 +393,10 @@ class OzoneCPU : public BaseCPU
 
     void dumpInsts() { frontEnd->dumpInsts(); }
 
-#if FULL_SYSTEM
     Fault hwrei();
     bool simPalCheck(int palFunc);
     void processInterrupts();
-#else
     void syscall(uint64_t &callnum);
-#endif
 
     ThreadContext *tcBase() { return tc; }
 

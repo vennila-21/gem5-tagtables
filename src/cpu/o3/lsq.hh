@@ -46,7 +46,6 @@
 #include <map>
 #include <queue>
 
-#include "config/full_system.hh"
 #include "cpu/o3/lsq_unit.hh"
 #include "cpu/inst_seq.hh"
 #include "mem/port.hh"

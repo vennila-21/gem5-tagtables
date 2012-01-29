@@ -47,9 +47,6 @@ from m5.defines import buildEnv
 from m5.objects import *
 from m5.util import addToPath, fatal
 
-if not buildEnv['FULL_SYSTEM']:
-    fatal("This script requires full-system mode (*_FS).")
-
 addToPath('../common')
 
 from FSConfig import *
@@ -198,9 +195,9 @@ if len(bm) == 2:
         drive_sys.kernel = binary(options.kernel)
 
     drive_sys.init_param = options.init_param
-    root = makeDualRoot(test_sys, drive_sys, options.etherdump)
+    root = makeDualRoot(True, test_sys, drive_sys, options.etherdump)
 elif len(bm) == 1:
-    root = Root(system=test_sys)
+    root = Root(full_system=True, system=test_sys)
 else:
     print "Error I don't know how to create more than 2 systems."
     sys.exit(1)

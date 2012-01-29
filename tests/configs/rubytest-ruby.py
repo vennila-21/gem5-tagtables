@@ -34,9 +34,6 @@ from m5.defines import buildEnv
 from m5.util import addToPath
 import os, optparse, sys
 
-if buildEnv['FULL_SYSTEM']:
-    panic("This script requires system-emulation mode (*_SE).")
-
 # Get paths we might need.  It's expected this file is in m5/configs/example.
 config_path = os.path.dirname(os.path.abspath(__file__))
 config_root = os.path.dirname(config_path)
@@ -112,7 +109,7 @@ system.system_port = system.ruby._sys_port_proxy.port
 # run simulation
 # -----------------------
 
-root = Root( system = system )
+root = Root(full_system = False, system = system )
 root.system.mem_mode = 'timing'
 
 # Not much point in this being higher than the L1 latency

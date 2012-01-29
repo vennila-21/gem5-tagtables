@@ -122,13 +122,7 @@
 #include <cstdio>
 #include <string>
 
-#include "config/full_system.hh"
-
-#if FULL_SYSTEM
 #include "arch/vtophys.hh"
-#include "mem/fs_translating_port_proxy.hh"
-#endif
-
 #include "base/intmath.hh"
 #include "base/remote_gdb.hh"
 #include "base/socket.hh"
@@ -138,7 +132,9 @@
 #include "cpu/thread_context.hh"
 #include "debug/GDBAll.hh"
 #include "mem/port.hh"
+#include "mem/fs_translating_port_proxy.hh"
 #include "mem/se_translating_port_proxy.hh"
+#include "sim/full_system.hh"
 #include "sim/system.hh"
 
 using namespace std;
@@ -464,12 +460,13 @@ BaseRemoteGDB::read(Addr vaddr, size_t size, char *data)
 
     DPRINTF(GDBRead, "read:  addr=%#x, size=%d", vaddr, size);
 
-#if FULL_SYSTEM
-    FSTranslatingPortProxy *port = context->getVirtProxy();
-#else
-    SETranslatingPortProxy *port = context->getMemProxy();
-#endif
-    port->readBlob(vaddr, (uint8_t*)data, size);
+    if (FullSystem) {
+        FSTranslatingPortProxy *port = context->getVirtProxy();
+        port->readBlob(vaddr, (uint8_t*)data, size);
+    } else {
+        SETranslatingPortProxy *port = context->getMemProxy();
+        port->readBlob(vaddr, (uint8_t*)data, size);
+    }
 
 #if TRACING_ON
     if (DTRACE(GDBRead)) {
@@ -506,15 +503,14 @@ BaseRemoteGDB::write(Addr vaddr, size_t size, const char *data)
         } else
             DPRINTFNR("\n");
     }
-#if FULL_SYSTEM
-    FSTranslatingPortProxy *port = context->getVirtProxy();
-#else
-    SETranslatingPortProxy *port = context->getMemProxy();
-#endif
-    port->writeBlob(vaddr, (uint8_t*)data, size);
-#if !FULL_SYSTEM
-    delete port;
-#endif
+    if (FullSystem) {
+        FSTranslatingPortProxy *port = context->getVirtProxy();
+        port->writeBlob(vaddr, (uint8_t*)data, size);
+    } else {
+        SETranslatingPortProxy *port = context->getMemProxy();
+        port->writeBlob(vaddr, (uint8_t*)data, size);
+        delete port;
+    }
 
     return true;
 }

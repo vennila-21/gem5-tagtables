@@ -48,18 +48,15 @@
 
 #include <vector>
 
+#include "arch/interrupts.hh"
 #include "arch/isa_traits.hh"
 #include "arch/microcode_rom.hh"
 #include "base/statistics.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "mem/mem_object.hh"
 #include "sim/eventq.hh"
+#include "sim/full_system.hh"
 #include "sim/insttracer.hh"
-
-#if FULL_SYSTEM
-#include "arch/interrupts.hh"
-#endif
 
 class BaseCPUParams;
 class BranchPred;
@@ -173,7 +170,6 @@ class BaseCPU : public MemObject
 
     TheISA::MicrocodeRom microcodeRom;
 
-#if FULL_SYSTEM
   protected:
     TheISA::Interrupts *interrupts;
 
@@ -190,7 +186,8 @@ class BaseCPU : public MemObject
     postInterrupt(int int_num, int index)
     {
         interrupts->post(int_num, index);
-        wakeup();
+        if (FullSystem)
+            wakeup();
     }
 
     void
@@ -208,7 +205,7 @@ class BaseCPU : public MemObject
     bool
     checkInterrupts(ThreadContext *tc) const
     {
-        return interrupts->checkInterrupts(tc);
+        return FullSystem && interrupts->checkInterrupts(tc);
     }
 
     class ProfileEvent : public Event
@@ -222,7 +219,6 @@ class BaseCPU : public MemObject
         void process();
     };
     ProfileEvent *profileEvent;
-#endif
 
   protected:
     std::vector<ThreadContext *> threadContexts;
@@ -305,7 +301,6 @@ class BaseCPU : public MemObject
 
     Tick phase;
 
-#if FULL_SYSTEM
     /**
      * Serialize this object to the given output stream.
      * @param os The stream to serialize to.
@@ -318,8 +313,6 @@ class BaseCPU : public MemObject
      * @param section The section name of this object
      */
     virtual void unserialize(Checkpoint *cp, const std::string &section);
-
-#endif
 
     /**
      * Return pointer to CPU's branch predictor (NULL if none).

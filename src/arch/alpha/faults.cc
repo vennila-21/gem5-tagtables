@@ -35,11 +35,9 @@
 #include "base/trace.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
-
-#if !FULL_SYSTEM
 #include "mem/page_table.hh"
 #include "sim/process.hh"
-#endif
+#include "sim/full_system.hh"
 
 namespace AlphaISA {
 
@@ -107,12 +105,12 @@ FaultName IntegerOverflowFault::_name = "intover";
 FaultVect IntegerOverflowFault::_vect = 0x0501;
 FaultStat IntegerOverflowFault::_count;
 
-#if FULL_SYSTEM
-
 void
 AlphaFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
     FaultBase::invoke(tc);
+    if (!FullSystem)
+        return;
     countStat()++;
 
     PCState pc = tc->pcState();
@@ -135,32 +133,36 @@ void
 ArithmeticFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
     FaultBase::invoke(tc);
+    if (!FullSystem)
+        return;
     panic("Arithmetic traps are unimplemented!");
 }
 
 void
 DtbFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    // Set fault address and flags.  Even though we're modeling an
-    // EV5, we use the EV6 technique of not latching fault registers
-    // on VPTE loads (instead of locking the registers until IPR_VA is
-    // read, like the EV5).  The EV6 approach is cleaner and seems to
-    // work with EV5 PAL code, but not the other way around.
-    if (!tc->misspeculating() &&
-        reqFlags.noneSet(Request::VPTE | Request::PREFETCH)) {
-        // set VA register with faulting address
-        tc->setMiscRegNoEffect(IPR_VA, vaddr);
+    if (FullSystem) {
+        // Set fault address and flags.  Even though we're modeling an
+        // EV5, we use the EV6 technique of not latching fault registers
+        // on VPTE loads (instead of locking the registers until IPR_VA is
+        // read, like the EV5).  The EV6 approach is cleaner and seems to
+        // work with EV5 PAL code, but not the other way around.
+        if (!tc->misspeculating() &&
+            reqFlags.noneSet(Request::VPTE | Request::PREFETCH)) {
+            // set VA register with faulting address
+            tc->setMiscRegNoEffect(IPR_VA, vaddr);
 
-        // set MM_STAT register flags
-        MachInst machInst = inst->machInst;
-        tc->setMiscRegNoEffect(IPR_MM_STAT,
-            (((Opcode(machInst) & 0x3f) << 11) |
-             ((Ra(machInst) & 0x1f) << 6) |
-             (flags & 0x3f)));
+            // set MM_STAT register flags
+            MachInst machInst = inst->machInst;
+            tc->setMiscRegNoEffect(IPR_MM_STAT,
+                (((Opcode(machInst) & 0x3f) << 11) |
+                 ((Ra(machInst) & 0x1f) << 6) |
+                 (flags & 0x3f)));
 
-        // set VA_FORM register with faulting formatted address
-        tc->setMiscRegNoEffect(IPR_VA_FORM,
-            tc->readMiscRegNoEffect(IPR_MVPTBR) | (vaddr.vpn() << 3));
+            // set VA_FORM register with faulting formatted address
+            tc->setMiscRegNoEffect(IPR_VA_FORM,
+                tc->readMiscRegNoEffect(IPR_MVPTBR) | (vaddr.vpn() << 3));
+        }
     }
 
     AlphaFault::invoke(tc);
@@ -169,20 +171,25 @@ DtbFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 void
 ItbFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    if (!tc->misspeculating()) {
-        tc->setMiscRegNoEffect(IPR_ITB_TAG, pc);
-        tc->setMiscRegNoEffect(IPR_IFAULT_VA_FORM,
-            tc->readMiscRegNoEffect(IPR_IVPTBR) | (VAddr(pc).vpn() << 3));
+    if (FullSystem) {
+        if (!tc->misspeculating()) {
+            tc->setMiscRegNoEffect(IPR_ITB_TAG, pc);
+            tc->setMiscRegNoEffect(IPR_IFAULT_VA_FORM,
+                tc->readMiscRegNoEffect(IPR_IVPTBR) | (VAddr(pc).vpn() << 3));
+        }
     }
 
     AlphaFault::invoke(tc);
 }
 
-#else
-
 void
 ItbPageFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
+    if (FullSystem) {
+        ItbFault::invoke(tc);
+        return;
+    }
+
     Process *p = tc->getProcessPtr();
     TlbEntry entry;
     bool success = p->pTable->lookup(pc, entry);
@@ -197,6 +204,11 @@ ItbPageFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 void
 NDtbMissFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
+    if (FullSystem) {
+        DtbFault::invoke(tc, inst);
+        return;
+    }
+
     Process *p = tc->getProcessPtr();
     TlbEntry entry;
     bool success = p->pTable->lookup(vaddr, entry);
@@ -210,8 +222,6 @@ NDtbMissFault::invoke(ThreadContext *tc, StaticInstPtr inst)
         tc->getDTBPtr()->insert(vaddr.page(), entry);
     }
 }
-
-#endif
 
 } // namespace AlphaISA
 

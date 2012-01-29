@@ -47,6 +47,7 @@
 #include "dev/x86/south_bridge.hh"
 #include "mem/packet_access.hh"
 #include "sim/system.hh"
+#include "sim/full_system.hh"
 
 int
 divideFromConf(uint32_t conf)
@@ -273,8 +274,9 @@ X86ISA::Interrupts::requestInterrupt(uint8_t vector,
             pendingUnmaskableInt = pendingStartup = true;
             startupVector = vector;
         }
-    } 
-    cpu->wakeup();
+    }
+    if (FullSystem)
+        cpu->wakeup();
 }
 
 
@@ -302,10 +304,6 @@ X86ISA::Interrupts::init()
     //
     BasicPioDevice::init();
     IntDev::init();
-
-    Pc * pc = dynamic_cast<Pc *>(platform);
-    assert(pc);
-    pc->southBridge->ioApic->registerLocalApic(initialApicId, this);
 }
 
 

@@ -40,15 +40,12 @@
 
 #include "arch/arm/faults.hh"
 #include "arch/arm/isa_traits.hh"
-#include "arch/arm/utility.hh"
-#include "cpu/thread_context.hh"
-
-#if FULL_SYSTEM
-#include "arch/arm/vtophys.hh"
-#include "mem/fs_translating_port_proxy.hh"
-#endif
-
 #include "arch/arm/tlb.hh"
+#include "arch/arm/utility.hh"
+#include "arch/arm/vtophys.hh"
+#include "cpu/thread_context.hh"
+#include "mem/fs_translating_port_proxy.hh"
+#include "sim/full_system.hh"
 
 namespace ArmISA {
 
@@ -66,20 +63,24 @@ initCPU(ThreadContext *tc, int cpuId)
 uint64_t
 getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
 {
-#if FULL_SYSTEM
+    if (!FullSystem) {
+        panic("getArgument() only implemented for full system mode.\n");
+        M5_DUMMY_RETURN
+    }
+
     if (size == (uint16_t)(-1))
         size = ArmISA::MachineBytes;
     if (fp)
         panic("getArgument(): Floating point arguments not implemented\n");
 
     if (number < NumArgumentRegs) {
-        // If the argument is 64 bits, it must be in an even regiser number
-        // Increment the number here if it isn't even
+        // If the argument is 64 bits, it must be in an even regiser
+        // number. Increment the number here if it isn't even.
         if (size == sizeof(uint64_t)) {
             if ((number % 2) != 0)
                 number++;
-            // Read the two halves of the data
-            // number is inc here to get the second half of the 64 bit reg
+            // Read the two halves of the data. Number is inc here to
+            // get the second half of the 64 bit reg.
             uint64_t tmp;
             tmp = tc->readIntReg(number++);
             tmp |= tc->readIntReg(number) << 32;
@@ -105,10 +106,6 @@ getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
         }
         return arg;
     }
-#else
-    panic("getArgument() only implemented for FULL_SYSTEM\n");
-    M5_DUMMY_RETURN
-#endif
 }
 
 void

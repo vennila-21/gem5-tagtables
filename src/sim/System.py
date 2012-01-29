@@ -70,14 +70,10 @@ class System(MemObject):
     work_cpus_ckpt_count = Param.Counter(0,
         "create checkpoint when active cpu count value is reached")
 
-    if buildEnv['FULL_SYSTEM']:
-        abstract = True
-        boot_cpu_frequency = Param.Frequency(Self.cpu[0].clock.frequency,
-                                             "boot processor frequency")
-        init_param = Param.UInt64(0, "numerical value to pass into simulator")
-        boot_osflags = Param.String("a", "boot flags to pass to the kernel")
-        kernel = Param.String("", "file that contains the kernel code")
-        readfile = Param.String("", "file to read startup script from")
-        symbolfile = Param.String("", "file to get the symbols from")
-        load_addr_mask = Param.UInt64(0xffffffffff,
-                "Address to mask loading binaries with");
+    init_param = Param.UInt64(0, "numerical value to pass into simulator")
+    boot_osflags = Param.String("a", "boot flags to pass to the kernel")
+    kernel = Param.String("", "file that contains the kernel code")
+    readfile = Param.String("", "file to read startup script from")
+    symbolfile = Param.String("", "file to get the symbols from")
+    load_addr_mask = Param.UInt64(0xffffffffff,
+            "Address to mask loading binaries with");

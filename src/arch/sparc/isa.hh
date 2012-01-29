@@ -36,7 +36,6 @@
 
 #include "arch/sparc/registers.hh"
 #include "arch/sparc/types.hh"
-#include "config/full_system.hh"
 #include "cpu/cpuevent.hh"
 
 class Checkpoint;
@@ -114,7 +113,6 @@ class ISA
 
     // These need to check the int_dis field and if 0 then
     // set appropriate bit in softint and checkinterrutps on the cpu
-#if FULL_SYSTEM
     void  setFSReg(int miscReg, const MiscReg &val, ThreadContext *tc);
     MiscReg readFSReg(int miscReg, ThreadContext * tc);
 
@@ -138,7 +136,6 @@ class ISA
     typedef CpuEventWrapper<ISA,
             &ISA::processHSTickCompare> HSTickCompareEvent;
     HSTickCompareEvent *hSTickCompare;
-#endif
 
     static const int NumGlobalRegs = 8;
     static const int NumWindowedRegs = 24;
@@ -205,11 +202,9 @@ class ISA
 
     ISA()
     {
-#if FULL_SYSTEM
         tickCompare = NULL;
         sTickCompare = NULL;
         hSTickCompare = NULL;
-#endif
 
         clear();
     }

@@ -49,7 +49,6 @@
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Thread.hh"
-#include "dev/platform.hh"
 #include "kern/linux/events.hh"
 #include "kern/linux/printk.hh"
 #include "mem/physical.hh"
@@ -176,7 +175,7 @@ LinuxAlphaSystem::setDelayLoop(ThreadContext *tc)
     Addr addr = 0;
     if (kernelSymtab->findAddress("loops_per_jiffy", addr)) {
         Tick cpuFreq = tc->getCpuPtr()->frequency();
-        Tick intrFreq = platform->intrFrequency();
+        assert(intrFreq);
         FSTranslatingPortProxy* vp;
 
         vp = tc->getVirtProxy();

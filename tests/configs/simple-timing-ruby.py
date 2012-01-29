@@ -32,9 +32,6 @@ from m5.defines import buildEnv
 from m5.util import addToPath
 import os, optparse, sys
 
-if buildEnv['FULL_SYSTEM']:
-    panic("This script requires system-emulation mode (*_SE).")
-
 # Get paths we might need
 config_path = os.path.dirname(os.path.abspath(__file__))
 config_root = os.path.dirname(config_path)
@@ -82,8 +79,7 @@ assert(len(system.ruby._cpu_ruby_ports) == 1)
 # Tie the cpu cache ports to the ruby cpu ports and
 # physmem, respectively
 #
-cpu.icache_port = system.ruby._cpu_ruby_ports[0].port
-cpu.dcache_port = system.ruby._cpu_ruby_ports[0].port
+cpu.connectAllPorts(system.ruby._cpu_ruby_ports[0])
 
 # Connect the system port for loading of binaries etc
 system.system_port = system.ruby._sys_port_proxy.port
@@ -92,7 +88,7 @@ system.system_port = system.ruby._sys_port_proxy.port
 # run simulation
 # -----------------------
 
-root = Root(system = system)
+root = Root(full_system = False, system = system)
 root.system.mem_mode = 'timing'
 
 # Not much point in this being higher than the L1 latency

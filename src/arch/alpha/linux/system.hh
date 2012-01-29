@@ -134,6 +134,8 @@ class LinuxAlphaSystem : public AlphaSystem
     virtual void initState();
 
     void setDelayLoop(ThreadContext *tc);
+
+    const Params *params() const { return (const Params *)_params; }
 };
 
 #endif // __ARCH_ALPHA_LINUX_SYSTEM_HH__

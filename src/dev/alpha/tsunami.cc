@@ -36,6 +36,7 @@
 #include <string>
 #include <vector>
 
+#include "arch/alpha/system.hh"
 #include "config/the_isa.hh"
 #include "cpu/intr_control.hh"
 #include "dev/alpha/tsunami.hh"
@@ -43,7 +44,6 @@
 #include "dev/alpha/tsunami_io.hh"
 #include "dev/alpha/tsunami_pchip.hh"
 #include "dev/terminal.hh"
-#include "sim/system.hh"
 
 using namespace std;
 //Should this be AlphaISA?
@@ -52,17 +52,16 @@ using namespace TheISA;
 Tsunami::Tsunami(const Params *p)
     : Platform(p), system(p->system)
 {
-    // set the back pointer from the system to myself
-    system->platform = this;
-
     for (int i = 0; i < Tsunami::Max_CPUs; i++)
         intr_sum_type[i] = 0;
 }
 
-Tick
-Tsunami::intrFrequency()
+void
+Tsunami::init()
 {
-    return io->frequency();
+    AlphaSystem *alphaSystem = dynamic_cast<AlphaSystem *>(system);
+    assert(alphaSystem);
+    alphaSystem->setIntrFreq(io->frequency());
 }
 
 void

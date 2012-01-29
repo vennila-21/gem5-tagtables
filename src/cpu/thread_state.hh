@@ -36,13 +36,9 @@
 #include "cpu/base.hh"
 #include "cpu/profile.hh"
 #include "cpu/thread_context.hh"
-
-#if !FULL_SYSTEM
 #include "mem/mem_object.hh"
 #include "sim/process.hh"
-#endif
 
-#if FULL_SYSTEM
 class EndQuiesceEvent;
 class FunctionProfile;
 class ProfileNode;
@@ -51,7 +47,6 @@ namespace TheISA {
         class Statistics;
     };
 };
-#endif
 
 class Checkpoint;
 class PortProxy;
@@ -67,11 +62,7 @@ class FSTranslatingPort;
 struct ThreadState {
     typedef ThreadContext::Status Status;
 
-#if FULL_SYSTEM
-    ThreadState(BaseCPU *cpu, ThreadID _tid);
-#else
     ThreadState(BaseCPU *cpu, ThreadID _tid, Process *_process);
-#endif
 
     ~ThreadState();
 
@@ -93,7 +84,6 @@ struct ThreadState {
 
     Tick readLastSuspend() { return lastSuspend; }
 
-#if FULL_SYSTEM
     /**
      * Initialise the physical and virtual port proxies and tie them to
      * the data port of the CPU.
@@ -115,11 +105,10 @@ struct ThreadState {
     PortProxy* getPhysProxy() { return physProxy; }
 
     FSTranslatingPortProxy* getVirtProxy() { return virtProxy; }
-#else
+
     Process *getProcessPtr() { return process; }
 
     SETranslatingPortProxy* getMemProxy();
-#endif
 
     /** Reads the number of instructions functionally executed and
      * committed.
@@ -173,7 +162,6 @@ struct ThreadState {
     /** Last time suspend was called on this thread. */
     Tick lastSuspend;
 
-#if FULL_SYSTEM
   public:
     FunctionProfile *profile;
     ProfileNode *profileNode;
@@ -181,7 +169,10 @@ struct ThreadState {
     EndQuiesceEvent *quiesceEvent;
 
     TheISA::Kernel::Statistics *kernelStats;
+
   protected:
+    Process *process;
+
     /** A port proxy outgoing only for functional accesses to physical
      * addresses.*/
     PortProxy *physProxy;
@@ -189,11 +180,7 @@ struct ThreadState {
     /** A translating port proxy, outgoing only, for functional
      * accesse to virtual addresses. */
     FSTranslatingPortProxy* virtProxy;
-#else
     SETranslatingPortProxy* proxy;
-
-    Process *process;
-#endif
 
   public:
     /*

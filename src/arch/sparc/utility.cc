@@ -31,10 +31,8 @@
 
 #include "arch/sparc/faults.hh"
 #include "arch/sparc/utility.hh"
-#if FULL_SYSTEM
 #include "arch/sparc/vtophys.hh"
 #include "mem/fs_translating_port_proxy.hh"
-#endif
 
 namespace SparcISA {
 
@@ -48,7 +46,11 @@ namespace SparcISA {
 uint64_t
 getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
 {
-#if FULL_SYSTEM
+    if (!FullSystem) {
+        panic("getArgument() only implemented for full system\n");
+        M5_DUMMY_RETURN
+    }
+
     const int NumArgumentRegs = 6;
     if (number < NumArgumentRegs) {
         return tc->readIntReg(8 + number);
@@ -59,10 +61,6 @@ getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
                             (number-NumArgumentRegs) * sizeof(uint64_t));
         return arg;
     }
-#else
-    panic("getArgument() only implemented for FULL_SYSTEM\n");
-    M5_DUMMY_RETURN
-#endif
 }
 
 void

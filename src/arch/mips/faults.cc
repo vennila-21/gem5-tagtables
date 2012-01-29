@@ -39,11 +39,8 @@
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "debug/MipsPRA.hh"
-
-#if !FULL_SYSTEM
 #include "mem/page_table.hh"
 #include "sim/process.hh"
-#endif
 
 namespace MipsISA
 {
@@ -136,7 +133,7 @@ MipsFaultBase::setExceptionState(ThreadContext *tc, uint8_t excCode)
 void
 MipsFaultBase::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    if (FULL_SYSTEM) {
+    if (FullSystem) {
         DPRINTF(MipsPRA, "Fault %s encountered.\n", name());
         setExceptionState(tc, code());
         tc->pcState(vect(tc));
@@ -148,7 +145,7 @@ MipsFaultBase::invoke(ThreadContext *tc, StaticInstPtr inst)
 void
 ResetFault::invoke(ThreadContext *tc, StaticInstPtr inst)
 {
-    if (FULL_SYSTEM) {
+    if (FullSystem) {
         DPRINTF(MipsPRA, "%s encountered.\n", name());
         /* All reset activity must be invoked from here */
         Addr handler = vect(tc);
