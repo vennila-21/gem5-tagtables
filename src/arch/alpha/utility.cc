@@ -30,18 +30,20 @@
  */
 
 #include "arch/alpha/utility.hh"
-
-#if FULL_SYSTEM
 #include "arch/alpha/vtophys.hh"
 #include "mem/fs_translating_port_proxy.hh"
-#endif
+#include "sim/full_system.hh"
 
 namespace AlphaISA {
 
 uint64_t
 getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
 {
-#if FULL_SYSTEM
+    if (!FullSystem) {
+        panic("getArgument() is Full system only\n");
+        M5_DUMMY_RETURN;
+    }
+
     const int NumArgumentRegs = 6;
     if (number < NumArgumentRegs) {
         if (fp)
@@ -55,10 +57,6 @@ getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
                            (number-NumArgumentRegs) * sizeof(uint64_t));
         return arg;
     }
-#else
-    panic("getArgument() is Full system only\n");
-    M5_DUMMY_RETURN;
-#endif
 }
 
 void

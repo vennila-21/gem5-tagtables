@@ -43,6 +43,9 @@ class ThreadContext;
 
 namespace PowerISA {
 
+Addr vtophys(Addr vaddr);
+Addr vtophys(ThreadContext *tc, Addr vaddr);
+
 inline Addr
 PteAddr(Addr a)
 {

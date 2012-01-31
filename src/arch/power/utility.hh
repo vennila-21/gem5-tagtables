@@ -78,6 +78,8 @@ advancePC(PCState &pc, const StaticInstPtr inst)
     pc.advance();
 }
 
+uint64_t getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp);
+
 static inline bool
 inUserMode(ThreadContext *tc)
 {
@@ -89,6 +91,8 @@ getExecutingAsid(ThreadContext *tc)
 {
     return 0;
 }
+
+void initCPU(ThreadContext *, int cpuId);
 
 } // namespace PowerISA
 

@@ -48,27 +48,23 @@
 #include "arch/isa_traits.hh"
 #include "arch/remote_gdb.hh"
 #include "arch/utility.hh"
+#include "arch/vtophys.hh"
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
 #include "base/trace.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Loader.hh"
 #include "debug/WorkItems.hh"
-#include "mem/mem_object.hh"
-#include "mem/physical.hh"
-#include "sim/byteswap.hh"
-#include "sim/debug.hh"
-#include "sim/system.hh"
-
-#if FULL_SYSTEM
-#include "arch/vtophys.hh"
 #include "kern/kernel_stats.hh"
 #include "mem/fs_translating_port_proxy.hh"
-#else
+#include "mem/mem_object.hh"
+#include "mem/physical.hh"
 #include "params/System.hh"
-#endif
+#include "sim/byteswap.hh"
+#include "sim/debug.hh"
+#include "sim/full_system.hh"
+#include "sim/system.hh"
 
 using namespace std;
 using namespace TheISA;
@@ -81,13 +77,9 @@ System::System(Params *p)
     : MemObject(p), _systemPort("system_port", this),
       physmem(p->physmem),
       _numContexts(0),
-#if FULL_SYSTEM
       init_param(p->init_param),
       loadAddrMask(p->load_addr_mask),
-#else
-      pagePtr(0),
       nextPID(0),
-#endif
       memoryMode(p->mem_mode),
       workItemsBegin(0),
       workItemsEnd(0),
@@ -109,28 +101,23 @@ System::System(Params *p)
                                       p->memories[x]->size()));
     }
 
-#if FULL_SYSTEM
-    kernelSymtab = new SymbolTable;
-    if (!debugSymbolTable)
-        debugSymbolTable = new SymbolTable;
+    if (FullSystem) {
+        kernelSymtab = new SymbolTable;
+        if (!debugSymbolTable)
+            debugSymbolTable = new SymbolTable;
 
-    /**
-     * Get a port proxy to memory
-     */
-    physProxy = new PortProxy(*getSystemPort());
-    virtProxy = new FSTranslatingPortProxy(*getSystemPort());
-#endif
+        /**
+         * Get a port proxy to memory
+         */
+        physProxy = new PortProxy(*getSystemPort());
+        virtProxy = new FSTranslatingPortProxy(*getSystemPort());
+    }
 }
 
 System::~System()
 {
-#if FULL_SYSTEM
     delete kernelSymtab;
     delete kernel;
-#else
-    panic("System::fixFuncEventAddr needs to be rewritten "
-          "to work with syscall emulation");
-#endif // FULL_SYSTEM}
 
     for (uint32_t j = 0; j < numWorkIds; j++)
         delete workItemStats[j];
@@ -231,61 +218,64 @@ System::numRunningContexts()
 void
 System::initState()
 {
-    // Moved from the constructor to here since it relies on the
-    // address map being resolved in the interconnect
-#if FULL_SYSTEM
-    /**
-     * Load the kernel code into memory
-     */
-    if (params()->kernel == "") {
-        inform("No kernel set for full system simulation. Assuming you know what"
-                " you're doing...\n");
-    } else {
-        // Load kernel code
-        kernel = createObjectFile(params()->kernel);
-        inform("kernel located at: %s", params()->kernel);
+    int i;
+    if (FullSystem) {
+        for (i = 0; i < threadContexts.size(); i++)
+            TheISA::startupCPU(threadContexts[i], i);
+        // Moved from the constructor to here since it relies on the
+        // address map being resolved in the interconnect
+        /**
+         * Load the kernel code into memory
+         */
+        if (params()->kernel == "") {
+            inform("No kernel set for full system simulation. "
+                    "Assuming you know what you're doing...\n");
+        } else {
+            // Load kernel code
+            kernel = createObjectFile(params()->kernel);
+            inform("kernel located at: %s", params()->kernel);
 
-        if (kernel == NULL)
-            fatal("Could not load kernel file %s", params()->kernel);
+            if (kernel == NULL)
+                fatal("Could not load kernel file %s", params()->kernel);
 
-        // Load program sections into memory
-        kernel->loadSections(physProxy, loadAddrMask);
+            // Load program sections into memory
+            kernel->loadSections(physProxy, loadAddrMask);
 
-        // setup entry points
-        kernelStart = kernel->textBase();
-        kernelEnd = kernel->bssBase() + kernel->bssSize();
-        kernelEntry = kernel->entryPoint();
+            // setup entry points
+            kernelStart = kernel->textBase();
+            kernelEnd = kernel->bssBase() + kernel->bssSize();
+            kernelEntry = kernel->entryPoint();
 
-        // load symbols
-        if (!kernel->loadGlobalSymbols(kernelSymtab))
-            fatal("could not load kernel symbols\n");
+            // load symbols
+            if (!kernel->loadGlobalSymbols(kernelSymtab))
+                fatal("could not load kernel symbols\n");
 
-        if (!kernel->loadLocalSymbols(kernelSymtab))
-            fatal("could not load kernel local symbols\n");
+            if (!kernel->loadLocalSymbols(kernelSymtab))
+                fatal("could not load kernel local symbols\n");
 
-        if (!kernel->loadGlobalSymbols(debugSymbolTable))
-            fatal("could not load kernel symbols\n");
+            if (!kernel->loadGlobalSymbols(debugSymbolTable))
+                fatal("could not load kernel symbols\n");
 
-        if (!kernel->loadLocalSymbols(debugSymbolTable))
-            fatal("could not load kernel local symbols\n");
+            if (!kernel->loadLocalSymbols(debugSymbolTable))
+                fatal("could not load kernel local symbols\n");
 
-        DPRINTF(Loader, "Kernel start = %#x\n", kernelStart);
-        DPRINTF(Loader, "Kernel end   = %#x\n", kernelEnd);
-        DPRINTF(Loader, "Kernel entry = %#x\n", kernelEntry);
-        DPRINTF(Loader, "Kernel loaded...\n");
+            DPRINTF(Loader, "Kernel start = %#x\n", kernelStart);
+            DPRINTF(Loader, "Kernel end   = %#x\n", kernelEnd);
+            DPRINTF(Loader, "Kernel entry = %#x\n", kernelEntry);
+            DPRINTF(Loader, "Kernel loaded...\n");
+        }
     }
-#endif // FULL_SYSTEM
 
     // increment the number of running systms
     numSystemsRunning++;
 
     activeCpus.clear();
 
-#if FULL_SYSTEM
-    int i;
+    if (!FullSystem)
+        return;
+
     for (i = 0; i < threadContexts.size(); i++)
         TheISA::startupCPU(threadContexts[i], i);
-#endif
 }
 
 void
@@ -301,7 +291,6 @@ System::replaceThreadContext(ThreadContext *tc, int context_id)
         remoteGDB[context_id]->replaceThreadContext(tc);
 }
 
-#if !FULL_SYSTEM
 Addr
 System::allocPhysPages(int npages)
 {
@@ -324,8 +313,6 @@ System::freeMemSize()
    return physmem->size() - (pagePtr << LogVMPageSize);
 }
 
-#endif
-
 bool
 System::isMemory(const Addr addr) const
 {
@@ -347,24 +334,20 @@ System::resume()
 void
 System::serialize(ostream &os)
 {
-#if FULL_SYSTEM
-    kernelSymtab->serialize("kernel_symtab", os);
-#else // !FULL_SYSTEM
+    if (FullSystem)
+        kernelSymtab->serialize("kernel_symtab", os);
     SERIALIZE_SCALAR(pagePtr);
     SERIALIZE_SCALAR(nextPID);
-#endif
 }
 
 
 void
 System::unserialize(Checkpoint *cp, const string &section)
 {
-#if FULL_SYSTEM
-    kernelSymtab->unserialize("kernel_symtab", cp, section);
-#else // !FULL_SYSTEM
+    if (FullSystem)
+        kernelSymtab->unserialize("kernel_symtab", cp, section);
     UNSERIALIZE_SCALAR(pagePtr);
     UNSERIALIZE_SCALAR(nextPID);
-#endif
 }
 
 void
@@ -418,12 +401,8 @@ printSystems()
 const char *System::MemoryModeStrings[3] = {"invalid", "atomic",
     "timing"};
 
-#if !FULL_SYSTEM
-
 System *
 SystemParams::create()
 {
     return new System(this);
 }
-
-#endif

@@ -60,17 +60,7 @@ using namespace TheISA;
 
 RealView::RealView(const Params *p)
     : Platform(p), system(p->system)
-{
-    // set the back pointer from the system to myself
-    system->platform = this;
-}
-
-Tick
-RealView::intrFrequency()
-{
-    panic("Need implementation\n");
-    M5_DUMMY_RETURN
-}
+{}
 
 void
 RealView::postConsoleInt()

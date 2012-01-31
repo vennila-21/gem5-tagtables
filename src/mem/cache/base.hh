@@ -47,7 +47,6 @@
 #include "base/statistics.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
-#include "config/full_system.hh"
 #include "debug/Cache.hh"
 #include "debug/CachePort.hh"
 #include "mem/cache/mshr_queue.hh"
@@ -57,6 +56,7 @@
 #include "mem/tport.hh"
 #include "params/BaseCache.hh"
 #include "sim/eventq.hh"
+#include "sim/full_system.hh"
 #include "sim/sim_exit.hh"
 
 class MSHR;
@@ -505,12 +505,10 @@ class BaseCache : public MemObject
              * available, meanwhile writeback hit/miss stats are not used
              * in any aggregate hit/miss calculations, so just lump them all
              * in bucket 0 */
-#if FULL_SYSTEM
-        } else if (id == -1) {
+        } else if (FullSystem && id == -1) {
             // Device accesses have id -1
             // lump device accesses into their own bucket
             misses[pkt->cmdToIndex()][_numCpus]++;
-#endif
         } else {
             misses[pkt->cmdToIndex()][id % _numCpus]++;
         }
@@ -533,12 +531,10 @@ class BaseCache : public MemObject
         if (pkt->cmd == MemCmd::Writeback) {
             assert(id == -1);
             hits[pkt->cmdToIndex()][0]++;
-#if FULL_SYSTEM
-        } else if (id == -1) {
+        } else if (FullSystem && id == -1) {
             // Device accesses have id -1
             // lump device accesses into their own bucket
             hits[pkt->cmdToIndex()][_numCpus]++;
-#endif
         } else {
             /* the % is necessary in case there are switch cpus */
             hits[pkt->cmdToIndex()][id % _numCpus]++;

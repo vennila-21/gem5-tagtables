@@ -295,7 +295,9 @@ TLB::regStats()
 Fault
 TLB::translateInst(RequestPtr req, ThreadContext *tc)
 {
-#if !FULL_SYSTEM
+    if (FullSystem)
+        panic("translateInst not implemented in MIPS.\n");
+
     Process * p = tc->getProcessPtr();
 
     Fault fault = p->pTable->translate(req);
@@ -303,93 +305,13 @@ TLB::translateInst(RequestPtr req, ThreadContext *tc)
         return fault;
 
     return NoFault;
-#else
-    Addr vaddr = req->getVaddr();
-
-    bool misaligned = (req->getSize() - 1) & vaddr;
-
-    if (IsKSeg0(vaddr)) {
-        // Address will not be translated through TLB, set response, and go!
-        req->setPaddr(KSeg02Phys(vaddr));
-        if (getOperatingMode(tc->readMiscReg(MISCREG_STATUS)) != mode_kernel ||
-                misaligned) {
-            return new AddressErrorFault(vaddr, false);
-        }
-    } else if(IsKSeg1(vaddr)) {
-        // Address will not be translated through TLB, set response, and go!
-        req->setPaddr(KSeg02Phys(vaddr));
-    } else {
-      /* 
-       * This is an optimization - smallPages is updated every time a TLB
-       * operation is performed. That way, we don't need to look at
-       * Config3 _ SP and PageGrain _ ESP every time we do a TLB lookup
-       */
-      Addr VPN;
-      if (smallPages == 1) {
-        VPN = (vaddr >> 11);
-      } else {
-        VPN = ((vaddr >> 11) & 0xFFFFFFFC);
-      }
-      uint8_t Asid = req->getAsid();
-      if (misaligned) {
-          // Unaligned address!
-          return new AddressErrorFault(vaddr, false);
-      }
-      PTE *pte = lookup(VPN,Asid);
-      if (pte != NULL) {
-          // Ok, found something
-          /* Check for valid bits */
-          int EvenOdd;
-          bool Valid;
-          if ((((vaddr) >> pte->AddrShiftAmount) & 1) == 0) {
-              // Check even bits
-              Valid = pte->V0;
-              EvenOdd = 0;
-          } else {
-              // Check odd bits
-              Valid = pte->V1;
-              EvenOdd = 1;
-          }
-
-          if (Valid == false) {
-              return new TlbInvalidFault(Asid, vaddr, VPN, false);
-          } else {
-              // Ok, this is really a match, set paddr
-              Addr PAddr;
-              if (EvenOdd == 0) {
-                PAddr = pte->PFN0;
-              } else {
-                PAddr = pte->PFN1;
-              }
-              PAddr >>= (pte->AddrShiftAmount - 12);
-              PAddr <<= pte->AddrShiftAmount;
-              PAddr |= (vaddr & pte->OffsetMask);
-              req->setPaddr(PAddr);
-            }
-        } else {
-            // Didn't find any match, return a TLB Refill Exception
-            return new TlbRefillFault(Asid, vaddr, VPN, false);
-        }
-    }
-    return checkCacheability(req);
-#endif
 }
 
 Fault
 TLB::translateData(RequestPtr req, ThreadContext *tc, bool write)
 {
-#if !FULL_SYSTEM
-    //@TODO: This should actually use TLB instead of going directly
-    //       to the page table in syscall mode.
-    /**
-     * Check for alignment faults
-     */
-    if (req->getVaddr() & (req->getSize() - 1)) {
-        DPRINTF(TLB, "Alignment Fault on %#x, size = %d", req->getVaddr(),
-                req->getSize());
-        return new AddressErrorFault(req->getVaddr(), write);
-    }
-
+    if (FullSystem)
+        panic("translateData not implemented in MIPS.\n");
 
     Process * p = tc->getProcessPtr();
 
@@ -398,79 +320,6 @@ TLB::translateData(RequestPtr req, ThreadContext *tc, bool write)
         return fault;
 
     return NoFault;
-#else
-    Addr vaddr = req->getVaddr();
-
-    bool misaligned = (req->getSize() - 1) & vaddr;
-
-    if (IsKSeg0(vaddr)) {
-        // Address will not be translated through TLB, set response, and go!
-        req->setPaddr(KSeg02Phys(vaddr));
-        if (getOperatingMode(tc->readMiscReg(MISCREG_STATUS)) != mode_kernel ||
-                misaligned) {
-            return new AddressErrorFault(vaddr, true);
-        }
-    } else if(IsKSeg1(vaddr)) {
-      // Address will not be translated through TLB, set response, and go!
-      req->setPaddr(KSeg02Phys(vaddr));
-    } else {
-        /* 
-         * This is an optimization - smallPages is updated every time a TLB
-         * operation is performed. That way, we don't need to look at
-         * Config3 _ SP and PageGrain _ ESP every time we do a TLB lookup
-         */
-        Addr VPN = (vaddr >> 11) & 0xFFFFFFFC;
-        if (smallPages == 1) {
-            VPN = vaddr >> 11;
-        }
-        uint8_t Asid = req->getAsid();
-        PTE *pte = lookup(VPN, Asid);
-        if (misaligned) {
-            return new AddressErrorFault(vaddr, true);
-        }
-        if (pte != NULL) {
-            // Ok, found something
-            /* Check for valid bits */
-            int EvenOdd;
-            bool Valid;
-            bool Dirty;
-            if ((((vaddr >> pte->AddrShiftAmount) & 1)) == 0) {
-                // Check even bits
-                Valid = pte->V0;
-                Dirty = pte->D0;
-                EvenOdd = 0;
-            } else {
-                // Check odd bits
-                Valid = pte->V1;
-                Dirty = pte->D1;
-                EvenOdd = 1;
-            }
-
-            if (Valid == false) {
-                return new TlbInvalidFault(Asid, vaddr, VPN, write);
-            } else {
-                // Ok, this is really a match, set paddr
-                if (!Dirty && write) {
-                    return new TlbModifiedFault(Asid, vaddr, VPN);
-                }
-                Addr PAddr;
-                if (EvenOdd == 0) {
-                    PAddr = pte->PFN0;
-                } else {
-                    PAddr = pte->PFN1;
-                }
-                PAddr >>= (pte->AddrShiftAmount - 12);
-                PAddr <<= pte->AddrShiftAmount;
-                PAddr |= (vaddr & pte->OffsetMask);
-                req->setPaddr(PAddr);
-            }
-        } else {
-            // Didn't find any match, return a TLB Refill Exception
-            return new TlbRefillFault(Asid, vaddr, VPN, write);
-        }
-    }
-    return checkCacheability(req);
-#endif
 }
 
 Fault

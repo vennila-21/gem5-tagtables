@@ -33,7 +33,6 @@
 
 #include "arch/utility.hh"
 #include "base/bigint.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/inorder/resources/resource_list.hh"
 #include "cpu/inorder/cpu.hh"
@@ -46,21 +45,20 @@
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
 #include "cpu/exetrace.hh"
+#include "cpu/quiesce_event.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Activity.hh"
 #include "debug/InOrderCPU.hh"
+#include "debug/Interrupt.hh"
 #include "debug/RefCount.hh"
 #include "debug/SkedCache.hh"
 #include "debug/Quiesce.hh"
 #include "params/InOrderCPU.hh"
+#include "sim/full_system.hh"
 #include "sim/process.hh"
 #include "sim/stat_control.hh"
-
-#if FULL_SYSTEM
-#include "cpu/quiesce_event.hh"
 #include "sim/system.hh"
-#endif
 
 #if THE_ISA == ALPHA_ISA
 #include "arch/alpha/osfpal.hh"
@@ -152,12 +150,11 @@ InOrderCPU::CPUEvent::process()
         cpu->trapPending[tid] = false;
         break;
 
-#if !FULL_SYSTEM
       case Syscall:
         cpu->syscall(inst->syscallNum, tid);
         cpu->resPool->trap(fault, tid, inst);
         break;
-#endif
+
       default:
         fatal("Unrecognized Event Type %s", eventNames[cpuEventType]);    
     }
@@ -197,9 +194,7 @@ InOrderCPU::InOrderCPU(Params *params)
       timeBuffer(2 , 2),
       removeInstsThisCycle(false),
       activityRec(params->name, NumStages, 10, params->activity),
-#if FULL_SYSTEM
       system(params->system),
-#endif // FULL_SYSTEM
 #ifdef DEBUG
       cpuEventNum(0),
       resReqCount(0),
@@ -217,33 +212,33 @@ InOrderCPU::InOrderCPU(Params *params)
     // Resize for Multithreading CPUs
     thread.resize(numThreads);
 
-#if !FULL_SYSTEM
     ThreadID active_threads = params->workload.size();
-
-    if (active_threads > MaxThreads) {
-        panic("Workload Size too large. Increase the 'MaxThreads'"
-              "in your InOrder implementation or "
-              "edit your workload size.");
-    }
-
-    
-    if (active_threads > 1) {
-        threadModel = (InOrderCPU::ThreadModel) params->threadModel;
-
-        if (threadModel == SMT) {
-            DPRINTF(InOrderCPU, "Setting Thread Model to SMT.\n");            
-        } else if (threadModel == SwitchOnCacheMiss) {
-            DPRINTF(InOrderCPU, "Setting Thread Model to "
-                    "Switch On Cache Miss\n");
-        }
-        
+    if (FullSystem) {
+        active_threads = 1;
     } else {
-        threadModel = Single;
+        active_threads = params->workload.size();
+
+        if (active_threads > MaxThreads) {
+            panic("Workload Size too large. Increase the 'MaxThreads'"
+                  "in your InOrder implementation or "
+                  "edit your workload size.");
+        }
+
+
+        if (active_threads > 1) {
+            threadModel = (InOrderCPU::ThreadModel) params->threadModel;
+
+            if (threadModel == SMT) {
+                DPRINTF(InOrderCPU, "Setting Thread Model to SMT.\n");
+            } else if (threadModel == SwitchOnCacheMiss) {
+                DPRINTF(InOrderCPU, "Setting Thread Model to "
+                        "Switch On Cache Miss\n");
+            }
+
+        } else {
+            threadModel = Single;
+        }
     }
-     
-        
-    
-#endif
 
     // Bind the fetch & data ports from the resource pool.
     fetchPortIdx = resPool->getPortIdx(params->fetchMemPort);
@@ -260,36 +255,34 @@ InOrderCPU::InOrderCPU(Params *params)
         pc[tid].set(0);
         lastCommittedPC[tid].set(0);
 
-#if FULL_SYSTEM
-        // SMT is not supported in FS mode yet.
-        assert(numThreads == 1);
-        thread[tid] = new Thread(this, 0);
-#else
-        if (tid < (ThreadID)params->workload.size()) {
-            DPRINTF(InOrderCPU, "Workload[%i] process is %#x\n",
-                    tid, params->workload[tid]->prog_fname);
-            thread[tid] =
-                new Thread(this, tid, params->workload[tid]);
+        if (FullSystem) {
+            // SMT is not supported in FS mode yet.
+            assert(numThreads == 1);
+            thread[tid] = new Thread(this, 0, NULL);
         } else {
-            //Allocate Empty thread so M5 can use later
-            //when scheduling threads to CPU
-            Process* dummy_proc = params->workload[0];
-            thread[tid] = new Thread(this, tid, dummy_proc);
+            if (tid < (ThreadID)params->workload.size()) {
+                DPRINTF(InOrderCPU, "Workload[%i] process is %#x\n",
+                        tid, params->workload[tid]->prog_fname);
+                thread[tid] =
+                    new Thread(this, tid, params->workload[tid]);
+            } else {
+                //Allocate Empty thread so M5 can use later
+                //when scheduling threads to CPU
+                Process* dummy_proc = params->workload[0];
+                thread[tid] = new Thread(this, tid, dummy_proc);
+            }
+
+            // Eventually set this with parameters...
+            asid[tid] = tid;
         }
-        
-        // Eventually set this with parameters...
-        asid[tid] = tid;
-#endif
 
         // Setup the TC that will serve as the interface to the threads/CPU.
         InOrderThreadContext *tc = new InOrderThreadContext;
         tc->cpu = this;
         tc->thread = thread[tid];
 
-#if FULL_SYSTEM
         // Setup quiesce event.
         this->thread[tid]->quiesceEvent = new EndQuiesceEvent(tc);
-#endif
 
         // Give the thread the TC.
         thread[tid]->tc = tc;
@@ -348,16 +341,17 @@ InOrderCPU::InOrderCPU(Params *params)
 
         dummyReq[tid] = new ResourceRequest(resPool->getResource(0));
 
-#if FULL_SYSTEM
-    // Use this dummy inst to force squashing behind every instruction
-    // in pipeline
-    dummyTrapInst[tid] = new InOrderDynInst(this, NULL, 0, 0, 0);
-    dummyTrapInst[tid]->seqNum = 0;
-    dummyTrapInst[tid]->squashSeqNum = 0;
-    dummyTrapInst[tid]->setTid(tid);
-#endif
 
-    trapPending[tid] = false;
+        if (FullSystem) {
+            // Use this dummy inst to force squashing behind every instruction
+            // in pipeline
+            dummyTrapInst[tid] = new InOrderDynInst(this, NULL, 0, 0, 0);
+            dummyTrapInst[tid]->seqNum = 0;
+            dummyTrapInst[tid]->squashSeqNum = 0;
+            dummyTrapInst[tid]->setTid(tid);
+        }
+
+        trapPending[tid] = false;
 
     }
 
@@ -698,9 +692,7 @@ InOrderCPU::tick()
 
     ++numCycles;
 
-#if FULL_SYSTEM
     checkForInterrupts();
-#endif
 
     bool pipes_idle = true;
     //Tick each of the stages
@@ -761,14 +753,14 @@ InOrderCPU::init()
     for (ThreadID tid = 0; tid < numThreads; ++tid)
         thread[tid]->inSyscall = true;
 
-#if FULL_SYSTEM
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        ThreadContext *src_tc = threadContexts[tid];
-        TheISA::initCPU(src_tc, src_tc->contextId());
-        // Initialise the ThreadContext's memory proxies
-        thread[tid]->initMemProxies(thread[tid]->getTC());
+    if (FullSystem) {
+        for (ThreadID tid = 0; tid < numThreads; tid++) {
+            ThreadContext *src_tc = threadContexts[tid];
+            TheISA::initCPU(src_tc, src_tc->contextId());
+            // Initialise the ThreadContext's memory proxies
+            thread[tid]->initMemProxies(thread[tid]->getTC());
+        }
     }
-#endif
 
     // Clear inSyscall.
     for (ThreadID tid = 0; tid < numThreads; ++tid)
@@ -784,7 +776,6 @@ InOrderCPU::getPort(const std::string &if_name, int idx)
     return resPool->getPort(if_name, idx);
 }
 
-#if FULL_SYSTEM
 Fault
 InOrderCPU::hwrei(ThreadID tid)
 {
@@ -870,7 +861,6 @@ InOrderCPU::getInterrupts()
     return interrupts->getInterrupt(threadContexts[0]);
 }
 
-
 void
 InOrderCPU::processInterrupts(Fault interrupt)
 {
@@ -888,8 +878,6 @@ InOrderCPU::processInterrupts(Fault interrupt)
     // Note: Context ID ok here? Impl. of FS mode needs to revisit this
     trap(interrupt, threadContexts[0]->contextId(), dummyBufferInst);
 }
-
-#endif
 
 void
 InOrderCPU::trapContext(Fault fault, ThreadID tid, DynInstPtr inst, int delay)
@@ -1681,7 +1669,6 @@ InOrderCPU::wakeCPU()
     schedule(&tickEvent, nextCycle(curTick()));
 }
 
-#if FULL_SYSTEM
 // Lots of copied full system code...place into BaseCPU class?
 void
 InOrderCPU::wakeup()
@@ -1694,9 +1681,7 @@ InOrderCPU::wakeup()
     DPRINTF(Quiesce, "Suspended Processor woken\n");
     threadContexts[0]->activate();
 }
-#endif
 
-#if !FULL_SYSTEM
 void
 InOrderCPU::syscallContext(Fault fault, ThreadID tid, DynInstPtr inst, int delay)
 {
@@ -1734,7 +1719,6 @@ InOrderCPU::syscall(int64_t callnum, ThreadID tid)
     // Clear Non-Speculative Block Variable
     nonSpecInstActive[tid] = false;
 }
-#endif
 
 TheISA::TLB*
 InOrderCPU::getITBPtr()

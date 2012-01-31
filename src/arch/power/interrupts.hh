@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2005 The Regents of The University of Michigan
+ * Copyright (c) 2011 Google
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,22 +25,81 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Nathan Binkert
- *          Steve Reinhardt
+ * Authors: Gabe Black
  */
 
-#include "config/full_system.hh"
-#include "cpu/base.hh"
-#include "cpu/thread_context.hh"
+#ifndef __ARCH_POWER_INTERRUPT_HH__
+#define __ARCH_POWER_INTERRUPT_HH__
 
-#if FULL_SYSTEM
+#include "base/misc.hh"
+#include "params/PowerInterrupts.hh"
+#include "sim/sim_object.hh"
 
-////////////////////////////////////////////////////////////////////////
-//
-//  Machine dependent functions
-//
-void
-MipsISA::initCPU(ThreadContext *tc, int cpuId)
-{}
+class ThreadContext;
 
-#endif // FULL_SYSTEM || BARE_IRON
+namespace PowerISA {
+
+class Interrupts : public SimObject
+{
+  private:
+    BaseCPU * cpu;
+
+  public:
+    typedef PowerInterruptsParams Params;
+
+    const Params *
+    params() const
+    {
+        return dynamic_cast<const Params *>(_params);
+    }
+
+    Interrupts(Params * p) : SimObject(p), cpu(NULL)
+    {}
+
+    void
+    setCPU(BaseCPU * _cpu)
+    {
+        cpu = _cpu;
+    }
+
+    void
+    post(int int_num, int index)
+    {
+        panic("Interrupts::post not implemented.\n");
+    }
+
+    void
+    clear(int int_num, int index)
+    {
+        panic("Interrupts::clear not implemented.\n");
+    }
+
+    void
+    clearAll()
+    {
+        panic("Interrupts::clearAll not implemented.\n");
+    }
+
+    bool
+    checkInterrupts(ThreadContext *tc) const
+    {
+        panic("Interrupts::checkInterrupts not implemented.\n");
+    }
+
+    Fault
+    getInterrupt(ThreadContext *tc)
+    {
+        panic("Interrupts::getInterrupt not implemented.\n");
+    }
+
+    void
+    updateIntrInfo(ThreadContext *tc)
+    {
+        panic("Interrupts::updateIntrInfo not implemented.\n");
+    }
+};
+
+} // namespace PowerISA
+
+#endif // __ARCH_POWER_INTERRUPT_HH__
+

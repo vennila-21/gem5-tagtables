@@ -44,6 +44,7 @@
 
 #include <string>
 
+#include "arch/isa_traits.hh"
 #include "base/chunk_generator.hh"
 #include "config/the_isa.hh"
 #include "mem/page_table.hh"
@@ -64,10 +65,10 @@ SETranslatingPortProxy::~SETranslatingPortProxy()
 bool
 SETranslatingPortProxy::tryReadBlob(Addr addr, uint8_t *p, int size)
 {
-    Addr paddr;
     int prevSize = 0;
 
     for (ChunkGenerator gen(addr, size, VMPageSize); !gen.done(); gen.next()) {
+        Addr paddr;
 
         if (!pTable->translate(gen.addr(),paddr))
             return false;
@@ -90,11 +91,10 @@ SETranslatingPortProxy::readBlob(Addr addr, uint8_t *p, int size)
 bool
 SETranslatingPortProxy::tryWriteBlob(Addr addr, uint8_t *p, int size)
 {
-
-    Addr paddr;
     int prevSize = 0;
 
     for (ChunkGenerator gen(addr, size, VMPageSize); !gen.done(); gen.next()) {
+        Addr paddr;
 
         if (!pTable->translate(gen.addr(), paddr)) {
             if (allocating == Always) {
@@ -129,9 +129,8 @@ SETranslatingPortProxy::writeBlob(Addr addr, uint8_t *p, int size)
 bool
 SETranslatingPortProxy::tryMemsetBlob(Addr addr, uint8_t val, int size)
 {
-    Addr paddr;
-
     for (ChunkGenerator gen(addr, size, VMPageSize); !gen.done(); gen.next()) {
+        Addr paddr;
 
         if (!pTable->translate(gen.addr(), paddr)) {
             if (allocating == Always) {
@@ -160,14 +159,15 @@ SETranslatingPortProxy::memsetBlob(Addr addr, uint8_t val, int size)
 bool
 SETranslatingPortProxy::tryWriteString(Addr addr, const char *str)
 {
-    Addr paddr,vaddr;
     uint8_t c;
 
-    vaddr = addr;
+    Addr vaddr = addr;
 
     do {
         c = *str++;
-        if (!pTable->translate(vaddr++,paddr))
+        Addr paddr;
+
+        if (!pTable->translate(vaddr++, paddr))
             return false;
 
         PortProxy::writeBlob(paddr, &c, 1);
@@ -186,13 +186,14 @@ SETranslatingPortProxy::writeString(Addr addr, const char *str)
 bool
 SETranslatingPortProxy::tryReadString(std::string &str, Addr addr)
 {
-    Addr paddr,vaddr;
     uint8_t c;
 
-    vaddr = addr;
+    Addr vaddr = addr;
 
     do {
-        if (!pTable->translate(vaddr++,paddr))
+        Addr paddr;
+
+        if (!pTable->translate(vaddr++, paddr))
             return false;
 
         PortProxy::readBlob(paddr, &c, 1);

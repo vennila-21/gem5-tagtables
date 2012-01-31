@@ -37,7 +37,6 @@
 #include "arch/registers.hh"
 #include "arch/types.hh"
 #include "base/types.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 
 // @todo: Figure out a more architecture independent way to obtain the ITB and
@@ -125,7 +124,6 @@ class ThreadContext
 
     virtual System *getSystemPtr() = 0;
 
-#if FULL_SYSTEM
     virtual TheISA::Kernel::Statistics *getKernelStats() = 0;
 
     virtual PortProxy* getPhysProxy() = 0;
@@ -139,11 +137,10 @@ class ThreadContext
      * tc ThreadContext for the virtual-to-physical translation
      */
     virtual void initMemProxies(ThreadContext *tc) = 0;
-#else
+
     virtual SETranslatingPortProxy *getMemProxy() = 0;
 
     virtual Process *getProcessPtr() = 0;
-#endif
 
     virtual Status status() const = 0;
 
@@ -159,9 +156,7 @@ class ThreadContext
     /// Set the status to Halted.
     virtual void halt(int delay = 0) = 0;
 
-#if FULL_SYSTEM
     virtual void dumpFuncProfile() = 0;
-#endif
 
     virtual void takeOverFrom(ThreadContext *old_context) = 0;
 
@@ -170,7 +165,6 @@ class ThreadContext
     virtual void serialize(std::ostream &os) = 0;
     virtual void unserialize(Checkpoint *cp, const std::string &section) = 0;
 
-#if FULL_SYSTEM
     virtual EndQuiesceEvent *getQuiesceEvent() = 0;
 
     // Not necessarily the best location for these...
@@ -180,7 +174,6 @@ class ThreadContext
 
     virtual void profileClear() = 0;
     virtual void profileSample() = 0;
-#endif
 
     virtual void copyArchRegs(ThreadContext *tc) = 0;
 
@@ -242,7 +235,6 @@ class ThreadContext
     // Only really makes sense for old CPU model.  Still could be useful though.
     virtual bool misspeculating() = 0;
 
-#if !FULL_SYSTEM
     // Same with st cond failures.
     virtual Counter readFuncExeInst() = 0;
 
@@ -252,7 +244,6 @@ class ThreadContext
     // 1 if the CPU has no more active threads (meaning it's OK to exit);
     // Used in syscall-emulation mode when a  thread calls the exit syscall.
     virtual int exit() { return 1; };
-#endif
 
     /** function to compare two thread contexts (for debugging) */
     static void compare(ThreadContext *one, ThreadContext *two);
@@ -300,7 +291,6 @@ class ProxyThreadContext : public ThreadContext
 
     System *getSystemPtr() { return actualTC->getSystemPtr(); }
 
-#if FULL_SYSTEM
     TheISA::Kernel::Statistics *getKernelStats()
     { return actualTC->getKernelStats(); }
 
@@ -309,11 +299,10 @@ class ProxyThreadContext : public ThreadContext
     FSTranslatingPortProxy* getVirtProxy() { return actualTC->getVirtProxy(); }
 
     void initMemProxies(ThreadContext *tc) { actualTC->initMemProxies(tc); }
-#else
+
     SETranslatingPortProxy* getMemProxy() { return actualTC->getMemProxy(); }
 
     Process *getProcessPtr() { return actualTC->getProcessPtr(); }
-#endif
 
     Status status() const { return actualTC->status(); }
 
@@ -329,9 +318,7 @@ class ProxyThreadContext : public ThreadContext
     /// Set the status to Halted.
     void halt(int delay = 0) { actualTC->halt(); }
 
-#if FULL_SYSTEM
     void dumpFuncProfile() { actualTC->dumpFuncProfile(); }
-#endif
 
     void takeOverFrom(ThreadContext *oldContext)
     { actualTC->takeOverFrom(oldContext); }
@@ -342,7 +329,6 @@ class ProxyThreadContext : public ThreadContext
     void unserialize(Checkpoint *cp, const std::string &section)
     { actualTC->unserialize(cp, section); }
 
-#if FULL_SYSTEM
     EndQuiesceEvent *getQuiesceEvent() { return actualTC->getQuiesceEvent(); }
 
     Tick readLastActivate() { return actualTC->readLastActivate(); }
@@ -350,7 +336,6 @@ class ProxyThreadContext : public ThreadContext
 
     void profileClear() { return actualTC->profileClear(); }
     void profileSample() { return actualTC->profileSample(); }
-#endif
 
     // @todo: Do I need this?
     void copyArchRegs(ThreadContext *tc) { actualTC->copyArchRegs(tc); }
@@ -418,12 +403,10 @@ class ProxyThreadContext : public ThreadContext
     // @todo: Fix this!
     bool misspeculating() { return actualTC->misspeculating(); }
 
-#if !FULL_SYSTEM
     void syscall(int64_t callnum)
     { actualTC->syscall(callnum); }
 
     Counter readFuncExeInst() { return actualTC->readFuncExeInst(); }
-#endif
 };
 
 #endif

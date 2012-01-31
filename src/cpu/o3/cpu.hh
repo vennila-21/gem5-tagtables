@@ -54,7 +54,6 @@
 
 #include "arch/types.hh"
 #include "base/statistics.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "config/use_checker.hh"
 #include "cpu/o3/comm.hh"
@@ -424,12 +423,10 @@ class FullO3CPU : public BaseO3CPU
     virtual void unserialize(Checkpoint *cp, const std::string &section);
 
   public:
-#if !FULL_SYSTEM
     /** Executes a syscall.
      * @todo: Determine if this needs to be virtual.
      */
     void syscall(int64_t callnum, ThreadID tid);
-#endif
 
     /** Starts draining the CPU's pipeline of all instructions in
      * order to stop all memory accesses. */
@@ -454,7 +451,6 @@ class FullO3CPU : public BaseO3CPU
     /** Traps to handle given fault. */
     void trap(Fault fault, ThreadID tid, StaticInstPtr inst);
 
-#if FULL_SYSTEM
     /** HW return from error interrupt. */
     Fault hwrei(ThreadID tid);
 
@@ -474,7 +470,6 @@ class FullO3CPU : public BaseO3CPU
 
     /** Check if this address is a valid data address. */
     bool validDataAddr(Addr addr) { return true; }
-#endif
 
     /** Register accessors.  Index refers to the physical register index. */
 
@@ -709,9 +704,7 @@ class FullO3CPU : public BaseO3CPU
     /** Wakes the CPU, rescheduling the CPU if it's not already active. */
     void wakeCPU();
 
-#if FULL_SYSTEM
     virtual void wakeup();
-#endif
 
     /** Gets a free thread id. Use if thread ids change across system. */
     ThreadID getFreeTid();

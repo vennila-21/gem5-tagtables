@@ -42,6 +42,7 @@
 #include "params/AtomicSimpleCPU.hh"
 #include "sim/faults.hh"
 #include "sim/system.hh"
+#include "sim/full_system.hh"
 
 using namespace std;
 using namespace TheISA;
@@ -83,18 +84,18 @@ void
 AtomicSimpleCPU::init()
 {
     BaseCPU::init();
-#if FULL_SYSTEM
-    ThreadID size = threadContexts.size();
-    for (ThreadID i = 0; i < size; ++i) {
-        ThreadContext *tc = threadContexts[i];
-
-        // initialize CPU, including PC
-        TheISA::initCPU(tc, tc->contextId());
+    if (FullSystem) {
+        ThreadID size = threadContexts.size();
+        for (ThreadID i = 0; i < size; ++i) {
+            ThreadContext *tc = threadContexts[i];
+            // initialize CPU, including PC
+            TheISA::initCPU(tc, tc->contextId());
+        }
     }
 
     // Initialise the ThreadContext's memory proxies
     tcBase()->initMemProxies(tcBase());
-#endif
+
     if (hasPhysMemPort) {
         AddrRangeList pmAddrList = physmemPort.getPeer()->getAddrRanges();
         physMemAddr = *pmAddrList.begin();
@@ -560,9 +561,7 @@ AtomicSimpleCPU *
 AtomicSimpleCPUParams::create()
 {
     numThreads = 1;
-#if !FULL_SYSTEM
-    if (workload.size() != 1)
+    if (!FullSystem && workload.size() != 1)
         panic("only one workload allowed");
-#endif
     return new AtomicSimpleCPU(this);
 }

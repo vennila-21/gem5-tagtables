@@ -48,9 +48,9 @@
 #include <fstream>
 #include <string>
 
+#include "arch/kernel_stats.hh"
 #include "arch/vtophys.hh"
 #include "base/debug.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
 #include "cpu/quiesce_event.hh"
@@ -59,6 +59,7 @@
 #include "debug/Quiesce.hh"
 #include "debug/WorkItems.hh"
 #include "params/BaseCPU.hh"
+#include "sim/full_system.hh"
 #include "sim/pseudo_inst.hh"
 #include "sim/serialize.hh"
 #include "sim/sim_events.hh"
@@ -66,11 +67,7 @@
 #include "sim/stat_control.hh"
 #include "sim/stats.hh"
 #include "sim/system.hh"
-
-#if FULL_SYSTEM
-#include "arch/kernel_stats.hh"
 #include "sim/vptr.hh"
-#endif
 
 using namespace std;
 
@@ -79,11 +76,18 @@ using namespace TheISA;
 
 namespace PseudoInst {
 
-#if FULL_SYSTEM
+static inline void
+panicFsOnlyPseudoInst(const char *name)
+{
+    panic("Pseudo inst \"%s\" is only available in Full System mode.");
+}
 
 void
 arm(ThreadContext *tc)
 {
+    if (!FullSystem)
+        panicFsOnlyPseudoInst("arm");
+
     if (tc->getKernelStats())
         tc->getKernelStats()->arm();
 }
@@ -91,6 +95,9 @@ arm(ThreadContext *tc)
 void
 quiesce(ThreadContext *tc)
 {
+    if (!FullSystem)
+        panicFsOnlyPseudoInst("quiesce");
+
     if (!tc->getCpuPtr()->params()->do_quiesce)
         return;
 
@@ -104,6 +111,9 @@ quiesce(ThreadContext *tc)
 void
 quiesceSkip(ThreadContext *tc)
 {
+    if (!FullSystem)
+        panicFsOnlyPseudoInst("quiesceSkip");
+
     BaseCPU *cpu = tc->getCpuPtr();
 
     if (!cpu->params()->do_quiesce)
@@ -126,6 +136,9 @@ quiesceSkip(ThreadContext *tc)
 void
 quiesceNs(ThreadContext *tc, uint64_t ns)
 {
+    if (!FullSystem)
+        panicFsOnlyPseudoInst("quiesceNs");
+
     BaseCPU *cpu = tc->getCpuPtr();
 
     if (!cpu->params()->do_quiesce || ns == 0)
@@ -148,6 +161,9 @@ quiesceNs(ThreadContext *tc, uint64_t ns)
 void
 quiesceCycles(ThreadContext *tc, uint64_t cycles)
 {
+    if (!FullSystem)
+        panicFsOnlyPseudoInst("quiesceCycles");
+
     BaseCPU *cpu = tc->getCpuPtr();
 
     if (!cpu->params()->do_quiesce || cycles == 0)
@@ -170,11 +186,14 @@ quiesceCycles(ThreadContext *tc, uint64_t cycles)
 uint64_t
 quiesceTime(ThreadContext *tc)
 {
+    if (!FullSystem) {
+        panicFsOnlyPseudoInst("quiesceTime");
+        return 0;
+    }
+
     return (tc->readLastActivate() - tc->readLastSuspend()) /
         SimClock::Int::ns;
 }
-
-#endif
 
 uint64_t
 rpns(ThreadContext *tc)
@@ -198,11 +217,12 @@ m5exit(ThreadContext *tc, Tick delay)
     exitSimLoop("m5_exit instruction encountered", 0, when);
 }
 
-#if FULL_SYSTEM
-
 void
 loadsymbol(ThreadContext *tc)
 {
+    if (!FullSystem)
+        panicFsOnlyPseudoInst("loadsymbol");
+
     const string &filename = tc->getCpuPtr()->system->params()->symbolfile;
     if (filename.empty()) {
         return;
@@ -251,6 +271,9 @@ loadsymbol(ThreadContext *tc)
 void
 addsymbol(ThreadContext *tc, Addr addr, Addr symbolAddr)
 {
+    if (!FullSystem)
+        panicFsOnlyPseudoInst("addSymbol");
+
     char symb[100];
     CopyStringOut(tc, symb, symbolAddr, 100);
     std::string symbol(symb);
@@ -264,10 +287,13 @@ addsymbol(ThreadContext *tc, Addr addr, Addr symbolAddr)
 uint64_t
 initParam(ThreadContext *tc)
 {
+    if (!FullSystem) {
+        panicFsOnlyPseudoInst("initParam");
+        return 0;
+    }
+
     return tc->getCpuPtr()->system->init_param;
 }
-
-#endif
 
 
 void
@@ -321,11 +347,14 @@ m5checkpoint(ThreadContext *tc, Tick delay, Tick period)
     exitSimLoop("checkpoint", 0, when, repeat);
 }
 
-#if FULL_SYSTEM
-
 uint64_t
 readfile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset)
 {
+    if (!FullSystem) {
+        panicFsOnlyPseudoInst("readfile");
+        return 0;
+    }
+
     const string &file = tc->getSystemPtr()->params()->readfile;
     if (file.empty()) {
         return ULL(0);
@@ -357,8 +386,6 @@ readfile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset)
     delete [] buf;
     return result;
 }
-
-#endif
 
 void
 debugbreak(ThreadContext *tc)

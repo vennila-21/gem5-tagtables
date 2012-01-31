@@ -36,7 +36,6 @@
 
 #include "arch/isa_traits.hh"
 #include "arch/types.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/ozone/cpu.hh"   // MUST include this
 #include "cpu/ozone/ozone_impl.hh"
@@ -214,13 +213,10 @@ class OzoneDynInst : public BaseDynInst<Impl>
 
     void setMiscReg(int misc_reg, const MiscReg &val);
 
-#if FULL_SYSTEM
     Fault hwrei();
     void trap(Fault fault);
     bool simPalCheck(int palFunc);
-#else
     void syscall(uint64_t &callnum);
-#endif
 
     ListIt iqIt;
     bool iqItValid;

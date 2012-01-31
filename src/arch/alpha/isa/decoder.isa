@@ -202,8 +202,8 @@ decode OPCODE default Unknown::unknown() {
             0x6c: decode RA {
                 31: decode IMM {
                     1: decode INTIMM {
-                        // return EV5 for FULL_SYSTEM and EV6 otherwise
-                        1: implver({{ Rc = FULL_SYSTEM ? 1 : 2 }});
+                        // return EV5 for FullSystem and EV6 otherwise
+                        1: implver({{ Rc = FullSystem ? 1 : 2 }});
                     }
                 }
             }
@@ -780,7 +780,7 @@ decode OPCODE default Unknown::unknown() {
                  * the parser to understand that.
                  */
                 uint64_t unused_var M5_VAR_USED = Rb;
-                Ra = FULL_SYSTEM ? xc->readMiscReg(IPR_CC) : curTick();
+                Ra = FullSystem ? xc->readMiscReg(IPR_CC) : curTick();
             }}, IsUnverifiable);
 
             // All of the barrier instructions below do nothing in
@@ -805,14 +805,14 @@ decode OPCODE default Unknown::unknown() {
             0x4400: wmb({{ }}, IsWriteBarrier, MemWriteOp);
         }
 
-        0xe000: decode FULL_SYSTEM {
+        0xe000: decode FullSystem {
             0: FailUnimpl::rc_se();
             default: BasicOperate::rc({{
                 Ra = IntrFlag;
                 IntrFlag = 0;
             }}, IsNonSpeculative, IsUnverifiable);
         }
-        0xf000: decode FULL_SYSTEM {
+        0xf000: decode FullSystem {
             0: FailUnimpl::rs_se();
             default: BasicOperate::rs({{
                 Ra = IntrFlag;
@@ -821,43 +821,41 @@ decode OPCODE default Unknown::unknown() {
         }
     }
 
-#if FULL_SYSTEM
-    0x00: CallPal::call_pal({{
-        if (!palValid ||
-            (palPriv
-             && xc->readMiscReg(IPR_ICM) != mode_kernel)) {
-            // invalid pal function code, or attempt to do privileged
-            // PAL call in non-kernel mode
-            fault = new UnimplementedOpcodeFault;
-        } else {
-            // check to see if simulator wants to do something special
-            // on this PAL call (including maybe suppress it)
-            bool dopal = xc->simPalCheck(palFunc);
-
-            if (dopal) {
-                xc->setMiscReg(IPR_EXC_ADDR, NPC);
-                NPC = xc->readMiscReg(IPR_PAL_BASE) + palOffset;
+    0x00: decode FullSystem {
+        0: decode PALFUNC {
+            format EmulatedCallPal {
+                0x00: halt ({{
+                    exitSimLoop("halt instruction encountered");
+                }}, IsNonSpeculative);
+                0x83: callsys({{
+                    xc->syscall(R0);
+                }}, IsSerializeAfter, IsNonSpeculative, IsSyscall);
+                // Read uniq reg into ABI return value register (r0)
+                0x9e: rduniq({{ R0 = Runiq; }}, IsIprAccess);
+                // Write uniq reg with value from ABI arg register (r16)
+                0x9f: wruniq({{ Runiq = R16; }}, IsIprAccess);
             }
         }
-    }}, IsNonSpeculative);
-#else
-    0x00: decode PALFUNC {
-        format EmulatedCallPal {
-            0x00: halt ({{
-                exitSimLoop("halt instruction encountered");
-            }}, IsNonSpeculative);
-            0x83: callsys({{
-                xc->syscall(R0);
-            }}, IsSerializeAfter, IsNonSpeculative, IsSyscall);
-            // Read uniq reg into ABI return value register (r0)
-            0x9e: rduniq({{ R0 = Runiq; }}, IsIprAccess);
-            // Write uniq reg with value from ABI arg register (r16)
-            0x9f: wruniq({{ Runiq = R16; }}, IsIprAccess);
-        }
-    }
-#endif
+        default: CallPal::call_pal({{
+            if (!palValid ||
+                (palPriv
+                 && xc->readMiscReg(IPR_ICM) != mode_kernel)) {
+                // invalid pal function code, or attempt to do privileged
+                // PAL call in non-kernel mode
+                fault = new UnimplementedOpcodeFault;
+            } else {
+                // check to see if simulator wants to do something special
+                // on this PAL call (including maybe suppress it)
+                bool dopal = xc->simPalCheck(palFunc);
 
-#if FULL_SYSTEM
+                if (dopal) {
+                    xc->setMiscReg(IPR_EXC_ADDR, NPC);
+                    NPC = xc->readMiscReg(IPR_PAL_BASE) + palOffset;
+                }
+            }
+        }}, IsNonSpeculative);
+    }
+
     0x1b: decode PALMODE {
         0: OpcdecFault::hw_st_quad();
         1: decode HW_LDST_QUAD {
@@ -923,8 +921,6 @@ decode OPCODE default Unknown::unknown() {
           1: hw_rei({{ xc->hwrei(); }}, IsSerializing, IsSerializeBefore);
         }
     }
-
-#endif
 
     format BasicOperate {
         // M5 special opcodes use the reserved 0x01 opcode space

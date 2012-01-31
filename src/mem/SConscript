@@ -37,21 +37,18 @@ SimObject('MemObject.py')
 Source('bridge.cc')
 Source('bus.cc')
 Source('mem_object.cc')
+Source('mport.cc')
 Source('packet.cc')
 Source('port.cc')
 Source('tport.cc')
-Source('mport.cc')
+Source('fs_translating_port_proxy.cc')
+Source('se_translating_port_proxy.cc')
 
 if env['TARGET_ISA'] != 'no':
     SimObject('PhysicalMemory.py')
     Source('dram.cc')
-    Source('physical.cc')
-
-if env['FULL_SYSTEM']:
-    Source('fs_translating_port_proxy.cc')
-elif env['TARGET_ISA'] != 'no':
     Source('page_table.cc')
-    Source('se_translating_port_proxy.cc')
+    Source('physical.cc')
 
 DebugFlag('Bus')
 DebugFlag('BusAddrRanges')

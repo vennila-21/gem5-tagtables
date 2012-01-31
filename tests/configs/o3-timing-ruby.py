@@ -46,4 +46,4 @@ cpu.connectAllPorts(system.membus)
 # Connect the system port for loading of binaries etc
 system.system_port = system.membus.port
 
-root = Root(system = system)
+root = Root(full_system = False, system = system)

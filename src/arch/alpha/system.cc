@@ -45,7 +45,7 @@
 using namespace AlphaISA;
 
 AlphaSystem::AlphaSystem(Params *p)
-    : System(p)
+    : System(p), intrFreq(0)
 {
     consoleSymtab = new SymbolTable;
     palSymtab = new SymbolTable;

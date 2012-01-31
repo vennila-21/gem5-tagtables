@@ -44,23 +44,19 @@
 #include "arch/x86/regs/msr.hh"
 #include "arch/x86/faults.hh"
 #include "arch/x86/pagetable.hh"
+#include "arch/x86/pagetable_walker.hh"
 #include "arch/x86/tlb.hh"
 #include "arch/x86/x86_traits.hh"
 #include "base/bitfield.hh"
 #include "base/trace.hh"
-#include "config/full_system.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "debug/TLB.hh"
 #include "mem/packet_access.hh"
-#include "mem/request.hh"
-
-#if FULL_SYSTEM
-#include "arch/x86/pagetable_walker.hh"
-#else
 #include "mem/page_table.hh"
+#include "mem/request.hh"
+#include "sim/full_system.hh"
 #include "sim/process.hh"
-#endif
 
 namespace X86ISA {
 
@@ -72,10 +68,8 @@ TLB::TLB(const Params *p) : BaseTLB(p), configAddress(0), size(p->size)
     for (int x = 0; x < size; x++)
         freeList.push_back(&tlb[x]);
 
-#if FULL_SYSTEM
     walker = p->walker;
     walker->setTLB(this);
-#endif
 }
 
 TlbEntry *
@@ -293,40 +287,40 @@ TLB::translate(RequestPtr req, ThreadContext *tc, Translation *translation,
             // The vaddr already has the segment base applied.
             TlbEntry *entry = lookup(vaddr);
             if (!entry) {
-#if FULL_SYSTEM
-                Fault fault = walker->start(tc, translation, req, mode);
-                if (timing || fault != NoFault) {
-                    // This gets ignored in atomic mode.
-                    delayedResponse = true;
-                    return fault;
-                }
-                entry = lookup(vaddr);
-                assert(entry);
-#else
-                DPRINTF(TLB, "Handling a TLB miss for "
-                        "address %#x at pc %#x.\n",
-                        vaddr, tc->instAddr());
-
-                Process *p = tc->getProcessPtr();
-                TlbEntry newEntry;
-                bool success = p->pTable->lookup(vaddr, newEntry);
-                if (!success && mode != Execute) {
-                    // Check if we just need to grow the stack.
-                    if (p->fixupStackFault(vaddr)) {
-                        // If we did, lookup the entry for the new page.
-                        success = p->pTable->lookup(vaddr, newEntry);
+                if (FullSystem) {
+                    Fault fault = walker->start(tc, translation, req, mode);
+                    if (timing || fault != NoFault) {
+                        // This gets ignored in atomic mode.
+                        delayedResponse = true;
+                        return fault;
                     }
-                }
-                if (!success) {
-                    return new PageFault(vaddr, true, mode, true, false);
+                    entry = lookup(vaddr);
+                    assert(entry);
                 } else {
-                    Addr alignedVaddr = p->pTable->pageAlign(vaddr);
-                    DPRINTF(TLB, "Mapping %#x to %#x\n", alignedVaddr,
-                            newEntry.pageStart());
-                    entry = insert(alignedVaddr, newEntry);
+                    DPRINTF(TLB, "Handling a TLB miss for "
+                            "address %#x at pc %#x.\n",
+                            vaddr, tc->instAddr());
+
+                    Process *p = tc->getProcessPtr();
+                    TlbEntry newEntry;
+                    bool success = p->pTable->lookup(vaddr, newEntry);
+                    if (!success && mode != Execute) {
+                        // Check if we just need to grow the stack.
+                        if (p->fixupStackFault(vaddr)) {
+                            // If we did, lookup the entry for the new page.
+                            success = p->pTable->lookup(vaddr, newEntry);
+                        }
+                    }
+                    if (!success) {
+                        return new PageFault(vaddr, true, mode, true, false);
+                    } else {
+                        Addr alignedVaddr = p->pTable->pageAlign(vaddr);
+                        DPRINTF(TLB, "Mapping %#x to %#x\n", alignedVaddr,
+                                newEntry.pageStart());
+                        entry = insert(alignedVaddr, newEntry);
+                    }
+                    DPRINTF(TLB, "Miss was serviced.\n");
                 }
-                DPRINTF(TLB, "Miss was serviced.\n");
-#endif
             }
 
             DPRINTF(TLB, "Entry found with paddr %#x, "
@@ -366,27 +360,29 @@ TLB::translate(RequestPtr req, ThreadContext *tc, Translation *translation,
         req->setPaddr(vaddr);
     }
     // Check for an access to the local APIC
-#if FULL_SYSTEM
-    LocalApicBase localApicBase = tc->readMiscRegNoEffect(MISCREG_APIC_BASE);
-    Addr baseAddr = localApicBase.base * PageBytes;
-    Addr paddr = req->getPaddr();
-    if (baseAddr <= paddr && baseAddr + PageBytes > paddr) {
-        // The Intel developer's manuals say the below restrictions apply,
-        // but the linux kernel, because of a compiler optimization, breaks
-        // them.
-        /*
-        // Check alignment
-        if (paddr & ((32/8) - 1))
-            return new GeneralProtection(0);
-        // Check access size
-        if (req->getSize() != (32/8))
-            return new GeneralProtection(0);
-        */
-        // Force the access to be uncacheable.
-        req->setFlags(Request::UNCACHEABLE);
-        req->setPaddr(x86LocalAPICAddress(tc->contextId(), paddr - baseAddr));
+    if (FullSystem) {
+        LocalApicBase localApicBase =
+            tc->readMiscRegNoEffect(MISCREG_APIC_BASE);
+        Addr baseAddr = localApicBase.base * PageBytes;
+        Addr paddr = req->getPaddr();
+        if (baseAddr <= paddr && baseAddr + PageBytes > paddr) {
+            // The Intel developer's manuals say the below restrictions apply,
+            // but the linux kernel, because of a compiler optimization, breaks
+            // them.
+            /*
+            // Check alignment
+            if (paddr & ((32/8) - 1))
+                return new GeneralProtection(0);
+            // Check access size
+            if (req->getSize() != (32/8))
+                return new GeneralProtection(0);
+            */
+            // Force the access to be uncacheable.
+            req->setFlags(Request::UNCACHEABLE);
+            req->setPaddr(x86LocalAPICAddress(tc->contextId(),
+                        paddr - baseAddr));
+        }
     }
-#endif
     return NoFault;
 };
 
@@ -409,27 +405,11 @@ TLB::translateTiming(RequestPtr req, ThreadContext *tc,
         translation->finish(fault, req, tc, mode);
 }
 
-#if FULL_SYSTEM
-
-Tick
-TLB::doMmuRegRead(ThreadContext *tc, Packet *pkt)
-{
-    return tc->getCpuPtr()->ticks(1);
-}
-
-Tick
-TLB::doMmuRegWrite(ThreadContext *tc, Packet *pkt)
-{
-    return tc->getCpuPtr()->ticks(1);
-}
-
 Walker *
 TLB::getWalker()
 {
     return walker;
 }
-
-#endif
 
 void
 TLB::serialize(std::ostream &os)

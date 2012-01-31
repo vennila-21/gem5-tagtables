@@ -41,7 +41,11 @@
  */
 
 #include "arch/faults.hh"
+#include "arch/kernel_stats.hh"
+#include "arch/stacktrace.hh"
+#include "arch/tlb.hh"
 #include "arch/utility.hh"
+#include "arch/vtophys.hh"
 #include "base/loader/symtab.hh"
 #include "base/cp_annotate.hh"
 #include "base/cprintf.hh"
@@ -63,24 +67,17 @@
 #include "debug/Decode.hh"
 #include "debug/Fetch.hh"
 #include "debug/Quiesce.hh"
+#include "mem/mem_object.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
 #include "params/BaseSimpleCPU.hh"
 #include "sim/byteswap.hh"
 #include "sim/debug.hh"
+#include "sim/full_system.hh"
 #include "sim/sim_events.hh"
 #include "sim/sim_object.hh"
 #include "sim/stats.hh"
 #include "sim/system.hh"
-
-#if FULL_SYSTEM
-#include "arch/kernel_stats.hh"
-#include "arch/stacktrace.hh"
-#include "arch/tlb.hh"
-#include "arch/vtophys.hh"
-#else // !FULL_SYSTEM
-#include "mem/mem_object.hh"
-#endif // FULL_SYSTEM
 
 using namespace std;
 using namespace TheISA;
@@ -88,12 +85,11 @@ using namespace TheISA;
 BaseSimpleCPU::BaseSimpleCPU(BaseSimpleCPUParams *p)
     : BaseCPU(p), traceData(NULL), thread(NULL), predecoder(NULL)
 {
-#if FULL_SYSTEM
-    thread = new SimpleThread(this, 0, p->system, p->itb, p->dtb);
-#else
-    thread = new SimpleThread(this, /* thread_num */ 0, p->workload[0],
-            p->itb, p->dtb);
-#endif // !FULL_SYSTEM
+    if (FullSystem)
+        thread = new SimpleThread(this, 0, p->system, p->itb, p->dtb);
+    else
+        thread = new SimpleThread(this, /* thread_num */ 0, p->workload[0],
+                p->itb, p->dtb);
 
     thread->setStatus(ThreadContext::Halted);
 
@@ -290,15 +286,12 @@ change_thread_state(ThreadID tid, int activate, int priority)
 {
 }
 
-#if FULL_SYSTEM
 Addr
 BaseSimpleCPU::dbg_vtophys(Addr addr)
 {
     return vtophys(tc, addr);
 }
-#endif // FULL_SYSTEM
 
-#if FULL_SYSTEM
 void
 BaseSimpleCPU::wakeup()
 {
@@ -308,12 +301,10 @@ BaseSimpleCPU::wakeup()
     DPRINTF(Quiesce,"Suspended Processor awoke\n");
     thread->activate();
 }
-#endif // FULL_SYSTEM
 
 void
 BaseSimpleCPU::checkForInterrupts()
 {
-#if FULL_SYSTEM
     if (checkInterrupts(tc)) {
         Fault interrupt = interrupts->getInterrupt(tc);
 
@@ -324,7 +315,6 @@ BaseSimpleCPU::checkForInterrupts()
             predecoder.reset();
         }
     }
-#endif
 }
 
 
@@ -422,15 +412,13 @@ BaseSimpleCPU::postExecute()
 
     TheISA::PCState pc = tc->pcState();
     Addr instAddr = pc.instAddr();
-#if FULL_SYSTEM
-    if (thread->profile) {
+    if (FullSystem && thread->profile) {
         bool usermode = TheISA::inUserMode(tc);
         thread->profilePC = usermode ? 1 : instAddr;
         ProfileNode *node = thread->profile->consume(tc, curStaticInst);
         if (node)
             thread->profileNode = node;
     }
-#endif
 
     if (curStaticInst->isMemRef()) {
         numMemRefs++;
@@ -478,7 +466,8 @@ BaseSimpleCPU::postExecute()
     }
     /* End power model statistics */
 
-    traceFunctions(instAddr);
+    if (FullSystem)
+        traceFunctions(instAddr);
 
     if (traceData) {
         traceData->dump();

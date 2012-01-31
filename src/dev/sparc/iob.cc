@@ -42,6 +42,7 @@
 #include "base/bitfield.hh"
 #include "base/trace.hh"
 #include "cpu/intr_control.hh"
+#include "cpu/thread_context.hh"
 #include "debug/Iob.hh"
 #include "dev/sparc/iob.hh"
 #include "dev/platform.hh"
@@ -60,9 +61,6 @@ Iob::Iob(const Params *p)
     assert (params()->system->threadContexts.size() <= MaxNiagaraProcs);
 
     pioDelay = p->pio_latency;
-
-    // Get the interrupt controller from the platform
-    ic = platform->intrctrl;
 
     for (int x = 0; x < NumDeviceIds; ++x) {
         intMan[x].cpu = 0;

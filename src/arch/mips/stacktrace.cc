@@ -37,6 +37,7 @@
 #include "base/trace.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
+#include "mem/fs_translating_port_proxy.hh"
 #include "sim/system.hh"
 
 using namespace std;

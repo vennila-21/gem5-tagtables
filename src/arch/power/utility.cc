@@ -55,10 +55,23 @@ copyRegs(ThreadContext *src, ThreadContext *dest)
     dest->pcState(src->pcState());
 }
 
+uint64_t
+getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
+{
+    panic("getArgument not implemented for POWER.\n");
+    return 0;
+}
+
 void
 skipFunction(ThreadContext *tc)
 {
     panic("Not Implemented for POWER");
+}
+
+void
+initCPU(ThreadContext *tc, int cpuId)
+{
+    panic("initCPU not implemented for POWER.\n");
 }
 
 

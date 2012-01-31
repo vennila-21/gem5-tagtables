@@ -65,6 +65,7 @@
 #include "mem/se_translating_port_proxy.hh"
 #include "sim/byteswap.hh"
 #include "sim/process.hh"
+#include "sim/syscallreturn.hh"
 #include "sim/system.hh"
 
 ///

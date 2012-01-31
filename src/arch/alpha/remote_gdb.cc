@@ -121,15 +121,12 @@
 
 #include <string>
 
-#include "config/full_system.hh"
-#if FULL_SYSTEM
-#include "arch/alpha/vtophys.hh"
-#endif
 
 #include "arch/alpha/kgdb.h"
 #include "arch/alpha/regredir.hh"
 #include "arch/alpha/remote_gdb.hh"
 #include "arch/alpha/utility.hh"
+#include "arch/alpha/vtophys.hh"
 #include "base/intmath.hh"
 #include "base/remote_gdb.hh"
 #include "base/socket.hh"
@@ -142,6 +139,7 @@
 #include "mem/physical.hh"
 #include "mem/port.hh"
 #include "sim/system.hh"
+#include "sim/full_system.hh"
 
 using namespace std;
 using namespace AlphaISA;
@@ -158,9 +156,9 @@ RemoteGDB::RemoteGDB(System *_system, ThreadContext *tc)
 bool
 RemoteGDB::acc(Addr va, size_t len)
 {
-#if !FULL_SYSTEM
-    panic("acc function needs to be rewritten for SE mode\n");
-#else
+    if (!FullSystem)
+        panic("acc function needs to be rewritten for SE mode\n");
+
     Addr last_va;
 
     va = TruncPage(va);
@@ -173,8 +171,8 @@ RemoteGDB::acc(Addr va, size_t len)
                         "%#x < K0SEG + size\n", va);
                 return true;
             } else {
-                DPRINTF(GDBAcc, "acc:   Mapping invalid %#x > K0SEG + size\n",
-                        va);
+                DPRINTF(GDBAcc, "acc:   Mapping invalid %#x "
+                        "> K0SEG + size\n", va);
                 return false;
             }
         }
@@ -202,7 +200,6 @@ RemoteGDB::acc(Addr va, size_t len)
 
     DPRINTF(GDBAcc, "acc:   %#x mapping is valid\n", va);
     return true;
-#endif
 }
 
 /*

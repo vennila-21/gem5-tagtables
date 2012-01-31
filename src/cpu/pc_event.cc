@@ -36,7 +36,6 @@
 
 #include "base/debug.hh"
 #include "base/trace.hh"
-#include "config/full_system.hh"
 #include "cpu/base.hh"
 #include "cpu/pc_event.hh"
 #include "cpu/thread_context.hh"
@@ -140,7 +139,6 @@ BreakPCEvent::process(ThreadContext *tc)
         delete this;
 }
 
-#if FULL_SYSTEM
 void
 sched_break_pc_sys(System *sys, Addr addr)
 {
@@ -156,4 +154,3 @@ sched_break_pc(Addr addr)
     }
 
 }
-#endif

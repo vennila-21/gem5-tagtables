@@ -52,9 +52,6 @@ from m5.defines import buildEnv
 from m5.objects import *
 from m5.util import addToPath, fatal
 
-if buildEnv['FULL_SYSTEM']:
-    fatal("This script requires syscall emulation mode (*_SE).")
-
 addToPath('../common')
 addToPath('../ruby')
 
@@ -199,6 +196,6 @@ for i in xrange(np):
     if options.fastmem:
         system.cpu[0].physmem_port = system.physmem.port
 
-root = Root(system = system)
+root = Root(full_system = False, system = system)
 
 Simulation.run(options, root, system, FutureClass)

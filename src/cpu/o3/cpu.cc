@@ -43,13 +43,14 @@
  *          Rick Strong
  */
 
-#include "config/full_system.hh"
+#include "arch/kernel_stats.hh"
 #include "config/the_isa.hh"
 #include "config/use_checker.hh"
 #include "cpu/o3/cpu.hh"
 #include "cpu/o3/isa_specific.hh"
 #include "cpu/o3/thread_context.hh"
 #include "cpu/activity.hh"
+#include "cpu/quiesce_event.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Activity.hh"
@@ -57,14 +58,10 @@
 #include "debug/Quiesce.hh"
 #include "enums/MemoryMode.hh"
 #include "sim/core.hh"
+#include "sim/full_system.hh"
+#include "sim/process.hh"
 #include "sim/stat_control.hh"
 #include "sim/system.hh"
-
-#if FULL_SYSTEM
-#include "cpu/quiesce_event.hh"
-#else
-#include "sim/process.hh"
-#endif
 
 #if USE_CHECKER
 #include "cpu/checker/cpu.hh"
@@ -270,18 +267,16 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
         BaseCPU *temp_checker = params->checker;
         checker = dynamic_cast<Checker<DynInstPtr> *>(temp_checker);
         checker->setIcachePort(&icachePort);
-#if FULL_SYSTEM
         checker->setSystem(params->system);
-#endif
     } else {
         checker = NULL;
     }
 #endif // USE_CHECKER
 
-#if !FULL_SYSTEM
-    thread.resize(numThreads);
-    tids.resize(numThreads);
-#endif
+    if (!FullSystem) {
+        thread.resize(numThreads);
+        tids.resize(numThreads);
+    }
 
     // The stages also need their CPU pointer setup.  However this
     // must be done at the upper level CPU because they have pointers
@@ -317,17 +312,18 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
     rename.setIEWStage(&iew);
     rename.setCommitStage(&commit);
 
-#if !FULL_SYSTEM
-    ThreadID active_threads = params->workload.size();
+    ThreadID active_threads;
+    if (FullSystem) {
+        active_threads = 1;
+    } else {
+        active_threads = params->workload.size();
 
-    if (active_threads > Impl::MaxThreads) {
-        panic("Workload Size too large. Increase the 'MaxThreads'"
-              "constant in your O3CPU impl. file (e.g. o3/alpha/impl.hh) or "
-              "edit your workload size.");
+        if (active_threads > Impl::MaxThreads) {
+            panic("Workload Size too large. Increase the 'MaxThreads' "
+                  "constant in your O3CPU impl. file (e.g. o3/alpha/impl.hh) "
+                  "or edit your workload size.");
+        }
     }
-#else
-    ThreadID active_threads = 1;
-#endif
 
     //Make Sure That this a Valid Architeture
     assert(params->numPhysIntRegs   >= numThreads * TheISA::NumIntRegs);
@@ -406,31 +402,31 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
     this->thread.resize(this->numThreads);
 
     for (ThreadID tid = 0; tid < this->numThreads; ++tid) {
-#if FULL_SYSTEM
-        // SMT is not supported in FS mode yet.
-        assert(this->numThreads == 1);
-        this->thread[tid] = new Thread(this, 0);
-#else
-        if (tid < params->workload.size()) {
-            DPRINTF(O3CPU, "Workload[%i] process is %#x",
-                    tid, this->thread[tid]);
-            this->thread[tid] = new typename FullO3CPU<Impl>::Thread(
-                    (typename Impl::O3CPU *)(this),
-                    tid, params->workload[tid]);
-
-            //usedTids[tid] = true;
-            //threadMap[tid] = tid;
+        if (FullSystem) {
+            // SMT is not supported in FS mode yet.
+            assert(this->numThreads == 1);
+            this->thread[tid] = new Thread(this, 0, NULL);
         } else {
-            //Allocate Empty thread so M5 can use later
-            //when scheduling threads to CPU
-            Process* dummy_proc = NULL;
+            if (tid < params->workload.size()) {
+                DPRINTF(O3CPU, "Workload[%i] process is %#x",
+                        tid, this->thread[tid]);
+                this->thread[tid] = new typename FullO3CPU<Impl>::Thread(
+                        (typename Impl::O3CPU *)(this),
+                        tid, params->workload[tid]);
 
-            this->thread[tid] = new typename FullO3CPU<Impl>::Thread(
-                    (typename Impl::O3CPU *)(this),
-                    tid, dummy_proc);
-            //usedTids[tid] = false;
+                //usedTids[tid] = true;
+                //threadMap[tid] = tid;
+            } else {
+                //Allocate Empty thread so M5 can use later
+                //when scheduling threads to CPU
+                Process* dummy_proc = NULL;
+
+                this->thread[tid] = new typename FullO3CPU<Impl>::Thread(
+                        (typename Impl::O3CPU *)(this),
+                        tid, dummy_proc);
+                //usedTids[tid] = false;
+            }
         }
-#endif // !FULL_SYSTEM
 
         ThreadContext *tc;
 
@@ -452,10 +448,10 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
         assert(o3_tc->cpu);
         o3_tc->thread = this->thread[tid];
 
-#if FULL_SYSTEM
-        // Setup quiesce event.
-        this->thread[tid]->quiesceEvent = new EndQuiesceEvent(tc);
-#endif
+        if (FullSystem) {
+            // Setup quiesce event.
+            this->thread[tid]->quiesceEvent = new EndQuiesceEvent(tc);
+        }
         // Give the thread the TC.
         this->thread[tid]->tc = tc;
 
@@ -608,9 +604,8 @@ FullO3CPU<Impl>::tick()
 
     commit.tick();
 
-#if !FULL_SYSTEM
-    doContextSwitch();
-#endif
+    if (!FullSystem)
+        doContextSwitch();
 
     // Now advance the time buffers
     timeBuffer.advance();
@@ -642,9 +637,8 @@ FullO3CPU<Impl>::tick()
         }
     }
 
-#if !FULL_SYSTEM
-    updateThreadPriority();
-#endif
+    if (!FullSystem)
+        updateThreadPriority();
 }
 
 template <class Impl>
@@ -665,14 +659,14 @@ FullO3CPU<Impl>::init()
     if (icachePort.isConnected())
         fetch.setIcache();
 
-#if FULL_SYSTEM
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        ThreadContext *src_tc = threadContexts[tid];
-        TheISA::initCPU(src_tc, src_tc->contextId());
-        // Initialise the ThreadContext's memory proxies
-        thread[tid]->initMemProxies(thread[tid]->getTC());
+    if (FullSystem) {
+        for (ThreadID tid = 0; tid < numThreads; tid++) {
+            ThreadContext *src_tc = threadContexts[tid];
+            TheISA::initCPU(src_tc, src_tc->contextId());
+            // Initialise the ThreadContext's memory proxies
+            thread[tid]->initMemProxies(thread[tid]->getTC());
+        }
     }
-#endif
 
     // Clear inSyscall.
     for (int tid = 0; tid < numThreads; ++tid)
@@ -813,11 +807,11 @@ FullO3CPU<Impl>::insertThread(ThreadID tid)
     DPRINTF(O3CPU,"[tid:%i] Initializing thread into CPU");
     // Will change now that the PC and thread state is internal to the CPU
     // and not in the ThreadContext.
-#if FULL_SYSTEM
-    ThreadContext *src_tc = system->threadContexts[tid];
-#else
-    ThreadContext *src_tc = tcBase(tid);
-#endif
+    ThreadContext *src_tc;
+    if (FullSystem)
+        src_tc = system->threadContexts[tid];
+    else
+        src_tc = tcBase(tid);
 
     //Bind Int Regs to Rename Map
     for (int ireg = 0; ireg < TheISA::NumIntRegs; ireg++) {
@@ -968,7 +962,6 @@ FullO3CPU<Impl>::activateWhenReady(ThreadID tid)
     }
 }
 
-#if FULL_SYSTEM
 template <class Impl>
 Fault
 FullO3CPU<Impl>::hwrei(ThreadID tid)
@@ -1035,8 +1028,6 @@ FullO3CPU<Impl>::processInterrupts(Fault interrupt)
     this->trap(interrupt, 0, NULL);
 }
 
-#endif
-
 template <class Impl>
 void
 FullO3CPU<Impl>::trap(Fault fault, ThreadID tid, StaticInstPtr inst)
@@ -1044,8 +1035,6 @@ FullO3CPU<Impl>::trap(Fault fault, ThreadID tid, StaticInstPtr inst)
     // Pass the thread's TC into the invoke method.
     fault->invoke(this->threadContexts[tid], inst);
 }
-
-#if !FULL_SYSTEM
 
 template <class Impl>
 void
@@ -1066,8 +1055,6 @@ FullO3CPU<Impl>::syscall(int64_t callnum, ThreadID tid)
     // incrementing it.
     --(this->thread[tid]->funcExeInst);
 }
-
-#endif
 
 template <class Impl>
 void
@@ -1662,7 +1649,6 @@ FullO3CPU<Impl>::wakeCPU()
     schedule(tickEvent, nextCycle());
 }
 
-#if FULL_SYSTEM
 template <class Impl>
 void
 FullO3CPU<Impl>::wakeup()
@@ -1675,7 +1661,6 @@ FullO3CPU<Impl>::wakeup()
     DPRINTF(Quiesce, "Suspended Processor woken\n");
     this->threadContexts[0]->activate();
 }
-#endif
 
 template <class Impl>
 ThreadID

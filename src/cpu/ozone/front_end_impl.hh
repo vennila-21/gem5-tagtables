@@ -426,13 +426,10 @@ FrontEnd<Impl>::tick()
         numInstsReady[0]++;
         ++num_inst;
 
-#if FULL_SYSTEM
         if (inst->isQuiesce()) {
-//            warn("%lli: Quiesce instruction encountered, halting fetch!", curTick());
             status = QuiescePending;
             break;
         }
-#endif
 
         if (inst->predTaken()) {
             // Start over with tick?
@@ -980,9 +977,6 @@ FrontEnd<Impl>::takeOverFrom(ThreadContext *old_tc)
 
     cacheBlkValid = false;
 
-#if !FULL_SYSTEM
-//    pTable = params->pTable;
-#endif
     fetchFault = NoFault;
     serializeNext = false;
     barrierInst = NULL;

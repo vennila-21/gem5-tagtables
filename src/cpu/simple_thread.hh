@@ -38,23 +38,22 @@
 #include "arch/tlb.hh"
 #include "arch/types.hh"
 #include "base/types.hh"
-#include "config/full_system.hh"
 #include "config/the_isa.hh"
 #include "cpu/decode.hh"
 #include "cpu/thread_context.hh"
 #include "cpu/thread_state.hh"
 #include "debug/FloatRegs.hh"
 #include "debug/IntRegs.hh"
+#include "mem/page_table.hh"
 #include "mem/request.hh"
 #include "sim/byteswap.hh"
 #include "sim/eventq.hh"
+#include "sim/process.hh"
 #include "sim/serialize.hh"
+#include "sim/system.hh"
 
 class BaseCPU;
 
-#if FULL_SYSTEM
-
-#include "sim/system.hh"
 
 class FunctionProfile;
 class ProfileNode;
@@ -64,13 +63,6 @@ namespace TheISA {
         class Statistics;
     };
 };
-
-#else // !FULL_SYSTEM
-
-#include "mem/page_table.hh"
-#include "sim/process.hh"
-
-#endif // FULL_SYSTEM
 
 /**
  * The SimpleThread object provides a combination of the ThreadState
@@ -130,14 +122,13 @@ class SimpleThread : public ThreadState
     Decoder decoder;
 
     // constructor: initialize SimpleThread from given process structure
-#if FULL_SYSTEM
+    // FS
     SimpleThread(BaseCPU *_cpu, int _thread_num, System *_system,
                  TheISA::TLB *_itb, TheISA::TLB *_dtb,
                  bool use_kernel_stats = true);
-#else
+    // SE
     SimpleThread(BaseCPU *_cpu, int _thread_num, Process *_process,
                  TheISA::TLB *_itb, TheISA::TLB *_dtb);
-#endif
 
     SimpleThread();
 
@@ -181,14 +172,11 @@ class SimpleThread : public ThreadState
         dtb->demapPage(vaddr, asn);
     }
 
-#if FULL_SYSTEM
     void dumpFuncProfile();
 
     Fault hwrei();
 
     bool simPalCheck(int palFunc);
-
-#endif
 
     /*******************************************
      * ThreadContext interface functions.
@@ -204,7 +192,6 @@ class SimpleThread : public ThreadState
 
     System *getSystemPtr() { return system; }
 
-#if FULL_SYSTEM
     PortProxy* getPhysProxy() { return physProxy; }
 
     /** Return a virtual port. This port cannot be cached locally in an object.
@@ -212,7 +199,6 @@ class SimpleThread : public ThreadState
      * mean stale data.
      */
     FSTranslatingPortProxy* getVirtProxy() { return virtProxy; }
-#endif
 
     Status status() const { return _status; }
 
@@ -381,12 +367,10 @@ class SimpleThread : public ThreadState
     void setStCondFailures(unsigned sc_failures)
     { storeCondFailures = sc_failures; }
 
-#if !FULL_SYSTEM
     void syscall(int64_t callnum)
     {
         process->syscall(callnum, tc);
     }
-#endif
 };
 
 
