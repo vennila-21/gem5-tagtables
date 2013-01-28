@@ -1,0 +1,32 @@
+warn: Sockets disabled, not accepting vnc client connections
+warn: Sockets disabled, not accepting terminal connections
+warn: Sockets disabled, not accepting gdb connections
+warn: The clidr register always reports 0 caches.
+warn: clidr LoUIS field of 0b001 to match current ARM implementations.
+warn: The csselr register isn't implemented.
+warn: The ccsidr register isn't implemented and always reads as 0.
+warn: 	instruction 'mcr bpiallis' unimplemented
+warn: 	instruction 'mcr icialluis' unimplemented
+warn: 	instruction 'mcr dccimvac' unimplemented
+warn: 	instruction 'mcr dccmvau' unimplemented
+warn: 	instruction 'mcr icimvau' unimplemented
+warn: 5659150500: Instruction results do not match! (Values may not actually be integers) Inst: 0x3704, checker: 0x3708
+warn: 5667223500: Instruction results do not match! (Values may not actually be integers) Inst: 0x36c4, checker: 0x36c8
+warn: 5701468500: Instruction results do not match! (Values may not actually be integers) Inst: 0x3604, checker: 0x3608
+warn: 5716197500: Instruction results do not match! (Values may not actually be integers) Inst: 0x35c4, checker: 0x35c8
+warn: 6234360500: Instruction results do not match! (Values may not actually be integers) Inst: 0x34f0, checker: 0x34f8
+warn: LCD dual screen mode not supported
+warn: 51492621000: Instruction results do not match! (Values may not actually be integers) Inst: 0x19dc, checker: 0x1a04
+warn: 	instruction 'mcr icialluis' unimplemented
+warn: 	instruction 'mcr bpiallis' unimplemented
+warn: 2473679746000: Instruction results do not match! (Values may not actually be integers) Inst: 0x9debc, checker: 0
+warn: 2487454314500: Instruction results do not match! (Values may not actually be integers) Inst: 0x9d2b4, checker: 0
+warn: 2488664454000: Instruction results do not match! (Values may not actually be integers) Inst: 0x9d2a4, checker: 0
+warn: 2509713816500: Instruction results do not match! (Values may not actually be integers) Inst: 0x9d2b4, checker: 0
+warn: 2510230497500: Instruction results do not match! (Values may not actually be integers) Inst: 0x9d2b4, checker: 0
+warn: 2515951942000: Instruction results do not match! (Values may not actually be integers) Inst: 0x9d974, checker: 0
+warn: 2516461974500: Instruction results do not match! (Values may not actually be integers) Inst: 0x9d954, checker: 0
+warn: 2517022987000: Instruction results do not match! (Values may not actually be integers) Inst: 0x9d9fc, checker: 0
+warn: 2517024145000: Instruction results do not match! (Values may not actually be integers) Inst: 0x9da34, checker: 0
+warn: 2517574344000: Instruction results do not match! (Values may not actually be integers) Inst: 0x9d2fc, checker: 0
+hack: be nice to actually delete the event here

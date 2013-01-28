@@ -1,0 +1,29 @@
+
+---------- Begin Simulation Statistics ----------
+sim_seconds                                  0.000225                       # Number of seconds simulated
+sim_ticks                                      225141                       # Number of ticks simulated
+final_tick                                     225141                       # Number of ticks from beginning of simulation (restored from checkpoints and never reset)
+sim_freq                                   1000000000                       # Frequency of simulated ticks
+host_tick_rate                                1324121                       # Simulator tick rate (ticks/s)
+host_mem_usage                                 277532                       # Number of bytes of host memory used
+host_seconds                                     0.17                       # Real time elapsed on the host
+system.ruby.l2_cntrl0.L2cacheMemory.num_data_array_reads            0                       # number of data array reads
+system.ruby.l2_cntrl0.L2cacheMemory.num_data_array_writes            0                       # number of data array writes
+system.ruby.l2_cntrl0.L2cacheMemory.num_tag_array_reads            0                       # number of tag array reads
+system.ruby.l2_cntrl0.L2cacheMemory.num_tag_array_writes            0                       # number of tag array writes
+system.ruby.l2_cntrl0.L2cacheMemory.num_tag_array_stalls            0                       # number of stalls caused by tag array
+system.ruby.l2_cntrl0.L2cacheMemory.num_data_array_stalls            0                       # number of stalls caused by data array
+system.ruby.l1_cntrl0.L1DcacheMemory.num_data_array_reads            0                       # number of data array reads
+system.ruby.l1_cntrl0.L1DcacheMemory.num_data_array_writes            0                       # number of data array writes
+system.ruby.l1_cntrl0.L1DcacheMemory.num_tag_array_reads            0                       # number of tag array reads
+system.ruby.l1_cntrl0.L1DcacheMemory.num_tag_array_writes            0                       # number of tag array writes
+system.ruby.l1_cntrl0.L1DcacheMemory.num_tag_array_stalls            0                       # number of stalls caused by tag array
+system.ruby.l1_cntrl0.L1DcacheMemory.num_data_array_stalls            0                       # number of stalls caused by data array
+system.ruby.l1_cntrl0.L1IcacheMemory.num_data_array_reads            0                       # number of data array reads
+system.ruby.l1_cntrl0.L1IcacheMemory.num_data_array_writes            0                       # number of data array writes
+system.ruby.l1_cntrl0.L1IcacheMemory.num_tag_array_reads            0                       # number of tag array reads
+system.ruby.l1_cntrl0.L1IcacheMemory.num_tag_array_writes            0                       # number of tag array writes
+system.ruby.l1_cntrl0.L1IcacheMemory.num_tag_array_stalls            0                       # number of stalls caused by tag array
+system.ruby.l1_cntrl0.L1IcacheMemory.num_data_array_stalls            0                       # number of stalls caused by data array
+
+---------- End Simulation Statistics   ----------
