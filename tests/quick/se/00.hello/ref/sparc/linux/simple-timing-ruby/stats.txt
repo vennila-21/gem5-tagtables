@@ -1,0 +1,44 @@
+
+---------- Begin Simulation Statistics ----------
+sim_seconds                                  0.000108                       # Number of seconds simulated
+sim_ticks                                      107952                       # Number of ticks simulated
+final_tick                                     107952                       # Number of ticks from beginning of simulation (restored from checkpoints and never reset)
+sim_freq                                   1000000000                       # Frequency of simulated ticks
+host_inst_rate                                  19134                       # Simulator instruction rate (inst/s)
+host_op_rate                                    19132                       # Simulator op (including micro ops) rate (op/s)
+host_tick_rate                                 387691                       # Simulator tick rate (ticks/s)
+host_mem_usage                                 158116                       # Number of bytes of host memory used
+host_seconds                                     0.28                       # Real time elapsed on the host
+sim_insts                                        5327                       # Number of instructions simulated
+sim_ops                                          5327                       # Number of ops (including micro ops) simulated
+system.ruby.l1_cntrl0.cacheMemory.num_data_array_reads            0                       # number of data array reads
+system.ruby.l1_cntrl0.cacheMemory.num_data_array_writes            0                       # number of data array writes
+system.ruby.l1_cntrl0.cacheMemory.num_tag_array_reads            0                       # number of tag array reads
+system.ruby.l1_cntrl0.cacheMemory.num_tag_array_writes            0                       # number of tag array writes
+system.ruby.l1_cntrl0.cacheMemory.num_tag_array_stalls            0                       # number of stalls caused by tag array
+system.ruby.l1_cntrl0.cacheMemory.num_data_array_stalls            0                       # number of stalls caused by data array
+system.cpu.workload.num_syscalls                   11                       # Number of system calls
+system.cpu.numCycles                           107952                       # number of cpu cycles simulated
+system.cpu.numWorkItemsStarted                      0                       # number of work items this cpu started
+system.cpu.numWorkItemsCompleted                    0                       # number of work items this cpu completed
+system.cpu.committedInsts                        5327                       # Number of instructions committed
+system.cpu.committedOps                          5327                       # Number of ops (including micro ops) committed
+system.cpu.num_int_alu_accesses                  4505                       # Number of integer alu accesses
+system.cpu.num_fp_alu_accesses                      0                       # Number of float alu accesses
+system.cpu.num_func_calls                         146                       # number of times a function call or return occured
+system.cpu.num_conditional_control_insts          773                       # number of instructions that are conditional controls
+system.cpu.num_int_insts                         4505                       # number of integer instructions
+system.cpu.num_fp_insts                             0                       # number of float instructions
+system.cpu.num_int_register_reads               10598                       # number of times the integer registers were read
+system.cpu.num_int_register_writes               4845                       # number of times the integer registers were written
+system.cpu.num_fp_register_reads                    0                       # number of times the floating registers were read
+system.cpu.num_fp_register_writes                   0                       # number of times the floating registers were written
+system.cpu.num_mem_refs                          1401                       # number of memory refs
+system.cpu.num_load_insts                         723                       # Number of load instructions
+system.cpu.num_store_insts                        678                       # Number of store instructions
+system.cpu.num_idle_cycles                          0                       # Number of idle cycles
+system.cpu.num_busy_cycles                     107952                       # Number of busy cycles
+system.cpu.not_idle_fraction                        1                       # Percentage of non-idle cycles
+system.cpu.idle_fraction                            0                       # Percentage of idle cycles
+
+---------- End Simulation Statistics   ----------
