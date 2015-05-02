@@ -60,7 +60,7 @@ static inline int CeilLog2(uint n)
 }
 
 int root_width=4;
-int _num_chunks = 4;
+int _num_chunks = 5;
 int pageroot_depth=4;
 int expansions =0;
 int merges = 0;
@@ -85,6 +85,7 @@ bool is_tbl_ptr(entry *e) {
 }
 
 void populate_sst_entry(entry *e, list<block> blocks) {
+	DPRINTF(TagTable,"populate_sst_entry: ENTRY\n");
   //int no_blocks=blocks.size();
   //TODO:  make selection of field more intuitive (instead of starting in the first block for everything except those that are at subblock 3f).
   //assert(no_blocks <= int(m_num_fields));
@@ -105,12 +106,15 @@ void populate_sst_entry(entry *e, list<block> blocks) {
       e->sst_e.fields[0].page_offset = (*it).page_offset;
       e->sst_e.fields[0].len = (*it).len;
       e->sst_e.fields[0].PFentry_ptr = (*it).PFentry_ptr;
-    } else if((*it).len && ((*it).offset == ((PAGESIZE/BLOCKSIZE)-1))) {
+      DPRINTF(TagTable,"populate_sst_entry index :0, presence: %d, offset: %d, pageoffset : %d, len: %d, PfEntry_ptr: %0x\n", e->sst_e.fields[0].presence, e->sst_e.fields[0].offset,e->sst_e.fields[0].page_offset,e->sst_e.fields[0].len,e->sst_e.fields[0].PFentry_ptr);
+    }
+     else if((*it).len && ((*it).offset == ((PAGESIZE/BLOCKSIZE)-1))) {
       e->sst_e.fields[m_num_fields-1].presence = 1;
       e->sst_e.fields[m_num_fields-1].offset = (*it).offset;
       e->sst_e.fields[m_num_fields-1].page_offset = (*it).page_offset;
       e->sst_e.fields[m_num_fields-1].len = (*it).len;
       e->sst_e.fields[m_num_fields-1].PFentry_ptr = (*it).PFentry_ptr;
+      DPRINTF(TagTable,"populate_sst_entry, presence index m_num_fields-1 : %d, offset: %d, pageoffset : %d, len: %d, PfEntry_ptr: %0x\n", e->sst_e.fields[0].presence, e->sst_e.fields[m_num_fields-1].offset,e->sst_e.fields[m_num_fields-1].page_offset,e->sst_e.fields[m_num_fields-1].len,e->sst_e.fields[m_num_fields-1].PFentry_ptr);
       while(i < m_num_fields-1) {
 	e->sst_e.fields[i].presence = 0;
 	if(i > 0) {
@@ -132,6 +136,7 @@ void populate_sst_entry(entry *e, list<block> blocks) {
 	e->sst_e.fields[i].page_offset = (*it).page_offset;
 	e->sst_e.fields[i].len = (*it).len;
 	 e->sst_e.fields[i].PFentry_ptr = (*it).PFentry_ptr;
+	  DPRINTF(TagTable,"populate_sst_entry, presence index: %d : %d, offset: %d, pageoffset : %d, len: %d, PfEntry_ptr: %0x\n", i, e->sst_e.fields[i].presence, e->sst_e.fields[i].offset,e->sst_e.fields[i].page_offset,e->sst_e.fields[i].len,e->sst_e.fields[i].PFentry_ptr);
       } else {
 	e->sst_e.fields[i].presence = 0;
 	if(i > 0) {
@@ -509,14 +514,15 @@ AbstractCacheEntry* CacheMemoryPF::check_for_hit(uint64_t  addr, entry *e) {
   
   int subblock = (addr >> FloorLog2(BLOCKSIZE)) & ((PAGESIZE/BLOCKSIZE) - 1);  //subblock within entry that this address represents
   	DPRINTF(TagTable, "check_for_hit :: addr : %0x , subblock : %d\n", addr, subblock);
+  	 DPRINTF(TagTable," check_for_hit: entrypointer : %0xp\n", e);
     if(e->type == SST_ENTRY) {
 		DPRINTF(TagTable, "check_for_hit :: SST_ENTRY\n");
-      for(uint i = 0; i < m_num_fields; i++) {
+      for(uint i = 0; i <= m_num_fields; i++) {
 	if((subblock >= e->sst_e.fields[i].offset) && (subblock < (e->sst_e.fields[i].offset+e->sst_e.fields[i].len)) && e->sst_e.fields[i].presence) {  //address is in this - present - field
 	  DPRINTF(TagTable, "check_for_hit :: PFentry_ptr returned :%0xp\n" ,e->sst_e.fields[i].PFentry_ptr);
 	  DPRINTF(TagTable, "check_for_hit :: offset matched:%d, len: %d\n" ,e->sst_e.fields[i].offset,e->sst_e.fields[i].len );
 	  DPRINTF(TagTable, "check_for_hit :: index : %d\n",i);
-	  DPRINTF(TagTable," check_for_hit: entrypointer : %0xp\n", e);
+	 
 	  //DPRINTF(TagTable," check_for_hit: entry_1 m_address : %0x\n", e->m_Address.m_address);
 	  return e->sst_e.fields[i].PFentry_ptr;
   }
@@ -565,7 +571,7 @@ CacheMemoryPF::allocate(const Address& address, AbstractCacheEntry* entry)
 AbstractCacheEntry* CacheMemoryPF::lookupPF(const Address& addr){//, int size, ACCESS_TYPE accessType, uint64_t &unified_cycles) {
   int levels_walked = 0;
   uint64_t address = addr.m_address;
-  DPRINTF(TagTable, "lookupPF: addr: %ld\n", address);
+  DPRINTF(TagTable, "lookupPF: addr: %0x\n", address);
   //short page_offset = -1;	//page offset for populating POLB entry on miss
 	    //check POLB (page offset lookaside buffer)
 	     entry *e = search_level(address, NULL,levels_walked);//, unified_cycles);
@@ -652,6 +658,7 @@ std::list<block> build_entry(std::list<block> present_blocks) {
       present_blocks.erase(nit);
       nit = it;
       ++nit;
+      DPRINTF(TagTable," build_entry:: merge found\n");
     }
   }
 DPRINTF(TagTable," Exiting build_entry\n");
@@ -677,7 +684,7 @@ AbstractCacheEntry* CacheMemoryPF::allocatePF_inner(const Address& address, Abst
 	
 	 DPRINTF(TagTable, "allocatePF_inner:: ENTRY \n");
 	 DPRINTF(TagTable, "allocatePF_inner:: entry_1 : %0xp\n",entry_1);
-	 DPRINTF(TagTable," check_for_hit:  m_address : %0x\n", entry_1->m_Address.m_address);
+	 DPRINTF(TagTable," allocatePF_inner:  m_address : %0x\n", entry_1->m_Address.m_address);
 uint64_t addr = address.m_address;
 short page_offset = -1;
 int index;
@@ -703,13 +710,15 @@ if(!e->valid) {  //no valid data is stored at this location => insert
       l3_mmap.push_back(n_map_entry);
 	insert_metadata_block(n_map_entry.seq_no);
 	
-DPRINTF(TagTable, "allocatePF_inner:  l3map_entry created\n");
+DPRINTF(TagTable, "allocatePF_inner:  l3map_ created\n");
  //entry_1->m_Address =  Address(getMetadataaddr(n_map_entry.seq_no));
 }
 	auto map_it = l3_mmap.end();
     map_it--;	//point to valid entry
     uint idx = (BLOCKSIZE/m_entry_size);
- if(map_it->size == (BLOCKSIZE/m_entry_size)) {	//need to create a new map entry
+ if(map_it->size == (BLOCKSIZE/m_entry_size)) {	
+	 DPRINTF(TagTable, "allocatePF:: created l3 map entry created\n");
+	 //need to create a new map entry
       l3map_entry n_map_entry(m_entry_size);
       n_map_entry.seq_no = map_it->seq_no + 1;
       assert(n_map_entry.seq_no < std::numeric_limits<uint>::max());
@@ -746,6 +755,7 @@ list<block> insert_block;
 else{ //entry is valid => if not at leaf, make sure current address' tag matches the entry's, else split them at a new level
     if(is_tbl_ptr(e)) {
 	DPRINTF(TagTable," AllocatePF : its a tbl ptr, calling allocate PF recursively : %d\n");
+	
       allocatePF_inner(address, entry_1 ,e->addr);
       //Fix up my tc_path if something has been inserted (e.g., an SST_ENTRY was pushed down and a new entry created along with it in the new level)
     } else { 
@@ -864,10 +874,11 @@ uint64_t CacheMemoryPF::getindex(uint64_t addr, int lvl, int mask) {
   for(int lvl_depth = 0; lvl_depth < lvl; lvl_depth++) {
     temp_addr >>= 4;
   }
+   DPRINTF(TagTable, "temp addr before applying mask: %0x\n",temp_addr);
   index = temp_addr & mask;
   DPRINTF(TagTable, "getindex index_after: %d\n",index);
   assert(unsigned(index) != uint64_t(pow(2,ADDR_LEN)));
-	DPRINTF(TagTable, "getindex :: addr input : %ld index: %d\n",addr,index);
+	DPRINTF(TagTable, "getindex :: addr input : %0x index: %d\n",addr,index);
   return index;
 }
 
@@ -1254,7 +1265,8 @@ DPRINTF(TagTable," insert_into_existing : entering\n");
   short page_offset = -1;	//return value
   int preferred = (PAGESIZE/BLOCKSIZE);		//preferred page offset to either stay contiguous or match subblock with page_offset
   short actual = (PAGESIZE/BLOCKSIZE);		//actual page_offset assigned by page table
-  int subblock = ((addr >> FloorLog2(BLOCKSIZE))) & ((PAGESIZE/BLOCKSIZE)-1);  		//subblock within entry that this address represents (page offset of address - i.e., the 6 bits above the block offset)
+  int64 subblock = ((addr >> FloorLog2(BLOCKSIZE))) & ((PAGESIZE/BLOCKSIZE)-1);  		//subblock within entry that this address represents (page offset of address - i.e., the 6 bits above the block offset)
+  DPRINTF(TagTable, "acheMemoryPF::insert_into_existing, subblock : %ld, into entry : %0x\n", subblock,e);
   assert(subblock <= ((PAGESIZE/BLOCKSIZE)));  //subblock is in valid range
 
   list<block> present_blocks = build_blocks(e); //summarize blocks currently present
@@ -1264,6 +1276,7 @@ DPRINTF(TagTable," insert_into_existing : entering\n");
   temp.offset = subblock;
   temp.len = 1;
   temp.page_offset = -1;
+  temp.PFentry_ptr = entry_1;
   present_blocks.push_back(temp);
 
   //create ideal list of blocks for the entry (merge new block into existing, etc.)
@@ -1279,7 +1292,9 @@ DPRINTF(TagTable," insert_into_existing : entering\n");
   //bool alone = false;	//track whether the block's offset is contiguous or not, if not don't need to convert to status vector if I don't get the preferred address
   for(list<block>::iterator it = potential_blocks.begin(); it != potential_blocks.end(); it++) {
     //if block encompasses addition, request contiguous page_offset
-    if((subblock >= (*it).offset) && (subblock < ((*it).offset + (*it).len))) {	//new block is within this chunk
+    if((subblock >= (*it).offset) && (subblock < ((*it).offset + (*it).len))) {	
+		DPRINTF(TagTable," insert_into_existing : new block is within this chunk\n");
+		//new block is within this chunk
       if((*it).page_offset != -1) {	//new block is contiguous with an existing chunk
 	if((*it).page_offset < (PAGESIZE/BLOCKSIZE)) {	//new block is not the front => just get offset from existing (has to be at the end, right?)
 	  preferred = (*it).page_offset + (subblock - (*it).offset);
@@ -1335,6 +1350,7 @@ DPRINTF(TagTable," insert_into_existing : entering\n");
   //add new block
   temp.offset = subblock;
   temp.len = 1;
+  
   //use "actual" page offset for new block
   temp.page_offset = actual;
   temp.PFentry_ptr = entry_1;
@@ -1357,6 +1373,7 @@ DPRINTF(TagTable," insert_into_existing : entering\n");
       present_blocks.push_back(temp);
       present_blocks.sort(order_blocks);
     }
+   DPRINTF(TagTable," insert_into_existing : present_blocks.size = %d\n",present_blocks.size());
     populate_sst_entry(e, present_blocks);
   /*TEST
   calc_entry_occupancy(e);

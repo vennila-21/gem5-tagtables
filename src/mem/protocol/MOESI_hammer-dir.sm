@@ -479,7 +479,7 @@ machine(Directory, "AMD Hammer-like protocol")
 
   action(uo_updateOwnerIfPf, "uo", desc="update owner") {
     if (probe_filter_enabled || full_bit_dir_enabled) {
-//      assert(is_valid(cache_entry)); 
+      assert(is_valid(cache_entry)); 
       peek(unblockNetwork_in, ResponseMsg) {
         cache_entry.Owner := in_msg.Sender;
         if (full_bit_dir_enabled) {
