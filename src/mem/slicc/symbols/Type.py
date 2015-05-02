@@ -69,6 +69,9 @@ class Type(Symbol):
         # FIXME - all of the following id comparisons are fragile hacks
         if self.ident in ("CacheMemory"):
             self["cache"] = "yes"
+            
+        if self.ident in ("CacheMemoryPF"):
+            self["cachePF"] = "yes"
 
         if self.ident in ("TBETable"):
             self["tbe"] = "yes"

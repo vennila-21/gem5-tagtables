@@ -30,6 +30,8 @@
 #define __MEM_RUBY_SYSTEM_LRUPOLICY_HH__
 
 #include "mem/ruby/structures/AbstractReplacementPolicy.hh"
+ #include "debug/TagTable.hh"
+ #include "debug/TagTable1.hh"
 
 /* Simple true LRU replacement policy */
 
@@ -88,7 +90,7 @@ LRUPolicy::getVictim(int64 set) const
     //  DEBUG_EXPR(CACHE_COMP, MedPrio, smallest_index);
     //  DEBUG_EXPR(CACHE_COMP, MedPrio, m_cache[cacheSet][smallest_index]);
     //  DEBUG_EXPR(CACHE_COMP, MedPrio, *this);
-
+     DPRINTF( TagTable1, "RETURNING INDEX %d\n", smallest_index);
     return smallest_index;
 }
 

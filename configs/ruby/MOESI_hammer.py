@@ -48,7 +48,7 @@ class L2Cache(RubyCache):
 #
 # Probe filter is a cache, latency is not used
 #
-class ProbeFilter(RubyCache):
+class ProbeFilter(RubyCachePF):
     latency = 1
 
 def define_options(parser):

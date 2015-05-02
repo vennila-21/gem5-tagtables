@@ -1,6 +1,4 @@
-# -*- mode:python -*-
-
-# Copyright (c) 2012 Mark D. Hill and David A. Wood
+# Copyright (c) 2009 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -26,31 +24,26 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Nilay Vaish
+# Authors: Steve Reinhardt
+#          Brad Beckmann
 
-Import('*')
+from m5.params import *
+from m5.SimObject import SimObject
+from Controller import RubyController
 
-if env['PROTOCOL'] == 'None':
-    Return()
+class RubyCachePF(SimObject):
+    type = 'RubyCachePF'
+    cxx_class = 'CacheMemoryPF'
+    cxx_header = "mem/ruby/structures/CacheMemoryPF.hh"
+    size = Param.MemorySize("capacity in bytes");
+    latency = Param.Cycles("");
+    assoc = Param.Int("");
+    replacement_policy = Param.String("LRU", "");
+    start_index_bit = Param.Int(6, "index start, default 6 for 64-byte line");
+    is_icache = Param.Bool(False, "is instruction only cache");
 
-SimObject('Cache.py')
-SimObject('CachePF.py')
-SimObject('DirectoryMemory.py')
-SimObject('MemoryControl.py')
-SimObject('RubyMemoryControl.py')
-SimObject('RubyPrefetcher.py')
-SimObject('WireBuffer.py')
-
-Source('DirectoryMemory.cc')
-Source('SparseMemory.cc')
-Source('CacheMemory.cc')
-Source('CacheMemoryPF.cc')
-Source('MemoryControl.cc')
-Source('WireBuffer.cc')
-Source('RubyMemoryControl.cc')
-Source('entry-level.cc')
-Source('MemoryNode.cc')
-Source('PersistentTable.cc')
-Source('Prefetcher.cc')
-Source('TimerTable.cc')
-Source('BankedArray.cc')
+    dataArrayBanks = Param.Int(1, "Number of banks for the data array")
+    tagArrayBanks = Param.Int(1, "Number of banks for the tag array")
+    dataAccessLatency = Param.Cycles(1, "cycles for a data array access")
+    tagAccessLatency = Param.Cycles(1, "cycles for a tag array access")
+    resourceStalls = Param.Bool(False, "stall if there is a resource failure")

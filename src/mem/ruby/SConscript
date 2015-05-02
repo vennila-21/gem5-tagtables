@@ -53,6 +53,8 @@ DebugFlag('RubySystem')
 DebugFlag('RubyTester')
 DebugFlag('RubyStats')
 DebugFlag('RubyResourceStalls')
+DebugFlag('TagTable')
+DebugFlag('TagTable1')
 
 CompoundFlag('Ruby', [ 'RubyQueue', 'RubyNetwork', 'RubyTester',
     'RubyGenerated', 'RubySlicc', 'RubySystem', 'RubyCache',
@@ -124,6 +126,7 @@ MakeInclude('filters/GenericBloomFilter.hh')
 MakeInclude('network/MessageBuffer.hh')
 MakeInclude('structures/Prefetcher.hh')
 MakeInclude('structures/CacheMemory.hh')
+MakeInclude('structures/CacheMemoryPF.hh')
 MakeInclude('system/DMASequencer.hh')
 MakeInclude('structures/DirectoryMemory.hh')
 MakeInclude('structures/MemoryControl.hh')

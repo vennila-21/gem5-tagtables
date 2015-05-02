@@ -86,7 +86,7 @@ class Address
         m_address |= (physical_address_t) offset;
     }
 
-  private:
+
     physical_address_t m_address;
 };
 

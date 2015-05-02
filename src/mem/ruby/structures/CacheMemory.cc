@@ -34,6 +34,7 @@
 #include "mem/protocol/AccessPermission.hh"
 #include "mem/ruby/structures/CacheMemory.hh"
 #include "mem/ruby/system/System.hh"
+#include "debug/TagTable.hh"
 
 using namespace std;
 
@@ -240,7 +241,7 @@ CacheMemory::allocate(const Address& address, AbstractCacheEntry* entry)
     assert(!isTagPresent(address));
     assert(cacheAvail(address));
     DPRINTF(RubyCache, "address: %s\n", address);
-
+	DPRINTF(TagTable, "CacheMemory::allocate,address: %0x\n",address.m_address);
     // Find the first open slot
     int64 cacheSet = addressToCacheSet(address);
     std::vector<AbstractCacheEntry*> &set = m_cache[cacheSet];

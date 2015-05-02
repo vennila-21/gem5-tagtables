@@ -157,6 +157,24 @@ structure (CacheMemory, external = "yes") {
   Scalar demand_hits;
 }
 
+structure (CacheMemoryPF, external = "yes") {
+  bool cacheAvail(Address);
+  Address cacheProbe(Address);
+  AbstractCacheEntry allocate(Address, AbstractCacheEntry);
+  int Probe_PF(Address, bool, int);
+  void allocateVoid(Address, AbstractCacheEntry);
+  void deallocate(Address);
+  AbstractCacheEntry lookup(Address);
+  AbstractCacheEntry lookupPF(Address);
+  AbstractCacheEntry AllocatePF(Address,AbstractCacheEntry);
+  bool isTagPresent(Address);
+  void setMRU(Address);
+  void recordRequestType(CacheRequestType);
+  bool checkResourceAvailable(CacheResourceType, Address);
+  Scalar demand_misses;
+  Scalar demand_hits;
+}
+
 structure (WireBuffer, inport="yes", outport="yes", external = "yes") {
 
 }
