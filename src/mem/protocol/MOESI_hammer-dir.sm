@@ -237,7 +237,7 @@ machine(Directory, "AMD Hammer-like protocol")
     } else {
       if (probe_filter_enabled || full_bit_dir_enabled) {
         if (is_valid(pf_entry)) {
-          assert(pf_entry.PfState == getDirectoryEntry(addr).DirectoryState);
+         assert(pf_entry.PfState == getDirectoryEntry(addr).DirectoryState);
         }
       }
       return getDirectoryEntry(addr).DirectoryState;

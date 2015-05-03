@@ -234,6 +234,7 @@ void entry_level::evict_block(short victim, int &expansions, int &merges) {
 	      array[i]->sst_e.fields[j].presence = 0;
 	      array[i]->sst_e.fields[j].page_offset = -1;
 	      array[i]->sst_e.fields[j].len = 0;
+	      array[i]->sst_e.fields[j].PFentry_ptr = NULL;
 	      //fix the rest of the fields
 	    } else { //need to split block => might create STATUS_VECTOR
 	      //split field into two blocks
@@ -245,6 +246,7 @@ void entry_level::evict_block(short victim, int &expansions, int &merges) {
 		temp.offset = array[i]->sst_e.fields[j].offset;
 		temp.len = l - array[i]->sst_e.fields[j].page_offset;
 		temp.page_offset = array[i]->sst_e.fields[j].page_offset;
+		temp.PFentry_ptr = array[i]->sst_e.fields[j].PFentry_ptr;
 		present_blocks.push_back(temp);
 	      } else {  //bottom of range *is* the victim
 		victim_address = array[i]->tag + array[i]->sst_e.fields[j].offset;	//victim's address uses this field's base offset
@@ -256,6 +258,7 @@ void entry_level::evict_block(short victim, int &expansions, int &merges) {
 		temp.offset = array[i]->sst_e.fields[j].offset + (victim - array[i]->sst_e.fields[j].page_offset) + 1;
 		temp.len = l - victim - 1;
 		temp.page_offset = victim + 1;
+		temp.PFentry_ptr = array[i]->sst_e.fields[j].PFentry_ptr;
 		present_blocks.push_back(temp);
 	      }
 	      //set to invalid
@@ -270,6 +273,7 @@ void entry_level::evict_block(short victim, int &expansions, int &merges) {
 		temp2.offset = array[i]->sst_e.fields[k].offset;
 		temp2.len = array[i]->sst_e.fields[k].len;
 		temp2.page_offset = array[i]->sst_e.fields[k].page_offset;
+		temp2.PFentry_ptr = array[i]->sst_e.fields[k].PFentry_ptr;
 		present_blocks.push_back(temp2);
 	      }
 	    }

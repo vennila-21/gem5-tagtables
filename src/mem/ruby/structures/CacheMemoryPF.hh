@@ -94,7 +94,7 @@ class CacheMemoryPF : public SimObject
     AbstractCacheEntry* allocate(const Address& address, AbstractCacheEntry* new_entry);
     AbstractCacheEntry* AllocatePF(const Address& address, AbstractCacheEntry* new_entry);
     AbstractCacheEntry* allocatePF_inner(const Address& address, AbstractCacheEntry* new_entry, entry_level* lvl);
-	short insert_into_existing(uint64_t addr, entry *&e, entry_level *level, AbstractCacheEntry* entry_1);
+	short insert_into_existing(const Address& address, entry *&e, entry_level *level, AbstractCacheEntry* entry_1);
 	const AbstractCacheEntry* lookupCacheMemory(const Address& address) const;
 	std::list<block> build_blocks(entry *e);
     uint64_t getindex(uint64_t addr, int lvl, int mask);
